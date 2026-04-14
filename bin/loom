@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# loom — launch Claude Code inside a new Loom session (main branch),
-# running in a named tmux session so that other branches can send to it.
+# loom — parallel branching for Claude Code.
 set -euo pipefail
 
 # ──────────────────────────────────────────────────────────────────────
@@ -12,66 +11,62 @@ LOOM_REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 MCP_DIST="${LOOM_REPO}/mcp/dist/index.js"
 POST_FORK_HOOK="${LOOM_REPO}/mcp/dist/hooks/post-fork.js"
 SYSTEM_PROMPT_TEMPLATE="${LOOM_REPO}/system-prompt.md"
-
-# ──────────────────────────────────────────────────────────────────────
-# Preflight
-# ──────────────────────────────────────────────────────────────────────
-if [ ! -f "${MCP_DIST}" ]; then
-  echo "loom: MCP server not built." >&2
-  echo "      (cd ${LOOM_REPO}/mcp && npm install && npm run build)" >&2
-  exit 1
-fi
-command -v sqlite3 >/dev/null || { echo "loom: sqlite3 is required" >&2; exit 1; }
-command -v claude  >/dev/null || { echo "loom: claude (Claude Code) is required" >&2; exit 1; }
-command -v tmux    >/dev/null || { echo "loom: tmux is required" >&2; exit 1; }
-
-# ──────────────────────────────────────────────────────────────────────
-# Identifiers
-# ──────────────────────────────────────────────────────────────────────
-LOOM_SESSION_ID="$(openssl rand -hex 4)"
-CC_SESSION_ID="$(cat /proc/sys/kernel/random/uuid)"
-CWD="$(pwd)"
-NOW_MS="$(($(date +%s) * 1000))"
-TMUX_NAME="loom-${LOOM_SESSION_ID}-main"
-
-if tmux has-session -t "${TMUX_NAME}" 2>/dev/null; then
-  echo "loom: tmux session ${TMUX_NAME} already exists — aborting" >&2
-  exit 1
-fi
-
-# ──────────────────────────────────────────────────────────────────────
-# Init / upgrade SQLite schema, then insert session + main branch
-# ──────────────────────────────────────────────────────────────────────
-mkdir -p "${LOOM_HOME}"
-sqlite3 "${LOOM_DB}" <<SQL
-CREATE TABLE IF NOT EXISTS sessions (
-  id          TEXT PRIMARY KEY,
-  cwd         TEXT NOT NULL,
-  created_at  INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS branches (
-  session_id       TEXT NOT NULL REFERENCES sessions(id),
-  branch_id        TEXT NOT NULL,
-  cc_session_id    TEXT NOT NULL UNIQUE,
-  parent_branch_id TEXT,
-  instruction      TEXT,
-  created_at       INTEGER NOT NULL,
-  PRIMARY KEY (session_id, branch_id)
-);
-CREATE INDEX IF NOT EXISTS idx_branches_cc_session ON branches(cc_session_id);
-
-INSERT INTO sessions (id, cwd, created_at)
-VALUES ('${LOOM_SESSION_ID}', '${CWD}', ${NOW_MS});
-INSERT INTO branches (session_id, branch_id, cc_session_id, parent_branch_id, instruction, created_at)
-VALUES ('${LOOM_SESSION_ID}', 'main', '${CC_SESSION_ID}', NULL, NULL, ${NOW_MS});
-SQL
-
-# ──────────────────────────────────────────────────────────────────────
-# MCP server config + Loom settings (hooks). Stable paths shared by
-# fork/send auto-launches.
-# ──────────────────────────────────────────────────────────────────────
 MCP_CONFIG="${LOOM_HOME}/mcp-config.json"
-cat > "${MCP_CONFIG}" <<JSON
+LOOM_SETTINGS="${LOOM_HOME}/settings.json"
+
+usage() {
+  cat <<'USAGE'
+Usage: loom [COMMAND] [ARGS]
+
+Commands:
+  new                         Start a new Loom session on a main branch.
+                              (Default when no command is given.)
+  list                        Show all sessions and their branch trees.
+  attach <session> [branch]   Attach to a branch's tmux. If the tmux
+                              session isn't alive but the branch is
+                              registered, the branch's Claude Code
+                              instance is (re)launched first. Default
+                              branch is `main`.
+  stop <session> [branch]     Kill the tmux session(s) for a Loom
+                              session. Without branch: kill every live
+                              branch of that session. Branch
+                              registrations in the DB are preserved;
+                              `loom attach` can relaunch.
+  help, --help, -h            Show this help.
+
+A Loom session is a family of Claude Code instances that share
+conversation history at fork points and run in parallel. Each branch
+runs inside its own tmux session named `loom-<session>-<branch>`.
+
+Paths:
+  DB       ~/.loom/loom.db
+  Config   ~/.loom/mcp-config.json, ~/.loom/settings.json
+USAGE
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# Preflight (shared)
+# ──────────────────────────────────────────────────────────────────────
+require_tools() {
+  for t in "$@"; do
+    command -v "$t" >/dev/null || { echo "loom: $t is required" >&2; exit 1; }
+  done
+}
+
+require_mcp_built() {
+  if [ ! -f "${MCP_DIST}" ]; then
+    echo "loom: MCP server not built." >&2
+    echo "      (cd ${LOOM_REPO}/mcp && npm install && npm run build)" >&2
+    exit 1
+  fi
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# write_common_configs — idempotently write MCP + hook settings
+# ──────────────────────────────────────────────────────────────────────
+write_common_configs() {
+  mkdir -p "${LOOM_HOME}"
+  cat > "${MCP_CONFIG}" <<JSON
 {
   "mcpServers": {
     "loom": {
@@ -81,9 +76,7 @@ cat > "${MCP_CONFIG}" <<JSON
   }
 }
 JSON
-
-LOOM_SETTINGS="${LOOM_HOME}/settings.json"
-cat > "${LOOM_SETTINGS}" <<JSON
+  cat > "${LOOM_SETTINGS}" <<JSON
 {
   "hooks": {
     "PostToolUse": [
@@ -100,34 +93,291 @@ cat > "${LOOM_SETTINGS}" <<JSON
   }
 }
 JSON
+}
 
 # ──────────────────────────────────────────────────────────────────────
-# Rendered system prompt + inner launcher script (per-session)
+# write_launch_script — render per-branch prompt + launcher
+# Outputs absolute path of the launch script on stdout.
+# Args: <sid> <branch> <cc_session_id>
 # ──────────────────────────────────────────────────────────────────────
-SYSTEM_PROMPT_RENDERED="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-prompt.txt"
-sed "s/{{BRANCH_ID}}/main/g" "${SYSTEM_PROMPT_TEMPLATE}" > "${SYSTEM_PROMPT_RENDERED}"
+write_launch_script() {
+  local sid="$1" branch="$2" cc_id="$3"
+  local prompt="${LOOM_HOME}/session-${sid}-${branch}-prompt.txt"
+  local launch="${LOOM_HOME}/session-${sid}-${branch}-launch.sh"
+  sed "s/{{BRANCH_ID}}/${branch}/g" "${SYSTEM_PROMPT_TEMPLATE}" > "${prompt}"
+  cat > "${launch}" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec claude \\
+  --resume '${cc_id}' \\
+  --mcp-config '${MCP_CONFIG}' \\
+  --settings '${LOOM_SETTINGS}' \\
+  --append-system-prompt "\$(cat '${prompt}')" \\
+  --dangerously-skip-permissions
+EOF
+  chmod +x "${launch}"
+  printf '%s' "${launch}"
+}
 
-LAUNCH_SCRIPT="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-launch.sh"
-cat > "${LAUNCH_SCRIPT}" <<EOF
+# ──────────────────────────────────────────────────────────────────────
+# `list` — tree view of sessions/branches
+# ──────────────────────────────────────────────────────────────────────
+cmd_list() {
+  require_tools sqlite3 python3 tmux
+  if [ ! -f "${LOOM_DB}" ]; then
+    echo "loom: no sessions yet (${LOOM_DB} not found)" >&2
+    return 0
+  fi
+
+  local live_sessions
+  live_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^loom-' || true)"
+
+  LOOM_DB="${LOOM_DB}" LIVE_SESSIONS="${live_sessions}" python3 <<'PY'
+import os, sqlite3, datetime
+
+db_path = os.environ["LOOM_DB"]
+live = set(os.environ["LIVE_SESSIONS"].split()) if os.environ["LIVE_SESSIONS"] else set()
+
+con = sqlite3.connect(db_path)
+con.row_factory = sqlite3.Row
+
+cols = {r[1] for r in con.execute("PRAGMA table_info(branches)").fetchall()}
+if "instruction" not in cols:
+    con.execute("ALTER TABLE branches ADD COLUMN instruction TEXT")
+    con.commit()
+if "inherit_context" not in cols:
+    con.execute("ALTER TABLE branches ADD COLUMN inherit_context INTEGER")
+    con.commit()
+
+sessions = con.execute(
+    "SELECT id, cwd, created_at FROM sessions ORDER BY created_at DESC"
+).fetchall()
+
+if not sessions:
+    print("loom: no sessions recorded")
+    raise SystemExit(0)
+
+def fmt_ts(ms):
+    return datetime.datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M")
+
+def truncate(s, n=10):
+    if s is None:
+        return ""
+    s = s.replace("\n", " ").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+for i, s in enumerate(sessions):
+    sid, cwd, created = s["id"], s["cwd"], s["created_at"]
+    if i > 0:
+        print()
+    print(f"session {sid}  cwd={cwd}  created={fmt_ts(created)}")
+
+    branches = con.execute(
+        "SELECT branch_id, parent_branch_id, instruction, inherit_context, created_at "
+        "FROM branches WHERE session_id = ? ORDER BY created_at ASC",
+        (sid,),
+    ).fetchall()
+
+    children = {}
+    for b in branches:
+        children.setdefault(b["parent_branch_id"], []).append(b)
+
+    def render(node_key, prefix):
+        kids = children.get(node_key, [])
+        if node_key is None:
+            kids = sorted(kids, key=lambda r: (r["branch_id"] != "main", r["created_at"]))
+        for idx, b in enumerate(kids):
+            last = idx == len(kids) - 1
+            connector = "└─ " if last else "├─ "
+            bid = b["branch_id"]
+            instr = truncate(b["instruction"])
+            tmux_name = f"loom-{sid}-{bid}"
+            state = "alive" if tmux_name in live else "dead"
+            ic = b["inherit_context"]
+            ctx_tag = "" if ic is None else (" (inherit)" if ic else " (isolated)")
+            label = f"{bid} [{state}]{ctx_tag}"
+            if instr:
+                label += f'  "{instr}"'
+            print(f"{prefix}{connector}{label}")
+            next_prefix = prefix + ("   " if last else "│  ")
+            render(bid, next_prefix)
+
+    render(None, "")
+
+con.close()
+PY
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# `attach` — attach to a branch's tmux, relaunching if dead
+# ──────────────────────────────────────────────────────────────────────
+cmd_attach() {
+  require_tools tmux sqlite3 claude
+  require_mcp_built
+  local sid="${1:-}"
+  local branch="${2:-main}"
+  if [ -z "${sid}" ]; then
+    echo "loom: attach requires a session id" >&2
+    echo "      loom attach <session> [branch]" >&2
+    exit 2
+  fi
+  local tmux_name="loom-${sid}-${branch}"
+
+  if tmux has-session -t "${tmux_name}" 2>/dev/null; then
+    exec tmux attach -t "${tmux_name}"
+  fi
+
+  # Not live — check the DB for registration.
+  if [ ! -f "${LOOM_DB}" ]; then
+    echo "loom: no sessions database at ${LOOM_DB}" >&2
+    exit 1
+  fi
+
+  local row
+  row="$(sqlite3 -separator '|' "${LOOM_DB}" \
+    "SELECT b.cc_session_id, s.cwd FROM branches b JOIN sessions s ON s.id = b.session_id \
+     WHERE b.session_id = '${sid}' AND b.branch_id = '${branch}' LIMIT 1;")"
+  if [ -z "${row}" ]; then
+    echo "loom: branch ${branch} in session ${sid} is not registered" >&2
+    exit 1
+  fi
+  local cc_id cwd
+  cc_id="${row%%|*}"
+  cwd="${row#*|}"
+
+  echo "loom: relaunching ${tmux_name} (cc=${cc_id})" >&2
+  write_common_configs
+  local launch_script
+  launch_script="$(write_launch_script "${sid}" "${branch}" "${cc_id}")"
+
+  exec tmux new-session -s "${tmux_name}" \
+    -e "LOOM_SESSION=${sid}" \
+    -e "LOOM_BRANCH=${branch}" \
+    -c "${cwd}" \
+    "${launch_script}"
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# `stop` — kill tmux session(s) for a Loom session (DB untouched)
+# ──────────────────────────────────────────────────────────────────────
+cmd_stop() {
+  require_tools tmux
+  local sid="${1:-}"
+  local branch="${2:-}"
+  if [ -z "${sid}" ]; then
+    echo "loom: stop requires a session id" >&2
+    echo "      loom stop <session> [branch]" >&2
+    exit 2
+  fi
+
+  if [ -n "${branch}" ]; then
+    local name="loom-${sid}-${branch}"
+    if ! tmux has-session -t "${name}" 2>/dev/null; then
+      echo "loom: no live tmux session ${name}" >&2
+      exit 1
+    fi
+    tmux kill-session -t "${name}"
+    echo "loom: killed ${name}"
+    return
+  fi
+
+  local names
+  names="$(tmux list-sessions -F '#S' 2>/dev/null | grep "^loom-${sid}-" || true)"
+  if [ -z "${names}" ]; then
+    echo "loom: no live tmux sessions for ${sid}" >&2
+    exit 1
+  fi
+  while IFS= read -r n; do
+    if tmux kill-session -t "${n}" 2>/dev/null; then
+      echo "loom: killed ${n}"
+    fi
+  done <<< "${names}"
+}
+
+# ──────────────────────────────────────────────────────────────────────
+# `new` — start a new Loom session (main branch)
+# ──────────────────────────────────────────────────────────────────────
+cmd_new() {
+  require_mcp_built
+  require_tools sqlite3 claude tmux
+
+  local LOOM_SESSION_ID CC_SESSION_ID CWD NOW_MS TMUX_NAME
+  LOOM_SESSION_ID="$(openssl rand -hex 4)"
+  CC_SESSION_ID="$(cat /proc/sys/kernel/random/uuid)"
+  CWD="$(pwd)"
+  NOW_MS="$(($(date +%s) * 1000))"
+  TMUX_NAME="loom-${LOOM_SESSION_ID}-main"
+
+  if tmux has-session -t "${TMUX_NAME}" 2>/dev/null; then
+    echo "loom: tmux session ${TMUX_NAME} already exists — aborting" >&2
+    exit 1
+  fi
+
+  mkdir -p "${LOOM_HOME}"
+  sqlite3 "${LOOM_DB}" <<SQL
+CREATE TABLE IF NOT EXISTS sessions (
+  id          TEXT PRIMARY KEY,
+  cwd         TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS branches (
+  session_id       TEXT NOT NULL REFERENCES sessions(id),
+  branch_id        TEXT NOT NULL,
+  cc_session_id    TEXT NOT NULL UNIQUE,
+  parent_branch_id TEXT,
+  instruction      TEXT,
+  inherit_context  INTEGER,
+  created_at       INTEGER NOT NULL,
+  PRIMARY KEY (session_id, branch_id)
+);
+CREATE INDEX IF NOT EXISTS idx_branches_cc_session ON branches(cc_session_id);
+
+INSERT INTO sessions (id, cwd, created_at)
+VALUES ('${LOOM_SESSION_ID}', '${CWD}', ${NOW_MS});
+INSERT INTO branches (session_id, branch_id, cc_session_id, parent_branch_id, instruction, inherit_context, created_at)
+VALUES ('${LOOM_SESSION_ID}', 'main', '${CC_SESSION_ID}', NULL, NULL, NULL, ${NOW_MS});
+SQL
+
+  write_common_configs
+
+  local prompt="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-prompt.txt"
+  local launch_script="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-launch.sh"
+  sed "s/{{BRANCH_ID}}/main/g" "${SYSTEM_PROMPT_TEMPLATE}" > "${prompt}"
+  cat > "${launch_script}" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 exec claude \\
   --session-id '${CC_SESSION_ID}' \\
   --mcp-config '${MCP_CONFIG}' \\
   --settings '${LOOM_SETTINGS}' \\
-  --append-system-prompt "\$(cat '${SYSTEM_PROMPT_RENDERED}')" \\
+  --append-system-prompt "\$(cat '${prompt}')" \\
   --dangerously-skip-permissions
 EOF
-chmod +x "${LAUNCH_SCRIPT}"
+  chmod +x "${launch_script}"
+
+  echo "loom: session=${LOOM_SESSION_ID}  branch=main  cc=${CC_SESSION_ID}" >&2
+  echo "loom: tmux session ${TMUX_NAME}" >&2
+  echo "loom: detach with Ctrl-B d; reattach with 'loom attach ${LOOM_SESSION_ID}'" >&2
+
+  exec tmux new-session -s "${TMUX_NAME}" \
+    -e "LOOM_SESSION=${LOOM_SESSION_ID}" \
+    -e "LOOM_BRANCH=main" \
+    "${launch_script}"
+}
 
 # ──────────────────────────────────────────────────────────────────────
-# Launch in tmux (attached)
+# Dispatch
 # ──────────────────────────────────────────────────────────────────────
-echo "loom: session=${LOOM_SESSION_ID}  branch=main  cc=${CC_SESSION_ID}" >&2
-echo "loom: tmux session ${TMUX_NAME}" >&2
-echo "loom: detach with Ctrl-B d; reattach with 'tmux attach -t ${TMUX_NAME}'" >&2
-
-exec tmux new-session -s "${TMUX_NAME}" \
-  -e "LOOM_SESSION=${LOOM_SESSION_ID}" \
-  -e "LOOM_BRANCH=main" \
-  "${LAUNCH_SCRIPT}"
+cmd="${1:-new}"
+case "${cmd}" in
+  ""|new)           cmd_new ;;
+  list)             shift; cmd_list "$@" ;;
+  attach)           shift; cmd_attach "$@" ;;
+  stop)             shift; cmd_stop "$@" ;;
+  help|--help|-h)   usage ;;
+  *)
+    echo "loom: unknown command '${cmd}'" >&2
+    echo "      run 'loom --help' for usage" >&2
+    exit 2
+    ;;
+esac

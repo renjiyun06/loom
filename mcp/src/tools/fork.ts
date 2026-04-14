@@ -82,6 +82,7 @@ export async function handleFork(
     cc_session_id: childCcSessionId,
     parent_branch_id: ctx.branchId,
     instruction,
+    inherit_context: inheritContext ? 1 : 0,
     created_at: Date.now(),
   });
 

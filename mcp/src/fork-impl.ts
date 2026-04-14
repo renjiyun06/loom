@@ -128,7 +128,7 @@ export async function executeFork(
     });
 
     // Wait for CC to come up, then inject the kickoff message.
-    await sleep(2500);
+    await sleep(10000);
     const tmuxName = tmuxSessionName(job.sessionId, job.childBranchId);
     await withFileLock(sendLockPath(tmuxName), () => {
       sendKeys(tmuxName, "[loom] Begin.");

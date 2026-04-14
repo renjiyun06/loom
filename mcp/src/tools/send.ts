@@ -80,7 +80,7 @@ export async function handleSend(
       cwd: session.cwd,
     });
     // Give CC a moment to come up before we inject anything.
-    await sleep(2500);
+    await sleep(10000);
   }
 
   // 3. Inject the message, serialized per-target against other senders.

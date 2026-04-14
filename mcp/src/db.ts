@@ -22,6 +22,7 @@ export interface BranchRow {
   cc_session_id: string;        // UUID Claude Code uses for the JSONL file
   parent_branch_id: string | null; // parent's branch_id, null for root (main)
   instruction: string | null;   // fork instruction that created this branch; null for root
+  inherit_context: number | null; // 1 = child inherited parent's history, 0 = isolated; null for root
   created_at: number;
 }
 
@@ -50,6 +51,7 @@ export function openDb() {
       cc_session_id    TEXT NOT NULL UNIQUE,
       parent_branch_id TEXT,
       instruction      TEXT,
+      inherit_context  INTEGER,
       created_at       INTEGER NOT NULL,
       PRIMARY KEY (session_id, branch_id)
     );
@@ -64,6 +66,9 @@ export function openDb() {
     .all() as { name: string }[];
   if (!cols.some((c) => c.name === "instruction")) {
     db.exec(`ALTER TABLE branches ADD COLUMN instruction TEXT`);
+  }
+  if (!cols.some((c) => c.name === "inherit_context")) {
+    db.exec(`ALTER TABLE branches ADD COLUMN inherit_context INTEGER`);
   }
 
   return db;
@@ -100,14 +105,15 @@ export function getBranch(
 export function insertBranch(db: Db, row: BranchRow): void {
   db.prepare(
     `INSERT INTO branches
-       (session_id, branch_id, cc_session_id, parent_branch_id, instruction, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+       (session_id, branch_id, cc_session_id, parent_branch_id, instruction, inherit_context, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.session_id,
     row.branch_id,
     row.cc_session_id,
     row.parent_branch_id,
     row.instruction,
+    row.inherit_context,
     row.created_at,
   );
 }

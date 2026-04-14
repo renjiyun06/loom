@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# loom — launch Claude Code inside a new Loom session (main branch),
+# running in a named tmux session so that other branches can send to it.
+set -euo pipefail
+
+# ──────────────────────────────────────────────────────────────────────
+# Paths
+# ──────────────────────────────────────────────────────────────────────
+LOOM_HOME="${HOME}/.loom"
+LOOM_DB="${LOOM_HOME}/loom.db"
+LOOM_REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+MCP_DIST="${LOOM_REPO}/mcp/dist/index.js"
+POST_FORK_HOOK="${LOOM_REPO}/mcp/dist/hooks/post-fork.js"
+SYSTEM_PROMPT_TEMPLATE="${LOOM_REPO}/system-prompt.md"
+
+# ──────────────────────────────────────────────────────────────────────
+# Preflight
+# ──────────────────────────────────────────────────────────────────────
+if [ ! -f "${MCP_DIST}" ]; then
+  echo "loom: MCP server not built." >&2
+  echo "      (cd ${LOOM_REPO}/mcp && npm install && npm run build)" >&2
+  exit 1
+fi
+command -v sqlite3 >/dev/null || { echo "loom: sqlite3 is required" >&2; exit 1; }
+command -v claude  >/dev/null || { echo "loom: claude (Claude Code) is required" >&2; exit 1; }
+command -v tmux    >/dev/null || { echo "loom: tmux is required" >&2; exit 1; }
+
+# ──────────────────────────────────────────────────────────────────────
+# Identifiers
+# ──────────────────────────────────────────────────────────────────────
+LOOM_SESSION_ID="$(openssl rand -hex 4)"
+CC_SESSION_ID="$(cat /proc/sys/kernel/random/uuid)"
+CWD="$(pwd)"
+NOW_MS="$(($(date +%s) * 1000))"
+TMUX_NAME="loom-${LOOM_SESSION_ID}-main"
+
+if tmux has-session -t "${TMUX_NAME}" 2>/dev/null; then
+  echo "loom: tmux session ${TMUX_NAME} already exists — aborting" >&2
+  exit 1
+fi
+
+# ──────────────────────────────────────────────────────────────────────
+# Init / upgrade SQLite schema, then insert session + main branch
+# ──────────────────────────────────────────────────────────────────────
+mkdir -p "${LOOM_HOME}"
+sqlite3 "${LOOM_DB}" <<SQL
+CREATE TABLE IF NOT EXISTS sessions (
+  id          TEXT PRIMARY KEY,
+  cwd         TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS branches (
+  session_id       TEXT NOT NULL REFERENCES sessions(id),
+  branch_id        TEXT NOT NULL,
+  cc_session_id    TEXT NOT NULL UNIQUE,
+  parent_branch_id TEXT,
+  instruction      TEXT,
+  created_at       INTEGER NOT NULL,
+  PRIMARY KEY (session_id, branch_id)
+);
+CREATE INDEX IF NOT EXISTS idx_branches_cc_session ON branches(cc_session_id);
+
+INSERT INTO sessions (id, cwd, created_at)
+VALUES ('${LOOM_SESSION_ID}', '${CWD}', ${NOW_MS});
+INSERT INTO branches (session_id, branch_id, cc_session_id, parent_branch_id, instruction, created_at)
+VALUES ('${LOOM_SESSION_ID}', 'main', '${CC_SESSION_ID}', NULL, NULL, ${NOW_MS});
+SQL
+
+# ──────────────────────────────────────────────────────────────────────
+# MCP server config + Loom settings (hooks). Stable paths shared by
+# fork/send auto-launches.
+# ──────────────────────────────────────────────────────────────────────
+MCP_CONFIG="${LOOM_HOME}/mcp-config.json"
+cat > "${MCP_CONFIG}" <<JSON
+{
+  "mcpServers": {
+    "loom": {
+      "command": "node",
+      "args": ["${MCP_DIST}"]
+    }
+  }
+}
+JSON
+
+LOOM_SETTINGS="${LOOM_HOME}/settings.json"
+cat > "${LOOM_SETTINGS}" <<JSON
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*fork.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${POST_FORK_HOOK}"
+          }
+        ]
+      }
+    ]
+  }
+}
+JSON
+
+# ──────────────────────────────────────────────────────────────────────
+# Rendered system prompt + inner launcher script (per-session)
+# ──────────────────────────────────────────────────────────────────────
+SYSTEM_PROMPT_RENDERED="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-prompt.txt"
+sed "s/{{BRANCH_ID}}/main/g" "${SYSTEM_PROMPT_TEMPLATE}" > "${SYSTEM_PROMPT_RENDERED}"
+
+LAUNCH_SCRIPT="${LOOM_HOME}/session-${LOOM_SESSION_ID}-main-launch.sh"
+cat > "${LAUNCH_SCRIPT}" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec claude \\
+  --session-id '${CC_SESSION_ID}' \\
+  --mcp-config '${MCP_CONFIG}' \\
+  --settings '${LOOM_SETTINGS}' \\
+  --append-system-prompt "\$(cat '${SYSTEM_PROMPT_RENDERED}')" \\
+  --dangerously-skip-permissions
+EOF
+chmod +x "${LAUNCH_SCRIPT}"
+
+# ──────────────────────────────────────────────────────────────────────
+# Launch in tmux (attached)
+# ──────────────────────────────────────────────────────────────────────
+echo "loom: session=${LOOM_SESSION_ID}  branch=main  cc=${CC_SESSION_ID}" >&2
+echo "loom: tmux session ${TMUX_NAME}" >&2
+echo "loom: detach with Ctrl-B d; reattach with 'tmux attach -t ${TMUX_NAME}'" >&2
+
+exec tmux new-session -s "${TMUX_NAME}" \
+  -e "LOOM_SESSION=${LOOM_SESSION_ID}" \
+  -e "LOOM_BRANCH=main" \
+  "${LAUNCH_SCRIPT}"

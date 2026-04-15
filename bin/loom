@@ -32,6 +32,13 @@ Commands:
                               branch of that session. Branch
                               registrations in the DB are preserved;
                               `loom attach` can relaunch.
+  rm <session> [branch] [-f]  Permanently remove a session (or single
+                              branch and its descendants) from Loom:
+                              kill tmux, delete DB rows, clean runtime
+                              files. Claude Code JSONL files in
+                              ~/.claude/projects are left untouched.
+                              Branch `main` is equivalent to removing
+                              the whole session. `-f` skips confirmation.
   help, --help, -h            Show this help.
 
 A Loom session is a family of Claude Code instances that share
@@ -295,6 +302,203 @@ cmd_stop() {
 }
 
 # ──────────────────────────────────────────────────────────────────────
+# `rm` — permanently remove a session or branch (DB + tmux + runtime
+# files). Never touches Claude Code JSONL files.
+# ──────────────────────────────────────────────────────────────────────
+cmd_rm() {
+  require_tools sqlite3 python3 tmux
+  local force=0
+  local sid=""
+  local branch=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -f|--force) force=1; shift ;;
+      -*) echo "loom: unknown flag '$1'" >&2; exit 2 ;;
+      *)
+        if [ -z "${sid}" ]; then
+          sid="$1"
+        elif [ -z "${branch}" ]; then
+          branch="$1"
+        else
+          echo "loom: too many arguments" >&2
+          exit 2
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "${sid}" ]; then
+    echo "loom: rm requires a session id" >&2
+    echo "      loom rm <session> [branch] [-f]" >&2
+    exit 2
+  fi
+  if [ ! -f "${LOOM_DB}" ]; then
+    echo "loom: no sessions database at ${LOOM_DB}" >&2
+    exit 1
+  fi
+
+  # Removing the `main` branch is equivalent to removing the whole session.
+  if [ "${branch}" = "main" ]; then
+    branch=""
+  fi
+
+  LOOM_DB="${LOOM_DB}" LOOM_HOME="${LOOM_HOME}" \
+  SID="${sid}" BRANCH="${branch}" FORCE="${force}" python3 <<'PY'
+import os, sqlite3, subprocess, sys, tempfile
+
+db_path   = os.environ["LOOM_DB"]
+loom_home = os.environ["LOOM_HOME"]
+sid       = os.environ["SID"]
+branch    = os.environ["BRANCH"]  # "" means whole-session scope
+force     = os.environ["FORCE"] == "1"
+
+con = sqlite3.connect(db_path)
+con.row_factory = sqlite3.Row
+
+s = con.execute("SELECT id FROM sessions WHERE id = ?", (sid,)).fetchone()
+if not s:
+    print(f"loom: session {sid} not found", file=sys.stderr)
+    sys.exit(1)
+
+rows = con.execute(
+    "SELECT branch_id, parent_branch_id, cc_session_id, instruction, "
+    "inherit_context FROM branches WHERE session_id = ?",
+    (sid,),
+).fetchall()
+by_id = {r["branch_id"]: r for r in rows}
+
+if branch:
+    if branch not in by_id:
+        print(f"loom: branch {branch} not found in session {sid}",
+              file=sys.stderr)
+        sys.exit(1)
+    kids = {}
+    for r in rows:
+        kids.setdefault(r["parent_branch_id"], []).append(r["branch_id"])
+    targets = []
+    stack = [branch]
+    while stack:
+        b = stack.pop()
+        targets.append(b)
+        stack.extend(kids.get(b, []))
+    scope = "branch"
+else:
+    targets = [r["branch_id"] for r in rows]
+    scope = "session"
+
+def tmux_alive(name):
+    r = subprocess.run(
+        ["tmux", "has-session", "-t", name],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    return r.returncode == 0
+
+alive = sum(1 for b in targets if tmux_alive(f"loom-{sid}-{b}"))
+dead = len(targets) - alive
+
+if scope == "session":
+    print(f"About to remove session {sid} with {len(targets)} branch(es).")
+else:
+    desc = len(targets) - 1
+    print(f"About to remove branch {branch} from session {sid}.")
+    if desc > 0:
+        print(f"This branch has {desc} descendant branch(es) that "
+              f"will also be removed:")
+        for b in targets:
+            if b == branch:
+                continue
+            r = by_id[b]
+            ic = r["inherit_context"]
+            ctx = "inherit" if ic == 1 else "isolated" if ic == 0 else "?"
+            instr = (r["instruction"] or "").replace("\n", " ")
+            if len(instr) > 40:
+                instr = instr[:39] + "…"
+            extra = f'  "{instr}"' if instr else ""
+            print(f"  - {b}  ({ctx}){extra}")
+
+print("Resources to clean up:")
+print(f"  - {len(targets)} tmux session(s): {alive} alive, {dead} dead")
+row_desc = f"{len(targets)} SQLite branch row(s)"
+if scope == "session":
+    row_desc += " + 1 session row"
+print(f"  - {row_desc}")
+print(f"  - {len(targets)} launch script + prompt file pair(s)")
+
+if not force:
+    # Read from /dev/tty, not stdin — stdin is the heredoc content that
+    # fed this Python program, so it's already at EOF.
+    try:
+        with open("/dev/tty", "r") as tty:
+            sys.stdout.write("Continue? [y/N]: ")
+            sys.stdout.flush()
+            ans = tty.readline().strip().lower()
+    except (OSError, EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(1)
+    if ans not in ("y", "yes"):
+        print("aborted")
+        sys.exit(1)
+
+debug_log = os.path.join(loom_home, "debug.log")
+def warn(msg):
+    try:
+        with open(debug_log, "a") as f:
+            f.write(f"[rm] {msg}\n")
+    except Exception:
+        pass
+
+# 1. Kill tmux
+for b in targets:
+    subprocess.run(
+        ["tmux", "kill-session", "-t", f"loom-{sid}-{b}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+# 2. Remove runtime files
+tmp = tempfile.gettempdir()
+for b in targets:
+    cc = by_id[b]["cc_session_id"]
+    paths = [
+        os.path.join(loom_home, f"session-{sid}-{b}-launch.sh"),
+        os.path.join(loom_home, f"session-{sid}-{b}-prompt.txt"),
+        os.path.join(loom_home, "pending-forks", f"{cc}.json"),
+        os.path.join(tmp, f"loom-send-loom-{sid}-{b}.lock"),
+    ]
+    for p in paths:
+        try:
+            if os.path.exists(p):
+                os.unlink(p)
+        except Exception as e:
+            warn(f"failed to remove {p}: {e}")
+
+# 3. Delete DB rows in a transaction
+try:
+    con.execute("BEGIN")
+    placeholders = ",".join("?" * len(targets))
+    con.execute(
+        f"DELETE FROM branches WHERE session_id = ? "
+        f"AND branch_id IN ({placeholders})",
+        (sid, *targets),
+    )
+    if scope == "session":
+        con.execute("DELETE FROM sessions WHERE id = ?", (sid,))
+    con.commit()
+except Exception:
+    con.rollback()
+    raise
+
+con.close()
+
+if scope == "session":
+    print(f"loom: removed session {sid} ({len(targets)} branch(es))")
+else:
+    print(f"loom: removed branch {branch} from session {sid} "
+          f"({len(targets)} branch(es) total)")
+PY
+}
+
+# ──────────────────────────────────────────────────────────────────────
 # `new` — start a new Loom session (main branch)
 # ──────────────────────────────────────────────────────────────────────
 cmd_new() {
@@ -374,6 +578,7 @@ case "${cmd}" in
   list)             shift; cmd_list "$@" ;;
   attach)           shift; cmd_attach "$@" ;;
   stop)             shift; cmd_stop "$@" ;;
+  rm)               shift; cmd_rm "$@" ;;
   help|--help|-h)   usage ;;
   *)
     echo "loom: unknown command '${cmd}'" >&2

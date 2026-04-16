@@ -12,8 +12,8 @@ import {
   sendLockPath,
   sleep,
   withFileLock,
-  shellQuote,
 } from "../../core/utils.js";
+import { writeLaunchScript } from "../../core/launch-script.js";
 import { renderSystemPrompt } from "../../core/system-prompt.js";
 
 export const sendTool: Tool = {
@@ -89,10 +89,15 @@ export async function handleSend(
       systemPromptText: promptText,
       resume: true,
     });
+    const launchScript = writeLaunchScript({
+      loomSessionId: ctx.loomSessionId,
+      branchId: target,
+      argv,
+    });
     newSession({
       name: tmuxName,
       cwd: session.cwd,
-      command: argv.map(shellQuote).join(" "),
+      command: launchScript,
       env: {
         LOOM_SESSION: ctx.loomSessionId,
         LOOM_BRANCH: target,
@@ -102,8 +107,8 @@ export async function handleSend(
   }
 
   const line = `[loom: from branch ${ctx.branchId}] ${content}`;
-  await withFileLock(sendLockPath(tmuxName), () => {
-    sendKeys(tmuxName, line);
+  await withFileLock(sendLockPath(tmuxName), async () => {
+    await sendKeys(tmuxName, line);
   });
 
   return { content: [{ type: "text", text: "Message sent." }] };

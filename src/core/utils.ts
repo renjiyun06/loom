@@ -7,9 +7,11 @@ import {
   closeSync,
   mkdirSync,
   openSync,
+  readFileSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { PENDING_FORKS_DIR, SEND_LOCKS_DIR } from "./paths.js";
 
 export function sleep(ms: number): Promise<void> {
@@ -32,10 +34,25 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+function pidIsAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH = no such process; EPERM = process exists but belongs to
+    // another user — for our "is this lock stale" check we treat EPERM
+    // as alive to avoid stealing.
+    const code = (err as NodeJS.ErrnoException).code;
+    return code === "EPERM";
+  }
+}
+
 /**
  * Acquire an advisory lock via exclusive file creation (`O_EXCL`) and
- * release it on completion. Used to serialize send-keys calls targeting
- * the same tmux pane so their keystrokes do not interleave.
+ * release it on completion. Writes our PID into the lock file so other
+ * callers can detect and reclaim a stale lock left behind by a dead
+ * process (e.g. a loom command that was Ctrl-C'd mid-run).
  */
 export async function withFileLock<T>(
   lockPath: string,
@@ -45,15 +62,33 @@ export async function withFileLock<T>(
   const retryMs = opts.retryMs ?? 50;
   const timeoutMs = opts.timeoutMs ?? 10_000;
   const started = Date.now();
-  mkdirSync(SEND_LOCKS_DIR, { recursive: true });
+  mkdirSync(dirname(lockPath), { recursive: true });
   let fd: number | null = null;
   while (fd === null) {
     try {
       fd = openSync(lockPath, "wx");
+      writeFileSync(lockPath, String(process.pid));
     } catch (err) {
+      // Someone else owns the lock — check if they're still alive.
+      let holderPid = 0;
+      try {
+        holderPid = parseInt(readFileSync(lockPath, "utf-8").trim(), 10);
+      } catch {
+        // ignore
+      }
+      if (holderPid && !pidIsAlive(holderPid)) {
+        // Stale lock — steal it.
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          // ignore, will retry
+        }
+        continue;
+      }
       if (Date.now() - started > timeoutMs) {
         throw new Error(
-          `withFileLock: timed out acquiring lock at ${lockPath}`,
+          `withFileLock: timed out acquiring lock at ${lockPath} ` +
+            `(held by pid=${holderPid})`,
         );
       }
       await sleep(retryMs);

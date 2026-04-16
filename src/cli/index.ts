@@ -81,13 +81,13 @@ function parseRmArgs(args: string[]): {
   return { sessionId: positional[0], branch: positional[1], force };
 }
 
-function main(argv: string[]): void {
+async function main(argv: string[]): Promise<void> {
   const [cmd, ...rest] = argv;
   switch (cmd ?? "new") {
     case undefined:
     case "new": {
       const opts = parseNewOpts(rest);
-      cmdNew(opts);
+      await cmdNew(opts);
       return;
     }
     case "list":
@@ -99,7 +99,7 @@ function main(argv: string[]): void {
         console.error(`      loom attach <session> [branch]`);
         process.exit(2);
       }
-      cmdAttach(rest[0], rest[1]);
+      await cmdAttach(rest[0], rest[1]);
       return;
     }
     case "stop": {
@@ -113,7 +113,7 @@ function main(argv: string[]): void {
     }
     case "rm": {
       const { sessionId, branch, force } = parseRmArgs(rest);
-      cmdRm(sessionId, branch, { force });
+      await cmdRm(sessionId, branch, { force });
       return;
     }
     case "help":
@@ -128,4 +128,7 @@ function main(argv: string[]): void {
   }
 }
 
-main(process.argv.slice(2));
+main(process.argv.slice(2)).catch((err) => {
+  console.error(`loom: ${err?.message ?? err}`);
+  process.exit(1);
+});

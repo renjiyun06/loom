@@ -7,7 +7,11 @@ import type {
   EnsureGlobalConfigOpts,
   LaunchCommandOpts,
 } from "../types.js";
-import { CC_MCP_CONFIG, CC_SETTINGS } from "../../core/paths.js";
+import {
+  CC_MCP_CONFIG,
+  CC_SETTINGS,
+  CC_POST_HOOK_PATH,
+} from "../../core/paths.js";
 import { ensureDir } from "../../core/utils.js";
 import { dirname } from "node:path";
 
@@ -55,7 +59,7 @@ export function ccEnsureGlobalConfig(opts: EnsureGlobalConfigOpts): void {
           hooks: [
             {
               type: "command",
-              command: `node ${opts.hookScriptPath}`,
+              command: `node ${CC_POST_HOOK_PATH}`,
             },
           ],
         },

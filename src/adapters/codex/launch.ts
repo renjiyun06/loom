@@ -10,16 +10,26 @@ import type {
   EnsureGlobalConfigOpts,
   LaunchCommandOpts,
 } from "../types.js";
+import { CODEX_STOP_HOOK_PATH } from "../../core/paths.js";
 import { ensureDir } from "../../core/utils.js";
 
 const CODEX_HOOKS_JSON = join(homedir(), ".codex", "hooks.json");
 const CODEX_HOME = join(homedir(), ".codex");
 
 /**
- * Build the `codex` argv. The two -c overrides inject:
- *   - per-launch MCP env (so each Codex process's spawned MCP child
- *     sees this branch's LOOM_SESSION/LOOM_BRANCH)
- *   - developer_instructions (equivalent of CC's --append-system-prompt)
+ * Build the `codex` argv.
+ *
+ * - `mcp_servers.loom.env` is passed on every launch (fresh and resume)
+ *   so the MCP child sees this branch's LOOM_SESSION/LOOM_BRANCH.
+ * - `developer_instructions` is only passed on fresh launches. On resume
+ *   Codex does NOT regenerate the developer role message from this flag
+ *   (verified against Codex source `build_initial_context` and empirical
+ *   tests); the developer message in the rollout is the sole authority
+ *   for what the model sees. For fork children loom writes the correct
+ *   developer message directly into the child's synthesized rollout, so
+ *   passing `-c developer_instructions` at child resume would be a no-op
+ *   at best and misleading (it only lands in turn_context, which is not
+ *   sent to the model) — we omit it.
  */
 export function codexBuildLaunchCommand(opts: LaunchCommandOpts): string[] {
   const mcpEnvToml =
@@ -27,18 +37,25 @@ export function codexBuildLaunchCommand(opts: LaunchCommandOpts): string[] {
     `LOOM_SESSION=${tomlString(opts.loomSessionId)},` +
     `LOOM_BRANCH=${tomlString(opts.branchId)}` +
     `}`;
-  const developerInstrToml =
-    `developer_instructions=${tomlTripleString(opts.systemPromptText)}`;
   const args = [
     "codex",
-    "--skip-git-repo-check",
+    "--dangerously-bypass-approvals-and-sandbox",
     "-c",
     mcpEnvToml,
-    "-c",
-    developerInstrToml,
   ];
   if (opts.resume) {
     args.push("resume", opts.agentSessionId);
+  } else {
+    // Fresh launch: inject the loom system prompt via developer_instructions
+    // so Codex's build_initial_context writes it into the developer message
+    // at turn 1.
+    const developerInstrToml =
+      `developer_instructions=${tomlString(opts.systemPromptText)}`;
+    args.push("-c", developerInstrToml);
+    // Codex 0.120+ does not persist any rollout file until the first
+    // user turn. Seed an initial prompt so loom can discover the real
+    // session id immediately.
+    args.push("你好");
   }
   return args;
 }
@@ -54,17 +71,12 @@ function tomlString(s: string): string {
   return `"${escaped}"`;
 }
 
-/** TOML multi-line literal string (triple single-quoted) — supports
- *  multi-line text without escape processing. Newlines, quotes etc.
- *  pass through verbatim. Requires the content to not include `'''`.
- */
-function tomlTripleString(s: string): string {
-  if (s.includes("'''")) {
-    // Fall back to double-quoted basic string with escapes.
-    return tomlString(s);
-  }
-  return `'''\n${s}'''`;
-}
+// Note: we intentionally do NOT use TOML multi-line literal strings
+// (`'''...'''`) because those contain literal single quotes that collide
+// with the shell-single-quote wrapping applied by writeLaunchScript. A
+// basic double-quoted TOML string with `\n` escapes is safely embeddable
+// inside `'...'` and decodes back to the original multi-line text when
+// Codex parses TOML.
 
 /**
  * Codex needs:
@@ -98,7 +110,7 @@ export function codexEnsureGlobalConfig(opts: EnsureGlobalConfigOpts): void {
           hooks: [
             {
               type: "command",
-              command: `node ${opts.hookScriptPath}`,
+              command: `node ${CODEX_STOP_HOOK_PATH}`,
               timeout: 60,
             },
           ],

@@ -24,6 +24,9 @@ import type {
 } from "../types.js";
 import { readCodexEntries } from "./session-file.js";
 import { sleep } from "../../core/utils.js";
+import { renderSystemPrompt } from "../../core/system-prompt.js";
+
+const LOOM_PROMPT_ANCHOR = "# Loom Branch System";
 
 function entryType(e: Entry): string {
   return String((e as any).type ?? "");
@@ -114,6 +117,107 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Derive the child's session_meta from the parent's first rollout entry.
+ * Replaces `id` + both `timestamp`s (outer and `payload.timestamp`); every
+ * other field (`cwd`, `originator`, `cli_version`, `source`,
+ * `model_provider`, `base_instructions`, ...) is inherited verbatim so the
+ * child keeps the same Codex system prompt and launch provenance.
+ */
+function inheritSessionMeta(
+  parentFirstEntry: Entry,
+  childAgentSessionId: string,
+): Entry {
+  if (entryType(parentFirstEntry) !== "session_meta") {
+    throw new Error(
+      `inheritSessionMeta: expected first entry type='session_meta', got '${entryType(parentFirstEntry)}'`,
+    );
+  }
+  const copy = structuredClone(parentFirstEntry) as any;
+  const now = nowIso();
+  copy.timestamp = now;
+  if (copy.payload) {
+    copy.payload.id = childAgentSessionId;
+    copy.payload.timestamp = now;
+  }
+  return copy as Entry;
+}
+
+/**
+ * Rewrite the loom system-prompt portion of a developer `ResponseItem::Message`.
+ *
+ * Codex stores the developer message's `content` as an array of input_text
+ * items, one per section (permissions / our loom prompt / collaboration_mode
+ * / apps_instructions / skills_instructions / ...). We identify our section
+ * by its opening line (`# Loom Branch System`) — distinct from Codex's own
+ * sections which all open with an `<xxx_instructions>` tag.
+ */
+function rewriteLoomPromptInDeveloperMessage(
+  devMsg: Entry,
+  childLoomPrompt: string,
+): Entry {
+  const copy = structuredClone(devMsg) as any;
+  const content = copy?.payload?.content;
+  if (!Array.isArray(content)) return copy as Entry;
+  copy.payload.content = content.map((item: any) => {
+    if (
+      item?.type === "input_text" &&
+      typeof item.text === "string" &&
+      item.text.startsWith(LOOM_PROMPT_ANCHOR)
+    ) {
+      return { ...item, text: childLoomPrompt };
+    }
+    return item;
+  });
+  return copy as Entry;
+}
+
+/** Find the (usually single) developer `Message` ResponseItem in parent entries. */
+function findDeveloperMessage(entries: Entry[]): Entry | null {
+  for (const e of entries) {
+    const ea = e as any;
+    if (
+      ea?.type === "response_item" &&
+      ea?.payload?.type === "message" &&
+      ea?.payload?.role === "developer"
+    ) {
+      return e;
+    }
+  }
+  return null;
+}
+
+/** Find the `<environment_context>` user `Message` ResponseItem in parent entries. */
+function findEnvironmentContextMessage(entries: Entry[]): Entry | null {
+  for (const e of entries) {
+    const ea = e as any;
+    if (
+      ea?.type === "response_item" &&
+      ea?.payload?.type === "message" &&
+      ea?.payload?.role === "user"
+    ) {
+      const c = ea?.payload?.content;
+      if (
+        Array.isArray(c) &&
+        c[0]?.type === "input_text" &&
+        typeof c[0]?.text === "string" &&
+        c[0].text.startsWith("<environment_context>")
+      ) {
+        return e;
+      }
+    }
+  }
+  return null;
+}
+
+/** Find the latest `turn_context` entry at or before `upToIndex`. */
+function findLatestTurnContext(entries: Entry[], upToIndex: number): Entry | null {
+  for (let i = Math.min(upToIndex, entries.length - 1); i >= 0; i--) {
+    if (entryType(entries[i]) === "turn_context") return entries[i];
+  }
+  return null;
+}
+
 function synthFunctionCallOutput(opts: {
   callId: string;
   outputText: string;
@@ -144,32 +248,63 @@ function synthTaskCompleteForTurn(turnId: string): Entry {
 }
 
 /**
- * For inheritContext=false synthesize a minimal session that looks like
- * "the agent just called fork and got back the birth announcement".
+ * Build an 8-entry synthesized child session for `inherit_context=false`.
+ *
+ * Mirrors the shape of a fresh Codex session's first turn
+ * (session_meta → task_started → developer message → env_context user →
+ * turn_context → ...turn body... → task_complete), except the "turn body"
+ * is a single synthesized fork call + its birth announcement output, with
+ * no preceding user input. The child's model sees: "I spontaneously
+ * forked myself in my first turn; my next real user input (`[loom] Begin.`)
+ * starts the second turn."
+ *
+ * What's inherited from parent (verbatim or with id/turn_id swapped):
+ *   - session_meta  (base_instructions, cwd, originator, cli_version, ...)
+ *   - developer message  (permissions / collab_mode / apps / skills sections;
+ *                         but the loom-prompt section is re-rendered with
+ *                         the child's BRANCH_ID)
+ *   - environment_context user message  (cwd/shell/date/tz — parent and
+ *                                        child share the cwd)
+ *   - latest turn_context  (model, policy, ... — child-swapped turn_id;
+ *                           informational only, not sent to model)
+ *
+ * What's synthesized:
+ *   - task_started / task_complete pair for this fake fork turn
+ *   - function_call: `mcp__loom__fork` with the user's instruction
+ *   - function_call_output: the birth announcement text
  */
-function synthMinimalCodexSession(opts: {
+function buildInheritFalseSynthesis(opts: {
+  parentEntries: Entry[];
+  forkIndex: number;
   childAgentSessionId: string;
-  cwd: string;
+  childBranchId: string;
   instruction: string;
+  cwd: string;
   birthText: string;
 }): Entry[] {
+  const { parentEntries, forkIndex } = opts;
+  const parentSessionMeta = parentEntries[0];
+  const parentDevMsg = findDeveloperMessage(parentEntries);
+  const parentEnvCtx = findEnvironmentContextMessage(parentEntries);
+  const parentTurnCtx = findLatestTurnContext(parentEntries, forkIndex);
+
+  if (!parentDevMsg) {
+    throw new Error(
+      "buildInheritFalseSynthesis: parent rollout has no developer message — " +
+        "cannot construct child system prompt without it",
+    );
+  }
+
+  const childLoomPrompt = renderSystemPrompt({ branchId: opts.childBranchId });
+  const sessionMeta = inheritSessionMeta(parentSessionMeta, opts.childAgentSessionId);
+  const developerMsg = rewriteLoomPromptInDeveloperMessage(parentDevMsg, childLoomPrompt);
+
   const turnId = randomUUID();
   const callId = `call_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
-  const sessionMeta: Entry = {
-    timestamp: nowIso(),
-    type: "session_meta",
-    payload: {
-      id: opts.childAgentSessionId,
-      timestamp: nowIso(),
-      cwd: opts.cwd,
-      originator: "loom-synthetic",
-      cli_version: "0.0.0",
-      source: "loom",
-      model_provider: "openai",
-    },
-  };
+  const now = nowIso();
+
   const taskStarted: Entry = {
-    timestamp: nowIso(),
+    timestamp: now,
     type: "event_msg",
     payload: {
       type: "task_started",
@@ -178,22 +313,63 @@ function synthMinimalCodexSession(opts: {
       collaboration_mode_kind: "default",
     },
   };
-  const turnContext: Entry = {
-    timestamp: nowIso(),
-    type: "turn_context",
-    payload: { turn_id: turnId, cwd: opts.cwd },
-  };
-  const userMsg: Entry = {
-    timestamp: nowIso(),
-    type: "response_item",
+
+  // env_context: clone parent's (same cwd/shell/tz). Fall back to a bare
+  // synthesized one if parent rollout somehow lacks it (defensive).
+  const envCtxMsg: Entry = parentEnvCtx
+    ? (structuredClone(parentEnvCtx) as Entry)
+    : {
+        timestamp: now,
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `<environment_context>\n  <cwd>${opts.cwd}</cwd>\n</environment_context>`,
+            },
+          ],
+        },
+      };
+
+  // turn_context: clone parent's latest, swap turn_id. If missing, fall
+  // back to a minimal one (turn_context isn't sent to the model so this
+  // is informational; reconstruct_history_from_rollout reads it to set
+  // reference_context_item so `build_initial_context` won't re-run).
+  let turnContext: Entry;
+  if (parentTurnCtx) {
+    const tc = structuredClone(parentTurnCtx) as any;
+    tc.timestamp = now;
+    if (tc.payload) tc.payload.turn_id = turnId;
+    turnContext = tc as Entry;
+  } else {
+    turnContext = {
+      timestamp: now,
+      type: "turn_context",
+      payload: { turn_id: turnId, cwd: opts.cwd },
+    };
+  }
+
+  // EventMsg::UserMessage: Codex's reconstruct_history_from_rollout only
+  // treats a segment as a "user turn" (and thus captures its turn_context
+  // as reference_context_item) when it contains an EventMsg::UserMessage.
+  // Without this, the first real user turn on resume would trigger
+  // build_initial_context → a duplicate developer message gets written.
+  // The event's `message` content is ignored by reconstruction (matched as
+  // `UserMessage(_)`) and NOT surfaced to the model (only ResponseItem
+  // entries go into the API input) — so an empty string is fine.
+  const userMessageEvent: Entry = {
+    timestamp: now,
+    type: "event_msg",
     payload: {
-      type: "message",
-      role: "user",
-      content: [{ type: "input_text", text: opts.instruction }],
+      type: "user_message",
+      message: "",
     },
   };
+
   const forkCall: Entry = {
-    timestamp: nowIso(),
+    timestamp: now,
     type: "response_item",
     payload: {
       type: "function_call",
@@ -210,31 +386,53 @@ function synthMinimalCodexSession(opts: {
     outputText: opts.birthText,
   });
   const taskComplete = synthTaskCompleteForTurn(turnId);
-  return [sessionMeta, taskStarted, turnContext, userMsg, forkCall, forkOut, taskComplete];
+
+  return [
+    sessionMeta,
+    taskStarted,
+    developerMsg,
+    envCtxMsg,
+    turnContext,
+    userMessageEvent,
+    forkCall,
+    forkOut,
+    taskComplete,
+  ];
 }
 
 export function codexBuildChildSessionEntries(
   opts: BuildChildSessionOpts,
 ): Entry[] {
   if (!opts.inheritContext) {
-    return synthMinimalCodexSession({
+    return buildInheritFalseSynthesis({
+      parentEntries: opts.forkLocation.entries,
+      forkIndex: opts.forkLocation.forkIndex,
       childAgentSessionId: opts.childAgentSessionId,
-      cwd: opts.cwd,
+      childBranchId: opts.childBranchId,
       instruction: opts.instruction,
+      cwd: opts.cwd,
       birthText: opts.birthAnnouncementText,
     });
   }
 
-  // inheritContext=true: slice parent prefix up to and including the
-  // fork function_call, change session_meta.id to child's id, then
+  // inheritContext=true: slice parent prefix up to and including the fork
+  // call, rewrite session_meta (id + timestamps) and the developer message
+  // (so child sees its own BRANCH_ID in the loom system prompt), then
   // append the synthetic function_call_output + task_complete closure.
+  const childLoomPrompt = renderSystemPrompt({ branchId: opts.childBranchId });
   const prefix = opts.forkLocation.entries
     .slice(0, opts.forkLocation.forkIndex + 1)
     .map((e, i) => {
+      const ea = e as any;
       if (i === 0 && entryType(e) === "session_meta") {
-        const copy = structuredClone(e) as any;
-        if (copy.payload) copy.payload.id = opts.childAgentSessionId;
-        return copy as Entry;
+        return inheritSessionMeta(e, opts.childAgentSessionId);
+      }
+      if (
+        ea?.type === "response_item" &&
+        ea?.payload?.type === "message" &&
+        ea?.payload?.role === "developer"
+      ) {
+        return rewriteLoomPromptInDeveloperMessage(e, childLoomPrompt);
       }
       return e;
     });

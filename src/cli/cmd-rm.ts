@@ -12,7 +12,7 @@
  *     rollouts under ~/.codex/sessions). Consistent with legacy loom.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import {
   deleteBranches,
   deleteSession,
@@ -30,23 +30,28 @@ export interface RmOpts {
   force: boolean;
 }
 
-function prompt(question: string): boolean {
-  if (!process.stdin.isTTY) return false;
-  process.stdout.write(question);
-  try {
-    const buf = Buffer.alloc(16);
-    const n = readFileSync(0, { encoding: "utf-8" }).trim();
-    return /^y(es)?$/i.test(n);
-  } catch {
-    return false;
-  }
+function confirmYesNo(question: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!process.stdin.isTTY) {
+      resolve(false);
+      return;
+    }
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(/^y(es)?$/i.test(answer.trim()));
+    });
+  });
 }
 
-export function cmdRm(
+export async function cmdRm(
   loomSessionId: string,
   branch: string | undefined,
   opts: RmOpts,
-): void {
+): Promise<void> {
   requireTools(["tmux"]);
   const db = openDb();
   const sess = getSession(db, loomSessionId);
@@ -74,7 +79,8 @@ export function cmdRm(
     const summary = wholeSession
       ? `entire session ${loomSessionId} (${toDelete.length} branch(es))`
       : `branch ${branch} and ${toDelete.length - 1} descendant(s)`;
-    if (!prompt(`Remove ${summary}? [y/N] `)) {
+    const ok = await confirmYesNo(`Remove ${summary}? [y/N] `);
+    if (!ok) {
       console.error(`loom: aborted`);
       process.exit(1);
     }

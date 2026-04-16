@@ -60,8 +60,6 @@ export interface LaunchCommandOpts {
 export interface EnsureGlobalConfigOpts {
   /** Absolute path to compiled dist/mcp/server.js (the loom MCP entry). */
   mcpServerPath: string;
-  /** Absolute path to compiled dist/hooks/<this agent's hook>.js. */
-  hookScriptPath: string;
 }
 
 export interface HookTriggerInfo {
@@ -124,4 +122,44 @@ export interface AgentAdapter {
 
   /** Parse the raw hook-payload JSON into the info the hook-runner needs. */
   parseHookPayload(rawPayload: string): HookTriggerInfo;
+
+  /**
+   * List all existing session file paths this agent has on disk. Used
+   * by the "discover" flow to snapshot the before-state so we can
+   * identify a newly created file after launch.
+   *
+   * - CC: lists `~/.claude/projects/<encoded-cwd>/*.jsonl` (so the
+   *   discover step knows not to re-pick existing CC sessions).
+   * - Codex: lists `~/.codex/sessions/**\/*.jsonl`.
+   */
+  listExistingSessionFiles(cwd: string): string[];
+
+  /**
+   * After launching a fresh (non-forked) session in the background,
+   * block until the agent is fully started up and return its real
+   * session id. This serves two purposes simultaneously:
+   *
+   *   1. Capture the session id Loom should record in the DB.
+   *   2. Gate the user-facing `tmux attach` so it only runs after the
+   *      agent is ready to read stdin. Attaching too early (while bash
+   *      is still parsing the launch script) causes terminal DA
+   *      capability-query responses to leak into the agent's TUI as
+   *      visible garbage.
+   *
+   * - CC: polls for `~/.claude/projects/<encoded-cwd>/<hintId>.jsonl`
+   *   to exist, then returns `hintId` (CC is guaranteed to use it
+   *   because we passed `--session-id <hintId>`).
+   * - Codex: polls `~/.codex/sessions/` for a new rollout file not in
+   *   `beforeFiles`, reads its `session_meta.payload.id`, returns it.
+   *
+   * @param hintId      The UUID loom pre-allocated and stored in the DB.
+   * @param beforeFiles Snapshot from `listExistingSessionFiles` taken
+   *                    before the agent was launched.
+   */
+  discoverNewSessionId(opts: {
+    cwd: string;
+    hintId: string;
+    beforeFiles: string[];
+    timeoutMs?: number;
+  }): Promise<string>;
 }

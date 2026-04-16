@@ -3,6 +3,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { readdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
   AgentAdapter,
   BuildChildSessionOpts,
@@ -17,6 +19,7 @@ import {
   readCcEntries,
   writeCcEntries,
 } from "./session-file.js";
+import { sleep } from "../../core/utils.js";
 import {
   ccBuildChildSessionEntries,
   ccWaitForForkCall,
@@ -65,5 +68,33 @@ export class CcAdapter implements AgentAdapter {
 
   parseHookPayload(rawPayload: string): HookTriggerInfo {
     return ccParseHookPayload(rawPayload);
+  }
+
+  listExistingSessionFiles(cwd: string): string[] {
+    const dir = dirname(this.sessionFilePath(cwd, "placeholder"));
+    try {
+      return readdirSync(dir)
+        .filter((n) => n.endsWith(".jsonl"))
+        .map((n) => `${dir}/${n}`);
+    } catch {
+      return [];
+    }
+  }
+
+  async discoverNewSessionId(opts: {
+    cwd: string;
+    hintId: string;
+    beforeFiles: string[];
+    timeoutMs?: number;
+  }): Promise<string> {
+    // CC is guaranteed to use `hintId` (we passed --session-id), so
+    // there is nothing to discover. But we still want the user-facing
+    // tmux attach to happen only after bash has exec'd claude and
+    // claude is reading stdin — attaching sooner leaks terminal DA
+    // query responses into the TUI. A short fixed wait is sufficient;
+    // bash's exec to claude is sub-second and claude settles its
+    // stdin handling almost immediately after that.
+    await sleep(2_000);
+    return opts.hintId;
   }
 }

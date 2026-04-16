@@ -16,7 +16,8 @@ import { getSession } from "./db.js";
 import { openDb } from "./db.js";
 import { renderSystemPrompt } from "./system-prompt.js";
 import { newSession, sendKeys, tmuxSessionName } from "./tmux.js";
-import { sendLockPath, sleep, withFileLock, shellQuote } from "./utils.js";
+import { sendLockPath, sleep, withFileLock } from "./utils.js";
+import { writeLaunchScript } from "./launch-script.js";
 import type { ForkJob } from "../types.js";
 
 /**
@@ -112,10 +113,15 @@ export async function executeFork(params: ExecuteForkParams): Promise<void> {
     systemPromptText: promptText,
     resume: true,
   });
+  const launchScript = writeLaunchScript({
+    loomSessionId: job.loomSessionId,
+    branchId: job.childBranchId,
+    argv,
+  });
   newSession({
     name: tmuxName,
     cwd,
-    command: argv.map(shellQuote).join(" "),
+    command: launchScript,
     env: {
       LOOM_SESSION: job.loomSessionId,
       LOOM_BRANCH: job.childBranchId,
@@ -124,8 +130,8 @@ export async function executeFork(params: ExecuteForkParams): Promise<void> {
 
   // 5. Wait for the TUI to come up, then inject the kickoff line.
   await sleep(kickoffDelayMs);
-  await withFileLock(sendLockPath(tmuxName), () => {
-    sendKeys(tmuxName, "[loom] Begin.");
+  await withFileLock(sendLockPath(tmuxName), async () => {
+    await sendKeys(tmuxName, "[loom] Begin.");
   });
 }
 

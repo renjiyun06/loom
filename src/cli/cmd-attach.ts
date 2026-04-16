@@ -10,17 +10,14 @@ import {
   getSession,
   openDb,
 } from "../core/db.js";
-import {
-  MCP_SERVER_PATH,
-  CC_POST_HOOK_PATH,
-  CODEX_STOP_HOOK_PATH,
-} from "../core/paths.js";
+import { MCP_SERVER_PATH } from "../core/paths.js";
 import { renderSystemPrompt } from "../core/system-prompt.js";
-import { sessionExists, tmuxSessionName } from "../core/tmux.js";
-import { shellQuote } from "../core/utils.js";
+import { newSession, sessionExists, tmuxSessionName } from "../core/tmux.js";
+import { writeLaunchScript } from "../core/launch-script.js";
+import { sleep } from "../core/utils.js";
 import { requireAgentBinary, requireBuilt, requireTools } from "./preflight.js";
 
-export function cmdAttach(loomSessionId: string, branch = "main"): void {
+export async function cmdAttach(loomSessionId: string, branch = "main"): Promise<void> {
   requireTools(["tmux"]);
   const tmuxName = tmuxSessionName(loomSessionId, branch);
 
@@ -45,11 +42,7 @@ export function cmdAttach(loomSessionId: string, branch = "main"): void {
   requireAgentBinary(b.agent_type);
 
   const adapter = getAdapter(b.agent_type);
-  adapter.ensureGlobalConfig({
-    mcpServerPath: MCP_SERVER_PATH,
-    hookScriptPath:
-      b.agent_type === "claude-code" ? CC_POST_HOOK_PATH : CODEX_STOP_HOOK_PATH,
-  });
+  adapter.ensureGlobalConfig({ mcpServerPath: MCP_SERVER_PATH });
 
   const promptText = renderSystemPrompt({ branchId: branch });
   const argv = adapter.buildLaunchCommand({
@@ -60,24 +53,30 @@ export function cmdAttach(loomSessionId: string, branch = "main"): void {
     systemPromptText: promptText,
     resume: true,
   });
-  const command = argv.map(shellQuote).join(" ");
+  const launchScript = writeLaunchScript({
+    loomSessionId,
+    branchId: branch,
+    argv,
+  });
 
   console.error(`loom: relaunching ${tmuxName} (agent=${b.agent_type})`);
-  const res = spawnSync(
-    "tmux",
-    [
-      "new-session",
-      "-s",
-      tmuxName,
-      "-e",
-      `LOOM_SESSION=${loomSessionId}`,
-      "-e",
-      `LOOM_BRANCH=${branch}`,
-      "-c",
-      sess.cwd,
-      command,
-    ],
-    { stdio: "inherit" },
-  );
+
+  // Detached launch + short wait + foreground attach, same flow as
+  // `loom new`. Attaching the user's terminal directly to a fresh pty
+  // while bash is still handing off to the agent causes the terminal's
+  // DA1/DA2 capability-query response bytes to leak into the agent's
+  // TUI as visible garbage. Waiting ~2s lets the agent settle first.
+  newSession({
+    name: tmuxName,
+    cwd: sess.cwd,
+    command: launchScript,
+    detached: true,
+    env: { LOOM_SESSION: loomSessionId, LOOM_BRANCH: branch },
+  });
+  await sleep(2_000);
+
+  const res = spawnSync("tmux", ["attach", "-t", tmuxName], {
+    stdio: "inherit",
+  });
   process.exit(res.status ?? 1);
 }

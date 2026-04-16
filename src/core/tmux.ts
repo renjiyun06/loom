@@ -4,6 +4,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { sleep } from "./utils.js";
 
 export function tmuxSessionName(
   loomSessionId: string,
@@ -59,16 +60,24 @@ export function killSession(name: string): void {
 
 /**
  * Inject a line of text (followed by Enter) into the target pane.
+ *
+ * The short pause between the text paste and the Enter keystroke is
+ * deliberate: Codex's TUI sometimes renders the input line after it
+ * already passed the Enter event through, which leaves the text stranded
+ * in the input box. Giving the TUI a moment to settle before Enter
+ * avoids this without losing much throughput (these sends are rare).
+ *
  * Callers are responsible for serialization via file-lock when multiple
  * senders might race; see utils.withFileLock.
  */
-export function sendKeys(name: string, text: string): void {
+export async function sendKeys(name: string, text: string): Promise<void> {
   const rText = spawnSync("tmux", ["send-keys", "-t", name, "-l", text], {
     encoding: "utf-8",
   });
   if (rText.status !== 0) {
     throw new Error(`tmux send-keys (text) failed: ${rText.stderr || ""}`);
   }
+  await sleep(300);
   const rEnter = spawnSync("tmux", ["send-keys", "-t", name, "Enter"], {
     encoding: "utf-8",
   });

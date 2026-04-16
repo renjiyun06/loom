@@ -14,10 +14,11 @@ export const LOOM_DEBUG_LOG = join(LOOM_HOME, "debug.log");
 
 /**
  * Locate the Loom repo root at runtime. Compiled code lives in
- * `<repo>/dist/core/paths.js`, so the repo root is three `..` up.
+ * `<repo>/dist/core/paths.js`, so the repo root is two `..` up from
+ * the compiled file's directory.
  */
 const __filename = fileURLToPath(import.meta.url);
-export const REPO_ROOT = resolve(dirname(__filename), "..", "..", "..");
+export const REPO_ROOT = resolve(dirname(__filename), "..", "..");
 
 export const DIST_DIR = join(REPO_ROOT, "dist");
 export const MCP_SERVER_PATH = join(DIST_DIR, "mcp", "server.js");
@@ -29,3 +30,14 @@ export const SYSTEM_PROMPT_TEMPLATE = join(REPO_ROOT, "system-prompt.md");
 /** CC-side MCP / settings config loom writes into ~/.loom/. */
 export const CC_MCP_CONFIG = join(LOOM_HOME, "mcp-config.json");
 export const CC_SETTINGS = join(LOOM_HOME, "settings.json");
+
+/** Per-branch runtime artifact paths written by Loom on launch. */
+export function launchScriptPath(sid: string, branchId: string): string {
+  return join(LOOM_HOME, `session-${sid}-${branchId}-launch.sh`);
+}
+export function promptFilePath(sid: string, branchId: string): string {
+  return join(LOOM_HOME, `session-${sid}-${branchId}-prompt.txt`);
+}
+
+/** Global lock for `loom new` serialization (agent-specific discovery flow). */
+export const NEW_SESSION_LOCK = join(LOOM_HOME, "new-session.lock");

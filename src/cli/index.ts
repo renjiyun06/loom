@@ -7,6 +7,7 @@ import type { AgentType } from "../types.js";
 import { cmdNew } from "./cmd-new.js";
 import { cmdList } from "./cmd-list.js";
 import { cmdAttach } from "./cmd-attach.js";
+import { cmdRelaunch } from "./cmd-relaunch.js";
 import { cmdStop } from "./cmd-stop.js";
 import { cmdRm } from "./cmd-rm.js";
 
@@ -23,6 +24,11 @@ Commands:
                              session isn't alive but the branch is
                              registered, relaunches the agent first.
                              Default branch is 'main'.
+  relaunch <session> [branch] Ensure a branch's tmux session is alive
+                             WITHOUT attaching. Useful for tooling /
+                             agentboard's loom tree view. Prints
+                             'already-alive: <name>' or 'launched:
+                             <name>' to stdout. Default branch 'main'.
   stop <session> [branch]    Kill tmux session(s) for a Loom session.
                              Without branch: kill every live branch
                              of that session. DB rows preserved;
@@ -100,6 +106,15 @@ async function main(argv: string[]): Promise<void> {
         process.exit(2);
       }
       await cmdAttach(rest[0], rest[1]);
+      return;
+    }
+    case "relaunch": {
+      if (!rest[0]) {
+        console.error(`loom: relaunch requires a session id`);
+        console.error(`      loom relaunch <session> [branch]`);
+        process.exit(2);
+      }
+      cmdRelaunch(rest[0], rest[1]);
       return;
     }
     case "stop": {

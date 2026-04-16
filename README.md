@@ -29,7 +29,7 @@ exactly the prefix of history that existed at the moment of fork.
 
 - **Claude Code** — session JSONL under `~/.claude/projects/...`,
   triggered via `PostToolUse` hook.
-- **Codex** (OpenAI Codex CLI v0.118+) — rollout JSONL under
+- **Codex** (OpenAI Codex CLI v0.120+) — rollout JSONL under
   `~/.codex/sessions/YYYY/MM/DD/...`, triggered via `Stop` hook
   (requires `codex features enable codex_hooks`).
 
@@ -130,10 +130,26 @@ registered in the DB and `loom attach` will relaunch them.
 - Each agent persists its session as JSONL/rollout files — Loom never
   stores conversation content itself, it only splices/writes these
   files to create child sessions.
-- A child branch's session file is a **copy of the parent's file
-  prefix** up to the fork call, with identifiers rewritten (CC: per
-  entry; Codex: in `session_meta`) and a synthesized "birth
-  announcement" appended as the fork tool's return value.
+- A child branch's session file is **synthesized by the adapter** at
+  fork time:
+  - **`inherit_context=true`**: copy the parent's prefix up to the fork
+    call, then append a synthesized "birth announcement" as the fork
+    tool's output. CC rewrites each entry's `sessionId` to the child's
+    id. Codex swaps `session_meta.id` and replaces the loom-prompt
+    section of the developer role message with the child's rendered
+    system prompt (so the model sees its own `BRANCH_ID`, not the
+    parent's).
+  - **`inherit_context=false`**: CC synthesizes a minimal two-entry
+    file (synthetic fork `tool_use` + birth `tool_result`). Codex
+    synthesizes nine entries that mirror a fresh first turn —
+    `session_meta` and the developer role message are inherited from
+    the parent (loom prompt re-rendered for the child); a synthetic
+    `task_started`, inherited `turn_context`, inherited environment
+    context, a `user_message` event (required for Codex's
+    reconstruction to treat this as a real user turn so
+    `reference_context_item` is captured and `build_initial_context`
+    does not re-run), the fork `function_call`, its birth
+    `function_call_output`, and `task_complete` close the turn.
 - **SQLite** at `~/.loom/loom.db` holds only structure: which branches
   exist, who their parent is, what agent backs them, and the agent's
   own session id.
@@ -145,10 +161,18 @@ registered in the DB and `loom attach` will relaunch them.
   - CC: `PostToolUse` hook matches the fork tool_use.
   - Codex: `Stop` hook fires per turn; we filter by the existence of a
     pending-fork marker file.
-- A **`system-prompt.md` template** is injected into every branch's
-  agent (CC: via `--append-system-prompt`; Codex: via
-  `-c developer_instructions=...`) with `{{BRANCH_ID}}` substituted at
-  launch time.
+- A **`system-prompt.md` template** is rendered per-branch with
+  `{{BRANCH_ID}}` substituted, then delivered to each agent differently:
+  - **CC**: passed on every launch (fresh and resume) via
+    `--append-system-prompt`; CC does not bake it into the JSONL.
+  - **Codex (fresh)**: passed via `-c developer_instructions=...` so
+    Codex writes it into the rollout's developer role message at
+    session start.
+  - **Codex (resume)**: the flag is omitted — Codex does not rewrite
+    the developer role message from `-c` on resume, so the system
+    prompt for fork children is written directly into the child's
+    synthesized rollout (see above) and read back when the child
+    resumes.
 - The **Adapter** pattern (`src/adapters/<agent>/*`) hides all
   agent-specific quirks behind a uniform interface. Upper layers
   (`src/cli/*`, `src/core/execute-fork`, `src/core/hook-runner`,

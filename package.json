@@ -1,0 +1,26 @@
+{
+  "name": "loom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Parallel branching system for Claude Code and Codex, with fork/send/checkout MCP tools.",
+  "type": "module",
+  "bin": {
+    "loom": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "npm run build && node --test '__tests__/**/*.test.mjs'",
+    "clean": "rm -rf dist",
+    "postbuild": "chmod +x dist/cli/index.js dist/hooks/*.js 2>/dev/null || true"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

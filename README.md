@@ -120,6 +120,7 @@ registered in the DB and `loom attach` will relaunch them.
 | `loom new [--agent <type>]` | Start a new Loom session on a fresh `main` branch. Agent is `claude-code` (default) or `codex`. |
 | `loom list [--json]` | Print all sessions and their branch trees, marking agent, alive/dead, and inherit/isolated. With `--json`, emit a flat machine-readable forest document (`{sessions:[{id,cwd,created_at,branches:[{id,parent_id,agent_type,agent_session_id,inherit_context,instruction,alive,tmux_name,created_at}]}]}`) — branches are a flat array per session with `parent_id` references; `instruction` is never truncated. Intended for tooling (VS Code extension, dashboards). |
 | `loom attach <session> [branch]` | Attach to a branch's tmux. Relaunches the agent if the tmux is dead but the branch is registered. Default branch: `main`. |
+| `loom relaunch <session> [branch]` | Ensure a branch's tmux is alive WITHOUT attaching. Prints `already-alive: <name>` or `launched: <name>`. Intended for tooling (Agentboard, VS Code extension). Default branch: `main`. |
 | `loom stop <session> [branch]` | Kill tmux for a session (or one of its branches). DB registrations are preserved. |
 | `loom rm <session> [branch] [-f]` | Permanently remove a session (or a branch subtree) from Loom's records. Agent session files are left untouched. |
 | `loom help` | Show usage. |

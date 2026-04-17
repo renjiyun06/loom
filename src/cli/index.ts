@@ -19,7 +19,10 @@ Commands:
                              --agent defaults to claude-code.
                              Valid types: claude-code, codex.
                              (Default command when none is given.)
-  list                       Show all sessions and their branch trees.
+  list [--json]              Show all sessions and their branch trees.
+                             With --json, emit a machine-readable
+                             flat forest document (for tooling like
+                             the VS Code extension or dashboards).
   attach <session> [branch]  Attach to a branch's tmux. If the tmux
                              session isn't alive but the branch is
                              registered, relaunches the agent first.
@@ -96,9 +99,18 @@ async function main(argv: string[]): Promise<void> {
       await cmdNew(opts);
       return;
     }
-    case "list":
-      cmdList();
+    case "list": {
+      let json = false;
+      for (const a of rest) {
+        if (a === "--json") json = true;
+        else {
+          console.error(`loom: unknown argument '${a}'`);
+          process.exit(2);
+        }
+      }
+      cmdList({ json });
       return;
+    }
     case "attach": {
       if (!rest[0]) {
         console.error(`loom: attach requires a session id`);

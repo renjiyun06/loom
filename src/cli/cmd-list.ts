@@ -1,5 +1,9 @@
 /**
  * `loom list` — render all sessions with their branch trees.
+ *
+ * Default output is a human-readable tree; `--json` emits a flat
+ * machine-readable document intended for programmatic consumers
+ * (VS Code extension, dashboards, etc.).
  */
 
 import {
@@ -8,7 +12,34 @@ import {
   openDb,
 } from "../core/db.js";
 import { listLoomSessions, tmuxSessionName } from "../core/tmux.js";
-import type { Branch } from "../types.js";
+import type { AgentType, Branch, Session } from "../types.js";
+
+export interface ListOpts {
+  json?: boolean;
+}
+
+export interface ForestJsonBranch {
+  id: string;
+  parent_id: string | null;
+  agent_type: AgentType;
+  agent_session_id: string;
+  inherit_context: boolean | null;
+  instruction: string | null;
+  alive: boolean;
+  tmux_name: string;
+  created_at: string;
+}
+
+export interface ForestJsonSession {
+  id: string;
+  cwd: string;
+  created_at: string;
+  branches: ForestJsonBranch[];
+}
+
+export interface ForestJson {
+  sessions: ForestJsonSession[];
+}
 
 function fmtTs(ms: number): string {
   const d = new Date(ms);
@@ -25,22 +56,64 @@ function truncate(s: string | null, n = 10): string {
   return t.length <= n ? t : t.slice(0, n - 1) + "…";
 }
 
-export function cmdList(): void {
-  const db = openDb();
-  const sessions = listSessions(db);
+/**
+ * Pure helper: turn DB rows + tmux liveness into the JSON shape.
+ * Extracted so tests can feed synthetic data without touching the DB.
+ */
+export function buildForestJson(
+  sessions: Session[],
+  branchesBySession: Map<string, Branch[]>,
+  liveTmuxSessions: Set<string>,
+): ForestJson {
+  return {
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      cwd: s.cwd,
+      created_at: new Date(s.created_at).toISOString(),
+      branches: (branchesBySession.get(s.id) ?? []).map((b) => {
+        const tmux = tmuxSessionName(s.id, b.branch_id);
+        return {
+          id: b.branch_id,
+          parent_id: b.parent_branch_id,
+          agent_type: b.agent_type,
+          agent_session_id: b.agent_session_id,
+          inherit_context:
+            b.inherit_context === null ? null : b.inherit_context === 1,
+          instruction: b.instruction,
+          alive: liveTmuxSessions.has(tmux),
+          tmux_name: tmux,
+          created_at: new Date(b.created_at).toISOString(),
+        };
+      }),
+    })),
+  };
+}
+
+function renderJson(
+  sessions: Session[],
+  branchesBySession: Map<string, Branch[]>,
+  live: Set<string>,
+): void {
+  const doc = buildForestJson(sessions, branchesBySession, live);
+  process.stdout.write(JSON.stringify(doc, null, 2) + "\n");
+}
+
+function renderTree(
+  sessions: Session[],
+  branchesBySession: Map<string, Branch[]>,
+  live: Set<string>,
+): void {
   if (!sessions.length) {
     console.log("loom: no sessions recorded");
     return;
   }
-
-  const live = new Set(listLoomSessions());
 
   sessions.forEach((s, i) => {
     if (i > 0) console.log();
     console.log(
       `session ${s.id}  cwd=${s.cwd}  created=${fmtTs(s.created_at)}`,
     );
-    const branches = listBranches(db, s.id);
+    const branches = branchesBySession.get(s.id) ?? [];
     const children: Record<string, Branch[]> = {};
     for (const b of branches) {
       const key = b.parent_branch_id ?? "__ROOT__";
@@ -77,4 +150,21 @@ export function cmdList(): void {
     };
     render(null, "");
   });
+}
+
+export function cmdList(opts: ListOpts = {}): void {
+  const db = openDb();
+  const sessions = listSessions(db);
+  const live = new Set(listLoomSessions());
+
+  const branchesBySession = new Map<string, Branch[]>();
+  for (const s of sessions) {
+    branchesBySession.set(s.id, listBranches(db, s.id));
+  }
+
+  if (opts.json) {
+    renderJson(sessions, branchesBySession, live);
+    return;
+  }
+  renderTree(sessions, branchesBySession, live);
 }

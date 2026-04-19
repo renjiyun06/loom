@@ -17,7 +17,6 @@ import {
 
 import { forkTool, handleFork } from "./tools/fork.js";
 import { sendTool, handleSend } from "./tools/send.js";
-import { checkoutTool, handleCheckout } from "./tools/checkout.js";
 import { openDb, type Db } from "../core/db.js";
 
 export interface Context {
@@ -45,7 +44,7 @@ async function main(): Promise<void> {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [forkTool, sendTool, checkoutTool],
+    tools: [forkTool, sendTool],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -55,8 +54,6 @@ async function main(): Promise<void> {
         return handleFork(ctx, args ?? {});
       case "send":
         return handleSend(ctx, args ?? {});
-      case "checkout":
-        return handleCheckout(ctx, args ?? {});
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

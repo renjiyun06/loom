@@ -32,10 +32,14 @@ Commands:
                              agentboard's loom tree view. Prints
                              'already-alive: <name>' or 'launched:
                              <name>' to stdout. Default branch 'main'.
-  stop <session> [branch]    Kill tmux session(s) for a Loom session.
+  stop <session> [branch] [--only]
+                             Kill tmux session(s) for a Loom session.
                              Without branch: kill every live branch
-                             of that session. DB rows preserved;
-                             'loom attach' can relaunch.
+                             of that session. With branch: kill that
+                             branch AND all its descendants. With
+                             --only: kill just that single branch.
+                             DB rows preserved; 'loom attach' can
+                             relaunch.
   rm <session> [branch] [-f] Permanently remove a session (or a branch
                              and its descendants) from Loom's records.
                              Agent session files are left untouched.
@@ -130,12 +134,18 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
     case "stop": {
-      if (!rest[0]) {
+      let only = false;
+      const pos: string[] = [];
+      for (const a of rest) {
+        if (a === "--only") only = true;
+        else pos.push(a);
+      }
+      if (!pos[0]) {
         console.error(`loom: stop requires a session id`);
-        console.error(`      loom stop <session> [branch]`);
+        console.error(`      loom stop <session> [branch] [--only]`);
         process.exit(2);
       }
-      cmdStop(rest[0], rest[1]);
+      cmdStop(pos[0], pos[1], { only });
       return;
     }
     case "rm": {

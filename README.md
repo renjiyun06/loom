@@ -1,44 +1,325 @@
 # Loom
 
-> Parallel branching system for **Claude Code and Codex** — turn a
-> single-threaded conversation into a forkable, parallel, and
-> message-passing tree.
+> Parallel branching for **Claude Code and Codex**. Loom turns a
+> single agent conversation into a forkable tree of tmux-backed agent
+> sessions with message passing between branches.
 
-## What & Why
+## Status
 
-A normal agent session is linear: you and the agent walk down one
-thread of context together. If you want to explore a side question, you
-either start a fresh session (losing context) or rewind (losing what
-came after). Neither composes well with the way real work branches.
+Loom is early project infrastructure, not a polished frontend product.
+The current implementation focuses on the terminal/runtime layer:
 
-Loom answers this with three primitives:
+- Implemented: `fork` and `send` MCP tools for Claude Code and Codex.
+- Implemented: CLI lifecycle commands for creating, listing, attaching,
+  relaunching, stopping, and removing Loom sessions.
+- Not bundled: a first-party graphical frontend.
+- Not currently exposed: the old `checkout` MCP idea. Frontends can
+  still consume `~/.loom/loom.db` and `loom list --json`, but the MCP
+  server currently exposes only `fork` and `send`.
+- Not supported yet: cross-agent forks. A child branch inherits the
+  parent's agent type.
 
-- **`fork`** — spawn a new branch with its own agent instance running
-  in parallel. The child inherits the conversation up to the fork
-  point; you keep working on the parent.
-- **`send`** — deliver a message to another branch. Use it to ask a
-  question, hand off a sub-task, or report a result back.
-- **`checkout`** — ask the user's frontend to switch focus to another
-  branch. Pure view-layer; no data effect.
+## What Loom Is For
 
-Branches are full agent instances, not "thoughts" or "rewinds". They
-actually run, in their own tmux sessions, in parallel, and share
-exactly the prefix of history that existed at the moment of fork.
+Most agent CLIs are linear: one working directory, one terminal, one
+conversation timeline. That is awkward when the work naturally branches:
+you may want one agent to investigate an unfamiliar subsystem, another
+to try a low-risk patch, and the parent to keep planning without
+blocking on either result.
 
-## Supported agents
+Loom gives that workflow three concrete properties:
 
-- **Claude Code** — session JSONL under `~/.claude/projects/...`,
-  triggered via `PostToolUse` hook.
-- **Codex** (OpenAI Codex CLI v0.120+) — rollout JSONL under
-  `~/.codex/sessions/YYYY/MM/DD/...`, triggered via `Stop` hook
-  (requires `codex features enable codex_hooks`).
+- **Parallelism**: each branch is a real Claude Code or Codex process in
+  its own named tmux session.
+- **Shared prefix**: a forked child can inherit the parent's conversation
+  history up to the fork call, then continue independently.
+- **Message passing**: branches can send short handoff messages to one
+  another without merging terminal state or rewriting history.
 
-Each branch pins its agent type; fork children default to the same
-agent as the parent. You can mix agents across a session's branches in
-principle, but cross-agent fork (parent CC, child Codex) is not yet
-supported — the child inherits the parent's agent.
+Good fits:
 
-## How it works
+- exploratory codebase investigation while the parent keeps working;
+- bounded implementation or verification subtasks;
+- agent dashboards or editor extensions that need a stable session tree;
+- long-running terminal workflows where branch state must survive
+  detach/reattach.
+
+Poor fits:
+
+- replacing git branches, worktrees, or code review;
+- running untrusted agents without sandboxing;
+- browser-style visual branch switching out of the box;
+- mixing Claude Code parent sessions with Codex child sessions.
+
+## Quick Start
+
+### 1. Install Prerequisites
+
+Install the runtime tools:
+
+- `node` 22 or newer
+- `npm`
+- `tmux`
+- `sqlite3`
+
+Install at least one supported agent CLI:
+
+- Claude Code: the `claude` command
+- Codex CLI v0.120 or newer: the `codex` command
+
+### 2. Build Loom
+
+```bash
+git clone https://github.com/renjiyun06/loom.git
+cd loom
+npm ci
+npm run build
+npm test
+npm link
+```
+
+`npm link` makes the compiled `loom` command available on your `PATH`.
+If you skip it, run the CLI with `node dist/cli/index.js`.
+
+### 3. Start a Session
+
+From the project directory you want the agent to work in:
+
+```bash
+# Claude Code is the default.
+loom new
+
+# Equivalent explicit form.
+loom new --agent claude-code
+
+# Or start with Codex.
+loom new --agent codex
+```
+
+`loom new` creates a Loom session, registers the `main` branch in
+`~/.loom/loom.db`, starts the agent inside `tmux`, and attaches your
+terminal. Detach with `Ctrl-B d`.
+
+### 4. Run a Minimal Branch Workflow
+
+Inside the attached agent, ask it to use Loom's `fork` tool:
+
+```text
+Use the loom fork tool to investigate the test structure and report
+back to main. Inherit context.
+```
+
+The tool call creates a child branch and starts another tmux session in
+the background. In another terminal:
+
+```bash
+loom list
+loom list --json
+```
+
+Attach to the child branch if you want to watch or interact with it:
+
+```bash
+loom attach <session-id> <child-branch-id>
+```
+
+From either branch, the agent can use the `send` tool to report back:
+
+```text
+Use the loom send tool with target "main" and content "The test suite is
+under __tests__ and npm test runs build plus node --test."
+```
+
+If a registered branch's tmux session is dead, wake it without attaching:
+
+```bash
+loom relaunch <session-id> <branch-id>
+```
+
+Stop live tmux sessions while keeping the Loom records:
+
+```bash
+loom stop <session-id>                  # stop every live branch
+loom stop <session-id> <branch-id>      # stop branch and descendants
+loom stop <session-id> <branch-id> --only
+```
+
+Because `stop` preserves database rows, `loom attach` and
+`loom relaunch` can start registered branches again.
+
+## Agent Setup Differences
+
+Loom configures the selected agent when you run `loom new`. The two
+agents need different hook and MCP wiring.
+
+### Claude Code
+
+Claude Code sessions store JSONL files under:
+
+```text
+~/.claude/projects/<encoded-cwd>/*.jsonl
+```
+
+Loom writes Claude-specific config under `~/.loom/`:
+
+- `~/.loom/mcp-config.json`: registers the compiled Loom MCP server.
+- `~/.loom/settings.json`: installs a `PostToolUse` hook matching fork
+  tool calls.
+
+Claude Code receives Loom branch context from the tmux environment:
+
+```text
+LOOM_SESSION=<session-id>
+LOOM_BRANCH=<branch-id>
+```
+
+Loom launches Claude Code with `--append-system-prompt`, `--mcp-config`,
+`--settings`, and `--dangerously-skip-permissions`.
+
+### Codex
+
+Codex rollouts are stored under:
+
+```text
+~/.codex/sessions/YYYY/MM/DD/*.jsonl
+```
+
+Loom performs three Codex setup steps:
+
+- registers the MCP server with `codex mcp add loom`;
+- writes `~/.codex/hooks.json` with a `Stop` hook pointing at Loom's
+  compiled hook;
+- runs `codex features enable codex_hooks`.
+
+Codex receives Loom branch context through the per-launch MCP config:
+
+```text
+mcp_servers.loom.env={LOOM_SESSION="<session-id>",LOOM_BRANCH="<branch-id>"}
+```
+
+For fresh Codex sessions, Loom also passes the branch system prompt via
+`developer_instructions`. On resume, Loom relies on the rollout's stored
+developer message instead.
+
+## CLI Reference
+
+| Command | What it does |
+|---------|--------------|
+| `loom new [--agent <type>]` | Start a new Loom session on a fresh `main` branch and attach to it. Agent type defaults to `claude-code`; valid values are `claude-code`, `cc`, and `codex`. |
+| `loom list` | Print all sessions as human-readable branch trees. Each branch shows agent type, tmux liveness, inherit/isolated state, and a truncated instruction. |
+| `loom list --json` | Emit `{ "sessions": [...] }` for tooling. Branches are a flat array per session with `parent_id` links. `instruction` is not truncated. |
+| `loom attach <session> [branch]` | Attach to a branch tmux session. If the tmux session is dead but the branch is still registered, relaunch the agent first. Default branch: `main`. |
+| `loom relaunch <session> [branch]` | Ensure a branch tmux session is alive without attaching. Prints `already-alive: <tmux-name>` or `launched: <tmux-name>`. Default branch: `main`. |
+| `loom stop <session>` | Kill every live tmux session whose name belongs to the Loom session. Database records are preserved. |
+| `loom stop <session> <branch>` | Kill that branch and all descendants, leaves first. Database records are preserved. |
+| `loom stop <session> <branch> --only` | Kill only that one branch's tmux session. Database records are preserved. |
+| `loom rm <session> [branch] [-f]` | Permanently remove a whole session or a branch subtree from Loom's database. Kills affected tmux sessions and removes pending-fork files. Agent session files are left untouched. `-f` skips confirmation. |
+| `loom help`, `loom --help`, `loom -h` | Show CLI usage. |
+
+## MCP Tools
+
+The MCP server is shared by both agents and currently exposes:
+
+| Tool | Arguments | Result |
+|------|-----------|--------|
+| `fork` | `instruction` string, optional `inherit_context` boolean defaulting to `true` | Allocates a child branch, records it in SQLite, writes a pending-fork marker, and lets the agent hook synthesize and launch the child session. |
+| `send` | `target` branch id, `content` string | Sends `[loom: from branch <id>] ...` into the target branch's tmux session. If the target branch is registered but not alive, Loom relaunches it first. |
+
+## Troubleshooting
+
+### `loom: MCP server not built`
+
+Run:
+
+```bash
+npm ci
+npm run build
+```
+
+Loom launches `dist/mcp/server.js`, so the TypeScript build must exist
+before `loom new`, `loom attach`, or `loom relaunch` can start agents.
+
+### Missing `tmux`, `sqlite3`, `claude`, or `codex`
+
+`loom new` checks required binaries before launch. Install the missing
+command and make sure it is visible on `PATH` from the shell where you
+run `loom`.
+
+### `tmux` session does not exist
+
+Use `loom list` to confirm the Loom session and branch ids. If the
+branch is still registered but marked dead, run:
+
+```bash
+loom relaunch <session-id> <branch-id>
+loom attach <session-id> <branch-id>
+```
+
+If the branch was removed with `loom rm`, it cannot be relaunched from
+Loom's database.
+
+### Agent starts but `fork` is not available
+
+Check that the selected agent was launched through `loom new`, not
+directly through `claude` or `codex`. The MCP server also requires:
+
+```text
+LOOM_SESSION
+LOOM_BRANCH
+```
+
+These are set by Loom's tmux launch path. Running the MCP server by hand
+without them will fail.
+
+### Codex fork calls do nothing
+
+Codex needs hook support enabled. Re-run a Codex Loom session setup:
+
+```bash
+loom new --agent codex
+```
+
+Then verify:
+
+```bash
+codex features list
+cat ~/.codex/hooks.json
+codex mcp list
+```
+
+The hook file should contain a `Stop` hook for Loom, and the MCP list
+should include `loom`.
+
+### Claude Code hook does not fire
+
+Claude Code uses Loom's per-launch config files:
+
+```text
+~/.loom/mcp-config.json
+~/.loom/settings.json
+```
+
+Start the session through `loom new --agent claude-code` so Claude Code
+receives those files and the `PostToolUse` hook.
+
+### Where runtime files live
+
+```text
+~/.loom/loom.db                         # session and branch structure
+~/.loom/pending-forks/                  # fork jobs waiting for hooks
+~/.loom/send-locks/                     # send serialization locks
+~/.loom/debug.log                       # hook/fork debug log
+~/.loom/session-<sid>-<branch>-*.sh     # per-branch launch scripts
+~/.loom/session-<sid>-<branch>-prompt.txt
+~/.claude/projects/.../*.jsonl          # Claude Code conversation files
+~/.codex/sessions/YYYY/MM/DD/*.jsonl    # Codex rollout files
+~/.codex/hooks.json                     # Codex hook config
+```
+
+Loom's database stores structure only. Conversation content remains in
+the agent's own session files.
+
+## How It Works
 
 ```
 Branch main (agent=codex)
@@ -57,163 +338,83 @@ Branch main (agent=codex)
  └─ assistant: "Good. Based on that, here's the plan..."
 ```
 
-**`fork`** allocates a new branch id, synthesizes a child session file
-by copying the parent's history up to (and including) the fork call,
-injects a "birth announcement" as the fork's tool result, then launches
-a fresh agent instance on that file inside a new tmux session.
+`fork` allocates a child branch id, stores it in SQLite, and writes a
+pending-fork file keyed by the parent agent session id. The agent hook
+then waits for the parent's fork call to be flushed to disk, synthesizes
+the child session file, and starts the child agent in a tmux session.
 
-**`send`** writes a `[loom: from branch <id>] ...` line into the
-target branch's tmux. If the target's agent is dormant, it gets started
-on demand. The receiver sees the message as a normal user turn.
+`send` writes a prefixed message into another branch's tmux session. If
+the target is registered but dead, Loom relaunches the agent first and
+then sends the message.
 
-**`checkout`** is a thin signal to the user's frontend (e.g. a web GUI
-watching loom's tmux sessions) to switch focus to a given branch.
-It does not move the caller and does not modify any branch's history.
+Each branch is named:
 
-## Quick start
+```text
+loom-<session-id>-<branch-id>
+```
 
-**Prerequisites**
-- `tmux`, `node` (≥ 22), `sqlite3`
-- At least one of: [Claude Code](https://docs.claude.com/claude-code)
-  (the `claude` CLI), [Codex CLI](https://developers.openai.com/codex/cli)
-  (the `codex` CLI)
+## Implementation Notes
 
-**Install**
+- **tmux** isolates each branch as its own terminal session.
+- **SQLite** at `~/.loom/loom.db` stores sessions, branch parentage,
+  agent type, agent session id, instruction, and timestamps.
+- **MCP** under `src/mcp/` exposes the `fork` and `send` tools over
+  stdio. The same server binary is used by both agents.
+- **Hooks** finish fork execution after the parent agent has written the
+  fork tool call to disk:
+  - Claude Code: `PostToolUse` hook matches fork tool calls.
+  - Codex: `Stop` hook fires each turn; Loom filters by pending-fork
+    marker.
+- **System prompt rendering** uses `system-prompt.md` with
+  `{{BRANCH_ID}}` substituted per branch.
+- **Adapters** under `src/adapters/<agent>/` isolate Claude Code and
+  Codex session-file, launch, hook, and resume behavior from the shared
+  CLI/core layers.
+
+Child session synthesis differs by `inherit_context`:
+
+- `inherit_context=true`: copy the parent's history prefix through the
+  fork call, then append a synthesized birth-announcement tool result.
+  Claude Code rewrites each entry's `sessionId`; Codex rewrites
+  `session_meta.id` and the Loom prompt section in the developer
+  message.
+- `inherit_context=false`: synthesize a minimal child session that
+  contains enough agent-native structure for the child to treat the fork
+  as its starting point without inheriting the full parent conversation.
+
+## Repo Layout
+
+```text
+src/cli/            TypeScript CLI (new/list/attach/relaunch/stop/rm)
+src/mcp/            Shared MCP server and tools
+src/hooks/          Agent-specific hook entry points
+src/adapters/       Claude Code and Codex adapter implementations
+src/core/           Agent-neutral database, tmux, fork, launch logic
+system-prompt.md    Per-branch system prompt template
+__tests__/          Node test runner tests
+dist/               Compiled JavaScript output
+```
+
+## Database Schema
+
+Current schema version: `user_version = 2`.
+
+Migrations run automatically when Loom opens the database. Pre-adapter
+v1 databases are upgraded in place: `cc_session_id` is renamed to
+`agent_session_id`, and an `agent_type` column is added with
+`claude-code` as the default.
+
+## Development
 
 ```bash
-git clone https://github.com/renjiyun06/loom.git
-cd loom
-npm install
+npm ci
 npm run build
-npm link                     # makes `loom` available on PATH
+npm test
+npm run clean
 ```
 
-**Use**
-
-```bash
-# Start a new Loom session running Claude Code on the main branch (default)
-loom new
-loom new --agent claude-code  # same thing, explicit
-
-# Or start a new session running Codex
-loom new --agent codex
-
-# Inside the agent, call the `fork` tool to spawn a parallel branch:
-#   fork(instruction: "Investigate X and report back", inherit_context: true)
-# A new tmux session 'loom-<sid>-<branch>' starts in the background.
-
-# In another terminal, see the tree:
-loom list
-
-# Attach to any branch's tmux to watch or interact:
-loom attach <session-id> <branch-id>
-```
-
-Detach a tmux session with `Ctrl-B d`. Use `loom stop <session>` to
-kill all live tmux sessions of a Loom session — the branches stay
-registered in the DB and `loom attach` will relaunch them.
-
-## CLI reference
-
-| Command | What it does |
-|---------|--------------|
-| `loom new [--agent <type>]` | Start a new Loom session on a fresh `main` branch. Agent is `claude-code` (default) or `codex`. |
-| `loom list [--json]` | Print all sessions and their branch trees, marking agent, alive/dead, and inherit/isolated. With `--json`, emit a flat machine-readable forest document (`{sessions:[{id,cwd,created_at,branches:[{id,parent_id,agent_type,agent_session_id,inherit_context,instruction,alive,tmux_name,created_at}]}]}`) — branches are a flat array per session with `parent_id` references; `instruction` is never truncated. Intended for tooling (VS Code extension, dashboards). |
-| `loom attach <session> [branch]` | Attach to a branch's tmux. Relaunches the agent if the tmux is dead but the branch is registered. Default branch: `main`. |
-| `loom relaunch <session> [branch]` | Ensure a branch's tmux is alive WITHOUT attaching. Prints `already-alive: <name>` or `launched: <name>`. Intended for tooling (Agentboard, VS Code extension). Default branch: `main`. |
-| `loom stop <session> [branch]` | Kill tmux for a session (or one of its branches). DB registrations are preserved. |
-| `loom rm <session> [branch] [-f]` | Permanently remove a session (or a branch subtree) from Loom's records. Agent session files are left untouched. |
-| `loom help` | Show usage. |
-
-## How it's built
-
-- **tmux** isolates each branch as `loom-<session>-<branch>`.
-- Each agent persists its session as JSONL/rollout files — Loom never
-  stores conversation content itself, it only splices/writes these
-  files to create child sessions.
-- A child branch's session file is **synthesized by the adapter** at
-  fork time:
-  - **`inherit_context=true`**: copy the parent's prefix up to the fork
-    call, then append a synthesized "birth announcement" as the fork
-    tool's output. CC rewrites each entry's `sessionId` to the child's
-    id. Codex swaps `session_meta.id` and replaces the loom-prompt
-    section of the developer role message with the child's rendered
-    system prompt (so the model sees its own `BRANCH_ID`, not the
-    parent's).
-  - **`inherit_context=false`**: CC synthesizes a minimal two-entry
-    file (synthetic fork `tool_use` + birth `tool_result`). Codex
-    synthesizes nine entries that mirror a fresh first turn —
-    `session_meta` and the developer role message are inherited from
-    the parent (loom prompt re-rendered for the child); a synthetic
-    `task_started`, inherited `turn_context`, inherited environment
-    context, a `user_message` event (required for Codex's
-    reconstruction to treat this as a real user turn so
-    `reference_context_item` is captured and `build_initial_context`
-    does not re-run), the fork `function_call`, its birth
-    `function_call_output`, and `task_complete` close the turn.
-- **SQLite** at `~/.loom/loom.db` holds only structure: which branches
-  exist, who their parent is, what agent backs them, and the agent's
-  own session id.
-- An **MCP server** (under `src/mcp/`) exposes the `fork` / `send` /
-  `checkout` tools to each agent instance over stdio. The same server
-  binary is shared by both agents.
-- Per-agent hooks do the heavy lifting once the parent's fork call
-  has been flushed to disk:
-  - CC: `PostToolUse` hook matches the fork tool_use.
-  - Codex: `Stop` hook fires per turn; we filter by the existence of a
-    pending-fork marker file.
-- A **`system-prompt.md` template** is rendered per-branch with
-  `{{BRANCH_ID}}` substituted, then delivered to each agent differently:
-  - **CC**: passed on every launch (fresh and resume) via
-    `--append-system-prompt`; CC does not bake it into the JSONL.
-  - **Codex (fresh)**: passed via `-c developer_instructions=...` so
-    Codex writes it into the rollout's developer role message at
-    session start.
-  - **Codex (resume)**: the flag is omitted — Codex does not rewrite
-    the developer role message from `-c` on resume, so the system
-    prompt for fork children is written directly into the child's
-    synthesized rollout (see above) and read back when the child
-    resumes.
-- The **Adapter** pattern (`src/adapters/<agent>/*`) hides all
-  agent-specific quirks behind a uniform interface. Upper layers
-  (`src/cli/*`, `src/core/execute-fork`, `src/core/hook-runner`,
-  `src/mcp/tools/*`) only call adapter methods, never reference a
-  concrete agent.
-
-## Repo layout
-
-```
-src/cli/            TypeScript CLI (new / list / attach / stop / rm)
-src/mcp/            Shared MCP server: server.ts + tools/*
-src/hooks/          Agent-specific hook entry points (thin wrappers)
-src/adapters/       claude-code/ and codex/ implementations of AgentAdapter
-src/core/           Agent-neutral business logic (execute-fork,
-                    hook-runner, db, tmux, ...)
-system-prompt.md    Template applied to every branch; {{BRANCH_ID}} is
-                    substituted at launch time
-__tests__/          Unit tests (Node test runner)
-
-~/.loom/            Runtime state (created on first use): loom.db,
-                    mcp-config.json, settings.json, pending-forks/,
-                    debug.log (CC-specific files live here)
-~/.codex/           Codex-side config loom writes into: hooks.json,
-                    and the registered loom MCP via `codex mcp add`.
-```
-
-## DB schema
-
-Version `user_version = 2`. Migrations run automatically on first
-connect; pre-Adapter (v1) databases are upgraded in place without data
-loss — `cc_session_id` is renamed to `agent_session_id` and an
-`agent_type` column is added defaulting to `claude-code`.
-
-## Status
-
-Early. `fork` and `send` are fully implemented for both agents.
-`checkout` is currently a stub on the MCP side — the user-facing
-frontend integration is done externally (a Loom tree view in
-[Agentboard](https://github.com/gbasin/agentboard), a tmux web GUI,
-that consumes `~/.loom/loom.db` directly).
+The test script runs `npm run build` first, then Node's built-in test
+runner over `__tests__/**/*.test.mjs`.
 
 ## License
 

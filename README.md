@@ -8,6 +8,8 @@
 
 Loom is early software. The implemented product surface is a local CLI,
 an MCP server, tmux-managed agent processes, and SQLite runtime state.
+For a maintenance-oriented map of the layers, fork/send flows, adapter
+boundary, and runtime state, see [docs/architecture.md](docs/architecture.md).
 
 Implemented today:
 

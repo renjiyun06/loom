@@ -1,0 +1,17 @@
+/runtime/
+/downloads/
+/state/
+/ipc/
+/logs/
+/backups/
+/tests/results/
+.render-profile/
+node_modules/
+*.log
+*.local.json
+.env
+.env.*
+
+# Per-installation settings written by the launcher or the running app.
+/config/runtime.json
+/config/codex.json

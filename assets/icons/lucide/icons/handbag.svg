@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-handbag"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2.048 18.566 C 1.9164 19.1582 2.0606 19.778 2.4401 20.2513 C 2.8196 20.7245 3.3934 20.9999 4 21 H 20 C 20.6066 20.9999 21.1804 20.7245 21.5599 20.2513 C 21.9394 19.778 22.0836 19.1582 21.952 18.566 L 19.952 9.566 C 19.7486 8.6511 18.9372 8.0002 18 8 H 6 C 5.0628 8.0002 4.2514 8.6511 4.048 9.566 Z" />
+  <path d="M 8 11 V 6 C 8 3.7909 9.7909 2 12 2 C 14.2091 2 16 3.7909 16 6 V 11" />
+</svg>

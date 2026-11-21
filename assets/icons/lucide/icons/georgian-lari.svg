@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-georgian-lari"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 10 V 3" />
+  <path d="M 14 10 V 3" />
+  <path d="M 19 13 C 19 9.134 15.866 6 12 6 C 8.134 6 5 9.134 5 13 C 5 16.866 8.134 20 12 20" />
+  <path d="M 5 20 H 19" />
+</svg>

@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-hockey-stick"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 4 V 8 C 11 9.1 8.975 10 6.5 10 C 4.025 10 2 9.1 2 8 V 4" />
+  <path d="M 18.21 3.106 C 18.704 2.1177 19.9057 1.717 20.894 2.211 C 21.8823 2.705 22.283 3.9067 21.789 4.895 L 14.894 18.684 C 13.8777 20.7159 11.8009 21.9995 9.529 22 H 4.5 C 3.1193 22 2 20.8807 2 19.5 C 2 18.1193 3.1193 17 4.5 17 H 10.028 C 10.7851 16.9998 11.4772 16.5721 11.816 15.895 Z" />
+  <path d="M 18.59 11.295 L 15.012 9.506" />
+  <path d="M 20.79 6.895 L 17.212 5.106" />
+  <path d="M 7 17 V 22" />
+  <ellipse cx="6.5" cy="4" rx="4.5" ry="2" />
+</svg>

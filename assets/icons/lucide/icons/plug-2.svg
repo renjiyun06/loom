@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-plug-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 9 2 V 8" />
+  <path d="M 15 2 V 8" />
+  <path d="M 12 17 V 22" />
+  <path d="M 5 8 H 19" />
+  <path d="M 6 11 V 8 H 18 V 11 C 18 14.3137 15.3137 17 12 17 C 8.6863 17 6 14.3137 6 11 Z" />
+</svg>

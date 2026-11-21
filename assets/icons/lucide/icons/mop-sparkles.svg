@@ -1,0 +1,24 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-mop-sparkles"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 22 C 8.3431 22 7 20.6569 7 19" />
+  <path d="M 10 22 C 12.761 22 15 20.21 15 18 C 10.58 18 10.92 13 6.5 13 C 4.0517 13.0516 2.0939 15.0511 2.0939 17.5 C 2.0939 19.9489 4.0517 21.9484 6.5 22 Z" />
+  <path d="M 10 3 H 8" />
+  <path d="M 12.5 11.5 L 22 2" />
+  <path d="M 20 13 V 17" />
+  <path d="M 22 15 H 18" />
+  <path d="M 4 5 V 9" />
+  <path d="M 6 7 H 2" />
+  <path d="M 6.98 13.02 L 9.645 10.356 C 10.1174 9.8843 10.8826 9.8843 11.355 10.356 L 13.645 12.644 C 13.8722 12.871 13.9998 13.1789 13.9998 13.5 C 13.9998 13.8211 13.8722 14.129 13.645 14.356 L 11.557 16.443" />
+  <path d="M 9 2 V 4" />
+</svg>

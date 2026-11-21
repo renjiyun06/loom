@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-nfc"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 6 8.32 C 7.3005 10.601 7.3005 13.399 6 15.68" />
+  <path d="M 9.46 6.21 C 11.4921 9.8025 11.4921 14.1975 9.46 17.79" />
+  <path d="M 12.91 4.1 C 15.713 8.9928 15.7168 15.0037 12.92 19.9" />
+  <path d="M 16.37 2 C 19.91 8.1967 19.91 15.8033 16.37 22" />
+</svg>

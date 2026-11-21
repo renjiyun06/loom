@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-paint-roller"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="16" height="6" x="2" y="2" rx="2" />
+  <path d="M 10 16 V 14 C 10 12.8954 10.8954 12 12 12 H 20 C 21.1046 12 22 11.1046 22 10 V 7 C 22 5.8954 21.1046 5 20 5 H 18" />
+  <rect width="4" height="6" x="8" y="16" rx="1" />
+</svg>

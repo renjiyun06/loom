@@ -1,0 +1,24 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-hotel"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 22 V 15.43" />
+  <path d="M 12 11 H 12.01" />
+  <path d="M 12 7 H 12.01" />
+  <path d="M 14 15.43 V 22" />
+  <path d="M 15 16 C 13.2222 14.6667 10.7778 14.6667 9 16" />
+  <path d="M 16 11 H 16.01" />
+  <path d="M 16 7 H 16.01" />
+  <path d="M 8 11 H 8.01" />
+  <path d="M 8 7 H 8.01" />
+  <rect x="4" y="2" width="16" height="20" rx="2" />
+</svg>

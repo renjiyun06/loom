@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-venus-and-mars"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 20 H 14" />
+  <path d="M 12 16 V 22" />
+  <path d="M 17 2 H 21 V 6" />
+  <path d="M 21 2 L 15.54 7.46" />
+  <circle cx="12" cy="11" r="5" />
+</svg>

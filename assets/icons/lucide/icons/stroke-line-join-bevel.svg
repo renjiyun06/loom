@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-stroke-line-join-bevel"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 21 V 18.998" />
+  <path d="M 3 3 H 11.002 C 11.6414 2.999 12.2547 3.2531 12.706 3.706 L 20.294 11.294 C 20.7469 11.7453 21.001 12.3586 21 12.998 V 21" />
+  <path d="M 5 13 H 3" />
+  <path d="M 9 13 H 10 C 10.5523 13 11 13.4477 11 14 V 15" />
+</svg>

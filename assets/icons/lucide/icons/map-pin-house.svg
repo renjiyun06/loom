@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-map-pin-house"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 15 22 C 14.4477 22 14 21.5523 14 21 V 17 C 13.9999 16.6657 14.1669 16.3535 14.445 16.168 L 17.445 14.168 C 17.781 13.9438 18.219 13.9438 18.555 14.168 L 21.555 16.168 C 21.8331 16.3535 22.0001 16.6657 22 17 V 21 C 22 21.5523 21.5523 22 21 22 Z" />
+  <path d="M 18 10 C 18 5.5817 14.4183 2 10 2 C 5.5817 2 2 5.5817 2 10 C 2 14.993 7.539 20.193 9.399 21.799 C 9.5724 21.929 9.7833 21.9992 10 21.999" />
+  <path d="M 18 22 V 19" />
+  <circle cx="10" cy="10" r="3" />
+</svg>

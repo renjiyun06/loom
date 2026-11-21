@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-car"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 19 17 H 21 C 21.6 17 22 16.6 22 16 V 13 C 22 12.1 21.3 11.3 20.5 11.1 C 18.7 10.6 16 10 16 10 C 16 10 14.7 8.6 13.8 7.7 C 13.3 7.3 12.7 7 12 7 H 5 C 4.4 7 3.9 7.4 3.6 7.9 L 2.2 10.8 C 2.0676 11.1862 2 11.5917 2 12 V 16 C 2 16.6 2.4 17 3 17 H 5" />
+  <circle cx="7" cy="17" r="2" />
+  <path d="M 9 17 H 15" />
+  <circle cx="17" cy="17" r="2" />
+</svg>

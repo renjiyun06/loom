@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-waves-vertical"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 2 Q 14 4.5 12 7 Q 10 9.5 12 12 Q 14 14.5 12 17 Q 10 19.5 12 22" />
+  <path d="M 19 2 Q 21 4.5 19 7 Q 17 9.5 19 12 Q 21 14.5 19 17 Q 17 19.5 19 22" />
+  <path d="M 5 2 Q 7 4.5 5 7 Q 3 9.5 5 12 Q 7 14.5 5 17 Q 3 19.5 5 22" />
+</svg>

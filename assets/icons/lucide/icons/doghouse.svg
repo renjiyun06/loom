@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-doghouse"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2 9.718 L 10.82 3.385 C 11.5228 2.8714 12.4772 2.8714 13.18 3.385 L 22 9.718" />
+  <path d="M 20 8.282 L 18.993 19.184 C 18.8979 20.2135 18.0338 21.0008 17 21 H 7 C 5.9665 21.0002 5.1031 20.2131 5.008 19.184 L 4 8.282" />
+  <path d="M 8.5 9.938 C 10.6658 8.6876 13.3342 8.6876 15.5 9.938" />
+  <path d="M 9 21 V 16 C 9 14.3431 10.3431 13 12 13 C 13.6569 13 15 14.3431 15 16 V 21" />
+</svg>

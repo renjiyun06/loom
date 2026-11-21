@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-undo"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 7 V 13 H 9" />
+  <path d="M 21 17 C 21 12.0294 16.9706 8 12 8 C 9.7851 8.0023 7.6489 8.8212 6 10.3 L 3 13" />
+</svg>

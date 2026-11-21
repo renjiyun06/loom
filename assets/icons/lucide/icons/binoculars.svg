@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-binoculars"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 10 H 14" />
+  <path d="M 19 7 V 4 C 19 3.4477 18.5523 3 18 3 H 16 C 15.4477 3 15 3.4477 15 4 V 7" />
+  <path d="M 20 21 C 21.1046 21 22 20.1046 22 19 V 15.149 C 22 13.759 20 12.187 20 10.32 V 8 C 20 7.4477 19.5523 7 19 7 H 15 C 14.4477 7 14 7.4477 14 8 V 19 C 14 20.1046 14.8954 21 16 21 Z" />
+  <path d="M 22 16 L 2 16" />
+  <path d="M 4 21 C 2.8954 21 2 20.1046 2 19 V 15.149 C 2 13.759 4 12.187 4 10.32 V 8 C 4 7.4477 4.4477 7 5 7 H 9 C 9.5523 7 10 7.4477 10 8 V 19 C 10 20.1046 9.1046 21 8 21 Z" />
+  <path d="M 9 7 V 4 C 9 3.4477 8.5523 3 8 3 H 6 C 5.4477 3 5 3.4477 5 4 V 7" />
+</svg>

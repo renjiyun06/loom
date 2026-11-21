@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-gemini"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 16 4.525 V 19.473" />
+  <path d="M 20 3 C 15 5.6667 9 5.6667 4 3" />
+  <path d="M 4 21 C 9 18.3333 15 18.3333 20 21" />
+  <path d="M 8 4.525 V 19.473" />
+</svg>

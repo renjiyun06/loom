@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-lens-concave"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 7 2 C 6.6212 2 6.275 2.214 6.1056 2.5528 C 5.9362 2.8916 5.9727 3.297 6.2 3.6 C 9.9333 8.5778 9.9333 15.4222 6.2 20.4 C 5.9727 20.703 5.9362 21.1084 6.1056 21.4472 C 6.275 21.786 6.6212 22 7 22 H 17 C 17.3788 22 17.725 21.786 17.8944 21.4472 C 18.0638 21.1084 18.0273 20.703 17.8 20.4 C 14.0667 15.4222 14.0667 8.5778 17.8 3.6 C 18.0273 3.297 18.0638 2.8916 17.8944 2.5528 C 17.725 2.214 17.3788 2 17 2 Z" />
+</svg>

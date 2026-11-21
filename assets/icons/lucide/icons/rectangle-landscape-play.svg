@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-rectangle-landscape-play"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 15.033 11.44 C 15.2313 11.5568 15.353 11.7698 15.353 12 C 15.353 12.2302 15.2313 12.4432 15.033 12.56 L 10.968 14.912 C 10.7678 15.0243 10.5232 15.0227 10.3245 14.9078 C 10.1258 14.7928 10.0024 14.5816 10 14.352 V 9.648 C 10.0026 9.4188 10.1258 9.2078 10.3242 9.0929 C 10.5226 8.9781 10.7669 8.9762 10.967 9.088 Z" />
+  <rect x="2" y="5" width="20" height="14" rx="2" />
+</svg>

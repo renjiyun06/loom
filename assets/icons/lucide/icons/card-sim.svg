@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-card-sim"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 14 V 18" />
+  <path d="M 14.172 2 C 14.7024 2.0001 15.211 2.2109 15.586 2.586 L 19.414 6.414 C 19.7891 6.789 19.9999 7.2976 20 7.828 V 20 C 20 21.1046 19.1046 22 18 22 H 6 C 4.8954 22 4 21.1046 4 20 V 4 C 4 2.8954 4.8954 2 6 2 Z" />
+  <path d="M 8 14 H 16" />
+  <rect x="8" y="10" width="8" height="8" rx="2" />
+</svg>

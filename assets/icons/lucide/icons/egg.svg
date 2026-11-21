@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-egg"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 2 C 8 2 4 8 4 14 C 4 18.4183 7.5817 22 12 22 C 16.4183 22 20 18.4183 20 14 C 20 8 16 2 12 2" />
+</svg>

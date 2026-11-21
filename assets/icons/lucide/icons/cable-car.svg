@@ -1,0 +1,22 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-cable-car"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 3 H 10.01" />
+  <path d="M 14 2 H 14.01" />
+  <path d="M 2 9 L 22 4" />
+  <path d="M 12 12 V 6.5" />
+  <rect width="16" height="10" x="4" y="12" rx="3" />
+  <path d="M 9 12 V 17" />
+  <path d="M 15 12 V 17" />
+  <path d="M 4 17 H 20" />
+</svg>

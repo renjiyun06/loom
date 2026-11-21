@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-rectangle-goggles"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 20 6 C 21.1046 6 22 6.8954 22 8 V 16 C 22 17.1046 21.1046 18 20 18 H 16 C 15.3705 18 14.7777 17.7036 14.4 17.2 L 12.8 15.07 C 12.6111 14.8182 12.3148 14.67 12 14.67 C 11.6852 14.67 11.3889 14.8182 11.2 15.07 L 9.6 17.2 C 9.2223 17.7036 8.6295 18 8 18 H 4 C 2.8954 18 2 17.1046 2 16 V 8 C 2 6.8954 2.8954 6 4 6 Z" />
+</svg>

@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-tractor"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 11 L 21 11.9 C 21.5134 12.0009 21.8621 12.4805 21.8 13 L 21.135 17.158 C 21.0573 17.6433 20.6385 18.0003 20.147 18 H 20" />
+  <path d="M 16 18 H 11" />
+  <path d="M 18 5 C 17.4477 5 17 5.4477 17 6 V 11.573" />
+  <path d="M 3 4 H 11.129 C 11.6281 4.0003 12.0506 4.3686 12.119 4.863 L 13 11.246" />
+  <path d="M 4 11 V 4" />
+  <path d="M 7 15 H 7.01" />
+  <path d="M 8 10.1 V 4" />
+  <circle cx="18" cy="18" r="2" />
+  <circle cx="7" cy="15" r="5" />
+</svg>

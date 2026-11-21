@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-monitor-smartphone"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 18 8 V 6 C 18 4.8954 17.1046 4 16 4 H 4 C 2.8954 4 2 4.8954 2 6 V 13 C 2 14.1046 2.8954 15 4 15 H 12" />
+  <path d="M 10 19 V 15.04 V 18.19" />
+  <path d="M 7 19 H 12" />
+  <rect width="6" height="10" x="16" y="12" rx="2" />
+</svg>

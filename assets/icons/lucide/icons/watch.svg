@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-watch"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 10 V 12.2 L 13.6 13.2" />
+  <path d="M 16.13 7.66 L 15.32 3.61 C 15.1313 2.6598 14.2886 1.9814 13.32 2 H 10.64 C 9.6714 1.9814 8.8287 2.6598 8.64 3.61 L 7.86 7.66" />
+  <path d="M 7.88 16.36 L 8.68 20.36 C 8.8687 21.3102 9.7114 21.9886 10.68 21.97 H 13.4 C 14.3686 21.9886 15.2113 21.3102 15.4 20.36 L 16.21 16.31" />
+  <circle cx="12" cy="12" r="6" />
+</svg>

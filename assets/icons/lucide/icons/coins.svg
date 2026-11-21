@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-coins"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 13.744 17.736 C 12.915 20.4771 10.2645 22.2503 7.4145 21.9704 C 4.5645 21.6905 2.3095 19.4355 2.0296 16.5855 C 1.7497 13.7355 3.5229 11.085 6.264 10.256" />
+  <path d="M 15 6 H 16 V 10" />
+  <path d="M 6.134 14.768 L 7 14.268 L 9 17.732" />
+  <circle cx="16" cy="8" r="6" />
+</svg>

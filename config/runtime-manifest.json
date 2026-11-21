@@ -1,0 +1,93 @@
+{
+  "recordedAt": "2026-11-20T16:05:26.050Z",
+  "codexSource": "Local official Codex Desktop 26.1111.2228.0 resources",
+  "nodeSource": "Previously verified Node runtime copied locally",
+  "files": [
+    {
+      "path": "runtime\\codex\\codex-code-mode-host.exe",
+      "bytes": 80459056,
+      "sha256": "ea5052efa8e4659f5eb2c6199090da75df65bbec4b08955e925eef60a64bbd33"
+    },
+    {
+      "path": "runtime\\codex\\codex-command-runner.exe",
+      "bytes": 8932144,
+      "sha256": "2d226628cda9dfc29e3483bd8017d32484714d79127b5fb53ce53aaf05499fae"
+    },
+    {
+      "path": "runtime\\codex\\codex-windows-sandbox-service.exe",
+      "bytes": 58484528,
+      "sha256": "b8a185d2964a24a666e8320f35518a9c676727f4418717265a559468eb925612"
+    },
+    {
+      "path": "runtime\\codex\\codex-windows-sandbox-setup.exe",
+      "bytes": 19556144,
+      "sha256": "0ee6252c8ed191b2a3809ba63231e941425427fe1156f58cdda978fefe76c8a9"
+    },
+    {
+      "path": "runtime\\codex\\codex.exe",
+      "bytes": 382514992,
+      "sha256": "094d4db493de22025712cc5963854e7654b7c97f4cee795e3e986270a0f4f6b4"
+    },
+    {
+      "path": "runtime\\codex\\rg.exe",
+      "bytes": 4352304,
+      "sha256": "aa3a65c65acf29456302b8ebe1ad5b77659d6139e149f149031ec7c99331c417"
+    },
+    {
+      "path": "runtime\\codex\\THIRD_PARTY_NOTICES.txt",
+      "bytes": 2579,
+      "sha256": "7009e188f3f387b702b1f3a091b5670b0cb08c6bacd86e33f37ace9ab01f08c5"
+    },
+    {
+      "path": "runtime\\node\\node.exe",
+      "bytes": 92534088,
+      "sha256": "9a4eb5f1c29c6a2e93852ead46b999e284a6a5ca8bab4d4e241d587d025a52de"
+    },
+    {
+      "path": "runtime\\supervisor\\supervisor.exe",
+      "bytes": 9728,
+      "sha256": "d75fe264aefe1190ec2912ad1604c6bef235ffbef0dc3167bf95f66a89b752bc"
+    },
+    {
+      "path": "downloads/GlamorousToolkit-Windows-x86_64-v1.1.699.zip",
+      "bytes": 160648343,
+      "sha256": "f5761604ce80a6c0124ae2da8de1b6fb990dfd4e5b2cacfdb789c9eddee822b1"
+    },
+    {
+      "path": "runtime/gtoolkit/bin/GlamorousToolkit.exe",
+      "bytes": 2857984,
+      "sha256": "de9e3cc7b23e22b08a9fa1d273e0c3f0570cdd7834de34dbcd8538a92a3e0efe"
+    },
+    {
+      "path": "runtime/gtoolkit/bin/GlamorousToolkit-cli.exe",
+      "bytes": 2799104,
+      "sha256": "5a9ffb9da56554be5df93369244d806dd774800f3476b81af78a80a699d659d0"
+    },
+    {
+      "path": "runtime/audio/AudioHost.exe",
+      "bytes": 9216,
+      "sha256": "8d35f02520a43d78d583c7d9b1cffcb4e20cd213fd213eeff7b952beebea0d28"
+    },
+    {
+      "path": "runtime/media/ffmpeg.exe",
+      "bytes": 99264000,
+      "sha256": "5af82a0d4fe2b9eae211b967332ea97edfc51c6b328ca35b827e73eac560dc0d"
+    },
+    {
+      "path": "runtime/media/ffprobe.exe",
+      "bytes": 99066368,
+      "sha256": "192a1d6899059765ac8c39764fc3148d4e6049955956dc2029f81f4bd6a8972d"
+    }
+  ],
+  "supervisorSource": "Local source src/supervisor/Supervisor.cs; built with Windows .NET Framework C# compiler",
+  "runtimeSource": "Official feenkcom/gtoolkit v1.1.699 Windows x86_64 portable distribution",
+  "release": {
+    "tag": "v1.1.699",
+    "prerelease": false,
+    "publishedAt": "2026-11-20T05:50:50Z",
+    "asset": "GlamorousToolkit-Windows-x86_64-v1.1.699.zip",
+    "digest": "sha256:f5761604ce80a6c0124ae2da8de1b6fb990dfd4e5b2cacfdb789c9eddee822b1",
+    "url": "https://github.com/feenkcom/gtoolkit/releases/download/v1.1.699/GlamorousToolkit-Windows-x86_64-v1.1.699.zip",
+    "checkedAt": "2026-11-20T15:53:53.1020273+00:00"
+  }
+}

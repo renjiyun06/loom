@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-audio-lines-off"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 10 V 21" />
+  <path d="M 10 3 V 4.35" />
+  <path d="M 14 14 V 15" />
+  <path d="M 14 8 V 8.35" />
+  <path d="M 18 5 V 12.35" />
+  <path d="M 2 10 V 13" />
+  <path d="M 2 2 L 22 22" />
+  <path d="M 22 10 V 13" />
+  <path d="M 6 6 V 17" />
+</svg>

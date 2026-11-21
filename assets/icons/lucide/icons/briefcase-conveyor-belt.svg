@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-briefcase-conveyor-belt"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 20 V 22" />
+  <path d="M 14 20 V 22" />
+  <path d="M 18 20 V 22" />
+  <path d="M 21 20 H 3" />
+  <path d="M 6 20 V 22" />
+  <path d="M 8 16 V 4 C 8 2.8954 8.8954 2 10 2 H 14 C 15.1046 2 16 2.8954 16 4 V 16" />
+  <rect x="4" y="6" width="16" height="10" rx="2" />
+</svg>

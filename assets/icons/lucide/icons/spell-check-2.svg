@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-spell-check-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 6 16 L 12 4 L 18 16" />
+  <path d="M 8 12 H 16" />
+  <path d="M 4 21 C 5.1 21 5.1 20 6.3 20 C 7.5 20 7.4 21 8.6 21 C 9.7 21 9.7 20 10.9 20 C 12 20 12 21 13.2 21 C 14.3 21 14.3 20 15.5 20 C 16.6 20 16.6 21 17.8 21 C 18.9 21 18.9 20 20.1 20" />
+</svg>

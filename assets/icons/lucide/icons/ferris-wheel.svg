@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-ferris-wheel"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="2" />
+  <path d="M 12 2 V 6" />
+  <path d="M 6.8 15 L 3.3 17" />
+  <path d="M 20.7 7 L 17.2 9" />
+  <path d="M 6.8 9 L 3.3 7" />
+  <path d="M 20.7 17 L 17.2 15" />
+  <path d="M 9 22 L 12 14 L 15 22" />
+  <path d="M 8 22 H 16" />
+  <path d="M 18 18.7 C 20.7813 16.2123 21.739 12.2663 20.4076 8.7804 C 19.0761 5.2945 15.7315 2.9918 12 2.9918 C 8.2685 2.9918 4.9239 5.2945 3.5924 8.7804 C 2.261 12.2663 3.2187 16.2123 6 18.7" />
+</svg>

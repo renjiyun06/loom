@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-mountain-snow"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 8 3 L 12 11 L 17 6 L 22 21 H 2 L 8 3 Z" />
+  <path d="M 4.14 15.08 C 6.76 13.51 9.38 13.65 12 15.5 C 14.74 17.44 17.49 17.5 20.23 15.69" />
+</svg>

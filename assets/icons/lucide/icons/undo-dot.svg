@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-undo-dot"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 21 17 C 20.9968 13.4523 18.9097 10.2375 15.6705 8.7907 C 12.4313 7.3438 8.6443 7.9349 6 10.3 L 3 13" />
+  <path d="M 3 7 V 13 H 9" />
+  <circle cx="12" cy="17" r="1" />
+</svg>

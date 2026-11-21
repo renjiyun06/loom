@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-sailboat"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 2 V 17" />
+  <path d="M 7 22 C 4.7909 22 3 20.2091 3 18 C 3 17.4477 3.4477 17 4 17 H 20 C 20.5523 17 21 17.4477 21 18 C 21 20.2091 19.2091 22 17 22 Z" />
+  <path d="M 9.159 2.46 C 9.3189 2.2111 9.5809 2.0457 9.8745 2.0085 C 10.168 1.9712 10.463 2.0659 10.68 2.267 L 20.657 11.247 C 20.9707 11.5211 21.0816 11.9609 20.9354 12.3509 C 20.7892 12.741 20.4165 12.9996 20 13 H 4 C 3.6285 13.0001 3.2875 12.7942 3.1146 12.4654 C 2.9417 12.1366 2.9654 11.739 3.176 11.433 Z" />
+</svg>

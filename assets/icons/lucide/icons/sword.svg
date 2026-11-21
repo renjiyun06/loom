@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-sword"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 19 L 5 13" />
+  <path d="M 5 21 L 3 19" />
+  <path d="M 8 16 L 4 20" />
+  <path d="M 9.5 17.5 L 20.414 6.586 C 20.7891 6.211 20.9999 5.7024 21 5.172 V 3 H 18.828 C 18.2976 3.0001 17.789 3.2109 17.414 3.586 L 6.5 14.5" />
+</svg>

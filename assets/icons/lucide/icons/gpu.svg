@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-gpu"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2 17 H 20 C 21.1046 17 22 16.1046 22 15 V 7 C 22 5.8954 21.1046 5 20 5 H 2" />
+  <path d="M 2 21 V 3" />
+  <path d="M 7 17 V 20 C 7 20.5523 7.4477 21 8 21 H 13 C 13.5523 21 14 20.5523 14 20 V 17" />
+  <circle cx="16" cy="11" r="2" />
+  <circle cx="8" cy="11" r="2" />
+</svg>

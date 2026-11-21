@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-clock-arrow-right"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 6 V 12 L 14 13" />
+  <path d="M 13.5 21.885 C 9.3651 22.5123 5.2766 20.5003 3.2511 16.8413 C 1.2256 13.1823 1.691 8.6493 4.4177 5.4782 C 7.1445 2.3072 11.5566 1.1679 15.4777 2.6224 C 19.3989 4.0768 22.0008 7.8178 22 12" />
+  <path d="M 14 18 H 22" />
+  <path d="M 18 22 L 22 18 L 18 14" />
+</svg>

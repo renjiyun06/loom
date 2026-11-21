@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-pentagon"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10.83 2.38 C 11.5286 1.8761 12.4714 1.8761 13.17 2.38 L 21.17 8.12 C 21.8783 8.6303 22.1738 9.5411 21.9 10.37 L 18.86 19.63 C 18.5883 20.4486 17.8225 21.0008 16.96 21 H 7.04 C 6.1775 21.0008 5.4117 20.4486 5.14 19.63 L 2.1 10.37 C 1.8262 9.5411 2.1217 8.6303 2.83 8.12 Z" />
+</svg>

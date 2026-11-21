@@ -1,0 +1,24 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-flower"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="3" />
+  <path d="M 12 16.5 C 12 18.9853 9.9853 21 7.5 21 C 5.0147 21 3 18.9853 3 16.5 C 3 14.0147 5.0147 12 7.5 12 C 5.0147 12 3 9.9853 3 7.5 C 3 5.0147 5.0147 3 7.5 3 C 9.9853 3 12 5.0147 12 7.5 C 12 5.0147 14.0147 3 16.5 3 C 18.9853 3 21 5.0147 21 7.5 C 21 9.9853 18.9853 12 16.5 12 C 18.9853 12 21 14.0147 21 16.5 C 21 18.9853 18.9853 21 16.5 21 C 14.0147 21 12 18.9853 12 16.5" />
+  <path d="M 12 7.5 V 9" />
+  <path d="M 7.5 12 H 9" />
+  <path d="M 16.5 12 H 15" />
+  <path d="M 12 16.5 V 15" />
+  <path d="M 8 8 L 9.88 9.88" />
+  <path d="M 14.12 9.88 L 16 8" />
+  <path d="M 8 16 L 9.88 14.12" />
+  <path d="M 14.12 14.12 L 16 16" />
+</svg>

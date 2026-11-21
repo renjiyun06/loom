@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-land-plot"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 8 L 18 5 L 12 2 V 12" />
+  <path d="M 8 11.99 L 2.5 15.13 C 2.1867 15.3076 1.9931 15.6399 1.9931 16 C 1.9931 16.3601 2.1867 16.6924 2.5 16.87 L 11 21.73 C 11.6188 22.0873 12.3812 22.0873 13 21.73 L 21.5 16.87 C 21.8133 16.6924 22.0069 16.3601 22.0069 16 C 22.0069 15.6399 21.8133 15.3076 21.5 15.13 L 16 12" />
+  <path d="M 6.49 12.85 L 17.51 19.15" />
+  <path d="M 17.51 12.85 L 6.5 19.15" />
+</svg>

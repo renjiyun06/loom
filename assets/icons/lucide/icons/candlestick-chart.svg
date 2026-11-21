@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-candlestick-chart"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 9 5 V 9" />
+  <rect width="4" height="6" x="7" y="9" rx="1" />
+  <path d="M 9 15 V 17" />
+  <path d="M 17 3 V 5" />
+  <rect width="4" height="8" x="15" y="5" rx="1" />
+  <path d="M 17 13 V 16" />
+  <path d="M 3 3 V 19 C 3 20.1046 3.8954 21 5 21 H 21" />
+</svg>

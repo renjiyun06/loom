@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-hourglass"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 5 22 H 19" />
+  <path d="M 5 2 H 19" />
+  <path d="M 17 22 V 17.828 C 16.9999 17.2976 16.7891 16.789 16.414 16.414 L 12 12 L 7.586 16.414 C 7.2109 16.789 7.0001 17.2976 7 17.828 V 22" />
+  <path d="M 7 2 V 6.172 C 7.0001 6.7024 7.2109 7.211 7.586 7.586 L 12 12 L 16.414 7.586 C 16.7891 7.211 16.9999 6.7024 17 6.172 V 2" />
+</svg>

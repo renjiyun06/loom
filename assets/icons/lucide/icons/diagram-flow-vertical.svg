@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-diagram-flow-vertical"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 8.5 C 12 10.433 13.567 12 15.5 12 C 17.433 12 19 13.567 19 15.5 V 16" />
+  <path d="M 12 8 V 8.5 C 12 10.433 10.433 12 8.5 12 C 6.567 12 5 13.567 5 15.5 V 16" />
+  <rect x="16" y="16" width="6" height="6" rx="1" />
+  <rect x="2" y="16" width="6" height="6" rx="1" />
+  <rect x="9" y="2" width="6" height="6" rx="1" />
+</svg>

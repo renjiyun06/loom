@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-truck-electric"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 14 19 V 7 C 14 5.8954 13.1046 5 12 5 H 9" />
+  <path d="M 15 19 H 9" />
+  <path d="M 19 19 H 21 C 21.5523 19 22 18.5523 22 18 V 14.35 C 21.9987 14.1244 21.9212 13.9059 21.78 13.73 L 18.3 9.38 C 18.1114 9.1413 17.8243 9.0014 17.52 9 H 14" />
+  <path d="M 2 13 V 18 C 2 18.5523 2.4477 19 3 19 H 5" />
+  <path d="M 4 3 L 2.15 5.15 C 1.9972 5.2898 1.9475 5.51 2.0256 5.7018 C 2.1037 5.8937 2.293 6.0167 2.5 6.01 H 4.65 C 4.8752 5.9573 5.1052 6.0763 5.1924 6.2905 C 5.2796 6.5047 5.198 6.7505 5 6.87 L 3 9.02" />
+  <circle cx="17" cy="19" r="2" />
+  <circle cx="7" cy="19" r="2" />
+</svg>

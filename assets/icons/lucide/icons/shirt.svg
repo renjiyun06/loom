@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-shirt"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 20.38 3.46 L 16 2 C 16 4.2091 14.2091 6 12 6 C 9.7909 6 8 4.2091 8 2 L 3.62 3.46 C 2.6848 3.7716 2.1161 4.718 2.28 5.69 L 2.86 9.16 C 2.9387 9.6453 3.3584 10.0014 3.85 10 H 6 V 20 C 6 21.1 6.9 22 8 22 H 16 C 17.1046 22 18 21.1046 18 20 V 10 H 20.15 C 20.6416 10.0014 21.0613 9.6453 21.14 9.16 L 21.72 5.69 C 21.8839 4.718 21.3152 3.7716 20.38 3.46 Z" />
+</svg>

@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-scorpio"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 19 V 5.5 C 10 4.1193 11.1193 3 12.5 3 C 13.8807 3 15 4.1193 15 5.5 V 17 C 15 18.1046 15.8954 19 17 19 H 22 L 19 16" />
+  <path d="M 22 19 L 19 22" />
+  <path d="M 5 19 V 5.5 C 5 4.1193 6.1193 3 7.5 3 C 8.8807 3 10 4.1193 10 5.5" />
+  <path d="M 5 5.5 C 5 4.1193 3.8807 3 2.5 3" />
+</svg>

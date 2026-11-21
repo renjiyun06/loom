@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-shopping-cart"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2.05 2.05 L 3.149 2.022 C 3.6394 2.0096 4.0664 2.3549 4.157 2.837 L 6.847 17.184 C 6.9356 17.6571 7.3486 18 7.83 18 H 18" />
+  <path d="M 4.563 5 H 20.998 C 21.2994 4.9994 21.5849 5.1347 21.7753 5.3683 C 21.9656 5.602 22.0405 5.909 21.979 6.204 L 20.953 12.43 C 20.7482 13.3609 19.915 14.018 18.962 14 H 6.25" />
+  <circle cx="18" cy="20" r="2" />
+  <circle cx="8" cy="20" r="2" />
+</svg>

@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-printer-3d"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 11 V 12" />
+  <path d="M 12 8 H 20" />
+  <path d="M 15 20 V 17 C 15 16.4477 14.5523 16 14 16 H 9 C 8.4477 16 8 16.4477 8 17 V 20" />
+  <path d="M 4 20 H 20" />
+  <path d="M 4 22 V 4 C 4 2.8954 4.8954 2 6 2 H 18 C 19.1046 2 20 2.8954 20 4 V 22" />
+  <path d="M 4 8 H 8" />
+  <path d="M 8.635 10.093 C 8.2299 9.7147 7.9999 9.1853 8 8.631 V 7 C 8 6.4477 8.4477 6 9 6 H 11 C 11.5523 6 12 6.4477 12 7 V 9 C 11.9999 9.2652 11.8945 9.5195 11.707 9.707 L 10.707 10.707 C 10.3165 11.0974 9.6835 11.0974 9.293 10.707 Z" />
+</svg>

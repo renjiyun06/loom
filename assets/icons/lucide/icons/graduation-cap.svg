@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-graduation-cap"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 21.42 10.922 C 21.7859 10.7606 22.0205 10.3967 22.0163 9.9967 C 22.0122 9.5968 21.7702 9.2378 21.401 9.084 L 12.83 5.18 C 12.3028 4.9395 11.6972 4.9395 11.17 5.18 L 2.6 9.08 C 2.2362 9.2393 2.0012 9.5988 2.0012 9.996 C 2.0012 10.3932 2.2362 10.7527 2.6 10.912 L 11.17 14.82 C 11.6972 15.0605 12.3028 15.0605 12.83 14.82 Z" />
+  <path d="M 22 10 V 16" />
+  <path d="M 6 12.5 V 16 C 6 17.6569 8.6863 19 12 19 C 15.3137 19 18 17.6569 18 16 V 12.5" />
+</svg>

@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-clapperboard"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12.296 3.464 L 15.316 7.42" />
+  <path d="M 20.2 6 L 3 11 L 2.1 8.6 C 1.8 7.5 2.4 6.4 3.4 6.1 L 16.9 2.1 C 18 1.8 19.1 2.4 19.4 3.4 Z" />
+  <path d="M 3 11 H 21 V 19 C 21 20.1046 20.1046 21 19 21 H 5 C 3.8954 21 3 20.1046 3 19 Z" />
+  <path d="M 6.18 5.276 L 9.28 9.175" />
+</svg>

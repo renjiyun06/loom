@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-picture-in-picture-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 21 9 V 6 C 21 4.8954 20.1046 4 19 4 H 4 C 2.8954 4 2 4.8954 2 6 V 16 C 2 17.1 2.9 18 4 18 H 8" />
+  <rect width="10" height="7" x="12" y="13" rx="2" />
+</svg>

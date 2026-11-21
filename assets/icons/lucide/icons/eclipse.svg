@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-eclipse"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M 12 2 C 10.2137 3.7863 9.516 6.39 10.1699 8.8301 C 10.8237 11.2703 12.7297 13.1763 15.1699 13.8301 C 17.61 14.484 20.2137 13.7863 22 12" />
+</svg>

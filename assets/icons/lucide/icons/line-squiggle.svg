@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-line-squiggle"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 7 3.5 C 12 1.5 14 6 10 7.5 C 1.5 10 2 15 5 16 C 10 18 14 6 19 9 C 24 12 19.5 22.5 15 21 C 10 18.5 15.5 10 21 19" />
+</svg>

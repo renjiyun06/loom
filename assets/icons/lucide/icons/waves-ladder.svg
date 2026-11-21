@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-waves-ladder"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 19 5 C 17.8954 5 17 5.8954 17 7 V 18" />
+  <path d="M 2 18 C 2.6 18.5 3.2 19 4.5 19 C 7 19 7 17 9.5 17 C 12.1 17 11.9 19 14.5 19 C 17 19 17 17 19.5 17 C 20.8 17 21.4 17.5 22 18" />
+  <path d="M 7 13 H 17" />
+  <path d="M 7 9 H 17" />
+  <path d="M 9 5 C 7.8954 5 7 5.8954 7 7 V 18" />
+</svg>

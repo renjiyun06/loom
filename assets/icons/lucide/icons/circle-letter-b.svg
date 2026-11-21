@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-circle-letter-b"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 9 12 H 13.846 C 14.4093 11.9969 14.9531 12.2061 15.369 12.586 C 16.15 13.3667 16.1505 14.6327 15.37 15.414 C 14.9538 15.7941 14.4096 16.0034 13.846 16 H 9.5 C 9.2239 16 9 15.7761 9 15.5 V 8.5 C 9 8.2239 9.2239 8 9.5 8 H 13 C 14.1046 8 15 8.8954 15 10 C 15 11.1046 14.1046 12 13 12" />
+  <circle cx="12" cy="12" r="10" />
+</svg>

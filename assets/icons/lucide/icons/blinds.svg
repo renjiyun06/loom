@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-blinds"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 3 H 21" />
+  <path d="M 20 7 H 8" />
+  <path d="M 20 11 H 8" />
+  <path d="M 10 19 H 20" />
+  <path d="M 8 15 H 20" />
+  <path d="M 4 3 V 17" />
+  <circle cx="4" cy="19" r="2" />
+</svg>

@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-metronome"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 11.4 V 9.1" />
+  <path d="M 12 17 L 18.59 10.41" />
+  <path d="M 15.05 5.7 L 14.832 5.009 C 14.4108 3.8059 13.2752 3.0003 12.0005 3.0003 C 10.7258 3.0003 9.5902 3.8059 9.169 5.009 L 4.418 19.695 C 4.3206 19.9991 4.3743 20.3314 4.5625 20.5893 C 4.7507 20.8473 5.0507 20.9999 5.37 21 H 18.623 C 18.9433 21.0001 19.2443 20.8467 19.4325 20.5875 C 19.6207 20.3282 19.6733 19.9946 19.574 19.69 L 18.45 16.2" />
+  <circle cx="20" cy="9" r="2" />
+</svg>

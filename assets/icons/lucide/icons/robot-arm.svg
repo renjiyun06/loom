@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-robot-arm"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 21 L 7.5 8.322" />
+  <path d="M 14 7 L 15.75 3.233 C 15.8908 3.0101 16.1805 2.9348 16.412 3.061 L 20 5.005" />
+  <path d="M 20 8.998 L 16.412 10.942 C 16.1805 11.0682 15.8908 10.9929 15.75 10.77 L 14 7 H 8" />
+  <path d="M 3.486 21 H 13.486" />
+  <path d="M 5 21 V 8.732" />
+  <circle cx="6" cy="7" r="2" />
+</svg>

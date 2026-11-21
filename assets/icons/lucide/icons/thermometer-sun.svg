@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-thermometer-sun"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 2 V 4" />
+  <path d="M 12 8 C 10.1143 7.999 8.484 9.3152 8.0874 11.1588 C 7.6909 13.0023 8.6357 14.8725 10.355 15.647" />
+  <path d="M 2 12 H 4" />
+  <path d="M 20 14.54 C 21.5679 15.4452 22.3323 17.2906 21.8637 19.0394 C 21.3951 20.7881 19.8104 22.0041 18 22.0041 C 16.1896 22.0041 14.6049 20.7881 14.1363 19.0394 C 13.6677 17.2906 14.4321 15.4452 16 14.54 V 4 C 16 2.8954 16.8954 2 18 2 C 19.1046 2 20 2.8954 20 4 Z" />
+  <path d="M 4.93 4.93 L 6.34 6.34" />
+  <path d="M 6.34 17.66 L 4.93 19.07" />
+</svg>

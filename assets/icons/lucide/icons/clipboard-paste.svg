@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-clipboard-paste"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 14 H 21" />
+  <path d="M 16 4 H 18 C 19.1046 4 20 4.8954 20 6 V 7.344" />
+  <path d="M 17 18 L 21 14 L 17 10" />
+  <path d="M 8 4 H 6 C 4.8954 4 4 4.8954 4 6 V 20 C 4 21.1046 4.8954 22 6 22 H 18 C 18.7607 22.0002 19.4556 21.5688 19.793 20.887" />
+  <rect x="8" y="2" width="8" height="4" rx="1" />
+</svg>

@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-fishing-rod"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 4 11 H 5" />
+  <path d="M 8 15 C 8 16.1046 7.1046 17 6 17 C 4.8954 17 4 16.1046 4 15 V 3 C 4 2.4477 4.4477 2 5 2 H 5.5 C 14 2 20 9 20 18 V 22" />
+  <circle cx="18" cy="18" r="2" />
+</svg>

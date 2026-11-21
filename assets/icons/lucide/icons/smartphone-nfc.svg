@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-smartphone-nfc"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="7" height="12" x="2" y="6" rx="1" />
+  <path d="M 13 8.32 C 14.3005 10.601 14.3005 13.399 13 15.68" />
+  <path d="M 16.46 6.21 C 18.4921 9.8025 18.4921 14.1975 16.46 17.79" />
+  <path d="M 19.91 4.1 C 22.713 8.9928 22.7168 15.0037 19.92 19.9" />
+</svg>

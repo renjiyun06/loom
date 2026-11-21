@@ -1,0 +1,26 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-brain-circuit"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 13 H 16" />
+  <path d="M 12 18 H 18 C 19.1046 18 20 18.8954 20 20 V 21" />
+  <path d="M 12 8 H 20" />
+  <path d="M 12 9 C 11.9989 10.8515 10.7771 12.4805 9 13" />
+  <path d="M 16 8 V 5 C 16 3.8954 16.8954 3 18 3" />
+  <path d="M 6 18 C 4.189 18.0007 2.6034 16.7845 2.1347 15.0352 C 1.666 13.2858 2.4312 11.4398 4 10.535" />
+  <path d="M 6.004 5.125 C 4.813 5.4312 3.829 6.2683 3.3358 7.3948 C 2.8427 8.5214 2.8951 9.8122 3.478 10.895" />
+  <path d="M 6.294 6.294 C 5.7616 5.1817 5.9641 3.857 6.8044 2.9545 C 7.6446 2.052 8.9516 1.7556 10.099 2.2073 C 11.2464 2.6591 12.0005 3.7669 12 5 V 18 C 11.998 19.4898 11.1682 20.8551 9.8467 21.5429 C 8.5251 22.2307 6.9308 22.1271 5.7094 21.2739 C 4.4881 20.4208 3.842 18.9595 4.033 17.482" />
+  <circle cx="16" cy="13" r="0.5" fill="currentColor" />
+  <circle cx="18" cy="3" r="0.5" fill="currentColor" />
+  <circle cx="20" cy="21" r="0.5" fill="currentColor" />
+  <circle cx="20" cy="8" r="0.5" fill="currentColor" />
+</svg>

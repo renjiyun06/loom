@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-cloud-exclamation-point"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 12 V 16" />
+  <path d="M 12 20 H 12.01" />
+  <path d="M 8.128 16.949 C 4.6629 16.5125 2.0498 13.5886 2.0036 10.0965 C 1.9574 6.6044 4.4923 3.6124 7.9446 3.0844 C 11.3969 2.5563 14.7102 4.6537 15.71 8 H 17.5 C 19.9853 8 22 10.0147 22 12.5 C 22 14.9853 19.9853 17 17.5 17 H 15.858" />
+</svg>

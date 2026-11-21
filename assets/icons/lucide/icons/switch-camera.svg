@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-switch-camera"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 19 H 4 C 2.8954 19 2 18.1046 2 17 V 7 C 2 5.8954 2.8954 5 4 5 H 9" />
+  <path d="M 13 5 H 20 C 21.1046 5 22 5.8954 22 7 V 17 C 22 18.1046 21.1046 19 20 19 H 15" />
+  <circle cx="12" cy="12" r="3" />
+  <path d="M 18 22 L 15 19 L 18 16" />
+  <path d="M 6 2 L 9 5 L 6 8" />
+</svg>

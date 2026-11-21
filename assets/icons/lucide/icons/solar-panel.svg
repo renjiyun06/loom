@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-solar-panel"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 2 H 13" />
+  <path d="M 14.28 14 L 9.72 22" />
+  <path d="M 21 22 L 19.442 18 H 4.558" />
+  <path d="M 3 10 V 12" />
+  <path d="M 6.245 15.04 C 6.5959 14.3986 7.2689 13.9998 8 14 H 20 C 20.3585 13.9997 20.6897 14.1913 20.8681 14.5021 C 21.0466 14.813 21.045 15.1956 20.864 15.505 L 17.754 20.962 C 17.4027 21.6023 16.7303 22.0002 16 22 H 4 C 3.6414 22.0002 3.3102 21.8083 3.1319 21.4972 C 2.9536 21.1861 2.9556 20.8033 3.137 20.494 Z" />
+  <path d="M 7 2 C 7 4.2091 5.2091 6 3 6" />
+  <path d="M 8.66 7.66 L 10.07 9.07" />
+</svg>

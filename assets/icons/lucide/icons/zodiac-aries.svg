@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-aries"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 7.5 C 12.015 5.0834 13.9361 3.11 16.3515 3.0303 C 18.7669 2.9506 20.8139 4.793 20.9882 7.2034 C 21.1625 9.6138 19.4017 11.7314 17 12" />
+  <path d="M 7 12 C 4.5983 11.7314 2.8375 9.6138 3.0118 7.2034 C 3.1861 4.793 5.2331 2.9506 7.6485 3.0303 C 10.0639 3.11 11.985 5.0834 12 7.5 V 21" />
+</svg>

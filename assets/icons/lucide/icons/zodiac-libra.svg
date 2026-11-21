@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-libra"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 16 H 9.857 C 10.019 15.988 10.047 15.677 9.895 15.62 C 7.1786 14.6018 5.5798 11.786 6.0972 8.9316 C 6.6146 6.0772 9.1001 4.0017 12.001 4.0017 C 14.9019 4.0017 17.3874 6.0772 17.9048 8.9316 C 18.4222 11.786 16.8234 14.6018 14.107 15.62 C 13.954 15.677 13.982 15.988 14.145 16 H 21" />
+  <path d="M 3 20 H 21" />
+</svg>

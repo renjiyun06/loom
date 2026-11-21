@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-playing-cards"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 14.832 8.445 C 14.6586 8.1851 14.3736 8.0213 14.0618 8.002 C 13.75 7.9828 13.4471 8.1104 13.243 8.347 L 11.168 11.445 C 10.9438 11.781 10.9438 12.219 11.168 12.555 L 13.168 15.555 C 13.3535 15.8332 13.6657 16.0002 14 16.0002 C 14.3343 16.0002 14.6465 15.8332 14.832 15.555 L 16.832 12.555 C 17.0562 12.219 17.0562 11.781 16.832 11.445 Z" />
+  <path d="M 7.18 20.827 L 2.18 9.827 C 1.7238 8.8218 2.1682 7.6371 3.173 7.18 L 7 5.44" />
+  <rect x="7" y="2" width="14" height="20" rx="2" />
+</svg>

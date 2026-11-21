@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-tablet-smartphone"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="10" height="14" x="3" y="8" rx="2" />
+  <path d="M 5 4 C 5 2.8954 5.8954 2 7 2 H 19 C 20.1046 2 21 2.8954 21 4 V 20 C 21 21.1046 20.1046 22 19 22 H 16.6" />
+  <path d="M 8 18 H 8.01" />
+</svg>

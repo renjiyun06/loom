@@ -1,0 +1,22 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-thermometer-snowflake"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 20 L 8.75 17.5 L 6 18" />
+  <path d="M 10 4 L 8.75 6.5 L 6 6" />
+  <path d="M 10.585 15 H 10" />
+  <path d="M 2 12 H 8.5 L 10 9" />
+  <path d="M 20 14.54 C 21.5679 15.4452 22.3323 17.2906 21.8637 19.0394 C 21.3951 20.7881 19.8104 22.0041 18 22.0041 C 16.1896 22.0041 14.6049 20.7881 14.1363 19.0394 C 13.6677 17.2906 14.4321 15.4452 16 14.54 V 4 C 16 2.8954 16.8954 2 18 2 C 19.1046 2 20 2.8954 20 4 Z" />
+  <path d="M 4 10 L 5.5 12 L 4 14" />
+  <path d="M 7 21 L 10 15 L 8.5 12" />
+  <path d="M 7 3 L 10 9 H 12" />
+</svg>

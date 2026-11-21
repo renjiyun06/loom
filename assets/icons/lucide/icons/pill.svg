@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-pill"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10.5 20.5 L 20.5 10.5 C 21.7716 9.2539 22.276 7.4209 21.821 5.6996 C 21.366 3.9783 20.0217 2.634 18.3004 2.179 C 16.5791 1.724 14.7461 2.2284 13.5 3.5 L 3.5 13.5 C 2.2284 14.7461 1.724 16.5791 2.179 18.3004 C 2.634 20.0217 3.9783 21.366 5.6996 21.821 C 7.4209 22.276 9.2539 21.7716 10.5 20.5 Z" />
+  <path d="M 8.5 8.5 L 15.5 15.5" />
+</svg>

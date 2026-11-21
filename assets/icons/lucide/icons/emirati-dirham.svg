@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-emirati-dirham"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 4 C 15.4183 4 19 7.5817 19 12 C 19 16.4183 15.4183 20 11 20 H 6.406 C 6.2978 20.0016 6.1936 19.9594 6.1171 19.8829 C 6.0406 19.8064 5.9984 19.7022 6 19.594 V 4.406 C 5.9984 4.2978 6.0406 4.1936 6.1171 4.1171 C 6.1936 4.0406 6.2978 3.9984 6.406 4 Z" />
+  <path d="M 4 10 H 21" />
+  <path d="M 4 14 H 21" />
+</svg>

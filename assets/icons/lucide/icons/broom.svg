@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-broom"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 13.5 10.5 L 22 2" />
+  <path d="M 14.734 13.841 C 15.1906 13.0565 15.0617 12.063 14.42 11.421 L 12.58 9.58 C 11.9379 8.9378 10.9437 8.8089 10.159 9.266 L 2.502 13.727 C 2.2336 13.8834 2.053 14.1556 2.0135 14.4637 C 1.9739 14.7719 2.0798 15.0809 2.3 15.3 L 8.703 21.703 C 8.9224 21.9223 9.2311 22.0273 9.5387 21.9874 C 9.8463 21.9474 10.1179 21.767 10.274 21.499 Z" />
+  <path d="M 5 18 L 7 16" />
+  <path d="M 7.699 10.7 L 13.301 16.301" />
+</svg>

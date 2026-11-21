@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-cone"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 20.9 18.55 L 12.9 2.57 C 12.7329 2.225 12.3833 2.0059 12 2.0059 C 11.6167 2.0059 11.2671 2.225 11.1 2.57 L 3.1 18.55" />
+  <ellipse cx="12" cy="19" rx="9" ry="3" />
+</svg>

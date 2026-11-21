@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-fishing-hook"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 17.586 11.414 L 11.656 17.344 C 9.4469 19.5531 5.8651 19.5531 3.656 17.344 C 1.4469 15.1349 1.4469 11.5531 3.656 9.344 L 6.793 6.207 C 6.9952 6.0047 7.2993 5.9442 7.5636 6.0537 C 7.8278 6.1631 8.0001 6.421 8 6.707 V 10" />
+  <path d="M 20.414 8.586 L 22 7" />
+  <circle cx="19" cy="10" r="2" />
+</svg>

@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-whistle"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 6 V 10" />
+  <path d="M 21 6 C 21.5523 6 22 6.4477 22 7 V 9 C 22 9.5523 21.5523 10 21 10 H 15.325 C 16.6603 12.8151 15.9742 16.174 13.6419 18.24 C 11.3095 20.3059 7.8924 20.5816 5.259 18.9162 C 2.6256 17.2508 1.41 14.0454 2.2768 11.0526 C 3.1436 8.0598 5.8842 6.0002 9 6 Z" />
+</svg>

@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-martini"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 12 L 4.207 4.207 C 4.0047 4.0048 3.9442 3.7007 4.0537 3.4364 C 4.1631 3.1722 4.421 2.9999 4.707 3 H 19.293 C 19.579 2.9999 19.8369 3.1722 19.9463 3.4364 C 20.0558 3.7007 19.9953 4.0048 19.793 4.207 Z" />
+  <path d="M 12 12 V 22" />
+  <path d="M 7 22 H 17" />
+</svg>

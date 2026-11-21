@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-rugby-ball"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 10 L 14 14" />
+  <path d="M 13 7 L 17 11" />
+  <path d="M 15.34 2.138 C 8.4031 2.9299 2.9299 8.4031 2.138 15.34 C 1.781 18.28 2.142 20.259 2.943 21.057 C 3.741 21.857 5.721 22.219 8.661 21.862 C 15.5972 21.0698 21.0698 15.5972 21.862 8.661 C 22.219 5.721 21.858 3.741 21.057 2.943 C 20.259 2.143 18.279 1.781 15.34 2.138" />
+  <path d="M 17 7 L 7 17" />
+  <path d="M 7 13 L 11 17" />
+</svg>

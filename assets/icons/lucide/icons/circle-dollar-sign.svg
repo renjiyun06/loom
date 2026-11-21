@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-circle-dollar-sign"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M 16 8 H 10 C 8.8954 8 8 8.8954 8 10 C 8 11.1046 8.8954 12 10 12 H 14 C 15.1046 12 16 12.8954 16 14 C 16 15.1046 15.1046 16 14 16 H 8" />
+  <path d="M 12 18 V 6" />
+</svg>

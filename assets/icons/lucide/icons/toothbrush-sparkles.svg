@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-toothbrush-sparkles"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 3 H 8" />
+  <path d="M 14.586 11.414 L 22 4" />
+  <path d="M 15 11 C 14.8619 11.1385 14.7188 11.272 14.571 11.4" />
+  <path d="M 2 22 L 9 15 C 10.857 13.143 12.714 13.01 14.571 11.4 L 12.586 9.414 C 12.0142 8.842 11.8432 7.9819 12.1526 7.2347 C 12.4621 6.4875 13.1912 6.0002 14 6 C 14 4.8954 14.8954 4 16 4 C 15.9998 3.2282 16.4438 2.5252 17.1407 2.1936 C 17.8377 1.862 18.6632 1.961 19.262 2.448 L 21.414 4.586" />
+  <path d="M 20 15 V 19" />
+  <path d="M 22 17 H 18" />
+  <path d="M 4 5 V 9" />
+  <path d="M 6 7 H 2" />
+  <path d="M 9 2 V 4" />
+</svg>

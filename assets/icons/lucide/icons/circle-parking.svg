@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-circle-parking"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 9 12 H 13 C 14.1046 12 15 11.1046 15 10 C 15 8.8954 14.1046 8 13 8 H 9.5 C 9.2239 8 9 8.2239 9 8.5 V 16" />
+  <circle cx="12" cy="12" r="10" />
+</svg>

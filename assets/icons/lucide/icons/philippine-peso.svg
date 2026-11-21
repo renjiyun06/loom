@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-philippine-peso"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 4 12 H 20" />
+  <path d="M 4 8 H 20" />
+  <path d="M 6 20 V 5 C 6 4.4477 6.4477 4 7 4 H 12 C 15.3137 4 18 6.6863 18 10 C 18 13.3137 15.3137 16 12 16 H 6" />
+</svg>

@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-ethernet-port"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 8 V 9" />
+  <path d="M 14 8 V 9" />
+  <path d="M 18 8 V 9" />
+  <path d="M 19 17 C 18.2612 16.9999 17.5826 17.4071 17.235 18.059 L 16.765 18.941 C 16.4174 19.5929 15.7388 20.0001 15 20 H 9 C 8.2612 20.0001 7.5826 19.5929 7.235 18.941 L 6.765 18.059 C 6.4174 17.4071 5.7388 16.9999 5 17 H 4 C 2.8954 17 2 16.1046 2 15 V 6 C 2 4.8954 2.8954 4 4 4 H 20 C 21.1046 4 22 4.8954 22 6 V 15 C 22 16.1046 21.1046 17 20 17 Z" />
+  <path d="M 6 8 V 9" />
+</svg>

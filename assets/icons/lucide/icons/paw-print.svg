@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-paw-print"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="11" cy="4" r="2" />
+  <circle cx="18" cy="8" r="2" />
+  <circle cx="20" cy="16" r="2" />
+  <path d="M 9 10 C 11.7614 10 14 12.2386 14 15 V 18.5 C 13.9994 20.2285 12.7372 21.6977 11.0286 21.9587 C 9.32 22.2198 7.6766 21.1944 7.16 19.545 Q 6.52 17.48 4.46 16.84 C 2.8115 16.3237 1.7862 14.6818 2.0459 12.9739 C 2.3056 11.266 3.7725 10.003 5.5 10 Z" />
+</svg>

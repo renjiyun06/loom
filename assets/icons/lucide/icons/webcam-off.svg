@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-webcam-off"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 22 V 18" />
+  <path d="M 12.754 7.096 C 13.8077 7.3695 14.6305 8.1923 14.904 9.246" />
+  <path d="M 12.863 12.873 C 11.8059 13.1903 10.6601 12.9015 9.8796 12.1212 C 9.0991 11.3409 8.81 10.1951 9.127 9.138" />
+  <path d="M 16.566 16.57 C 13.3864 18.7835 9.0776 18.4005 6.3382 15.6609 C 3.5989 12.9212 3.2162 8.6124 5.43 5.433" />
+  <path d="M 2 2 L 22 22" />
+  <path d="M 7 22 H 17" />
+  <path d="M 8.478 2.817 C 11.5493 1.3111 15.2381 1.9244 17.6569 4.3431 C 20.0756 6.7619 20.6889 10.4507 19.183 13.522" />
+</svg>

@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-triangle-dashed"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10.17 4.193 C 10.4907 3.4653 11.212 2.9967 12.0073 2.9996 C 12.8025 3.0024 13.5205 3.476 13.836 4.206" />
+  <path d="M 14 21 H 16" />
+  <path d="M 15.874 7.743 L 16.874 9.475" />
+  <path d="M 18.849 12.952 L 19.849 14.684" />
+  <path d="M 21.824 18.18 C 22.1048 18.801 22.0501 19.5223 21.6787 20.0938 C 21.3074 20.6653 20.6705 21.0083 19.989 21.004" />
+  <path d="M 4.024 21 C 3.3376 21.0081 2.695 20.6636 2.3218 20.0875 C 1.9487 19.5114 1.897 18.7841 2.185 18.161" />
+  <path d="M 5.136 12.952 L 4.136 14.684" />
+  <path d="M 8 21 H 10" />
+  <path d="M 8.102 7.743 L 7.102 9.475" />
+</svg>

@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-sun-medium"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="12" r="4" />
+  <path d="M 12 3 V 4" />
+  <path d="M 12 20 V 21" />
+  <path d="M 3 12 H 4" />
+  <path d="M 20 12 H 21" />
+  <path d="M 18.364 5.636 L 17.657 6.343" />
+  <path d="M 6.343 17.657 L 5.636 18.364" />
+  <path d="M 5.636 5.636 L 6.343 6.343" />
+  <path d="M 17.657 17.657 L 18.364 18.364" />
+</svg>

@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-pyramid"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2.5 16.88 C 2.2599 16.7398 2.089 16.5061 2.0283 16.2348 C 1.9676 15.9635 2.0225 15.6791 2.18 15.45 L 11.18 2.43 C 11.367 2.162 11.6732 2.0024 12 2.0024 C 12.3268 2.0024 12.633 2.162 12.82 2.43 L 21.82 15.44 C 21.9809 15.6698 22.0378 15.9566 21.977 16.2304 C 21.9161 16.5043 21.7431 16.74 21.5 16.88 L 12.99 21.74 C 12.3763 22.0896 11.6237 22.0896 11.01 21.74 Z" />
+  <path d="M 12 2 V 22" />
+</svg>

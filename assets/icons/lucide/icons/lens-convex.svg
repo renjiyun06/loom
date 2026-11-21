@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-lens-convex"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 13.433 2 C 13.765 2.0033 14.0737 2.1711 14.257 2.448 C 17.9151 8.2907 17.9151 15.7093 14.257 21.552 C 14.0737 21.8289 13.765 21.9967 13.433 22 H 10.567 C 10.235 21.9967 9.9263 21.8289 9.743 21.552 C 6.0849 15.7093 6.0849 8.2907 9.743 2.448 C 9.9263 2.1711 10.235 2.0033 10.567 2 Z" />
+</svg>

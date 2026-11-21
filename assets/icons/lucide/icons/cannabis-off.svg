@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-cannabis-off"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 22 V 18 C 13.5 19.5 15.5 21 18 21 C 18 19.5 17.5 17.5 16 16" />
+  <path d="M 13.988 8.327 C 13.902 6.054 13.365 3.82 12 2 C 11.3524 2.8747 10.8633 3.8562 10.555 4.9" />
+  <path d="M 17.375 11.725 C 18.882 10.53 21 7.841 21 6 C 18.676 6 15.92 7.296 14.338 8.684" />
+  <path d="M 2 2 L 22 22" />
+  <path d="M 21.024 15.378 C 21.3536 15.2634 21.6792 15.1373 22 15 C 21.574 13.721 19.33 12.443 17.75 12.093" />
+  <path d="M 6.995 6.992 C 5.714 6.4 4.29 6 3 6 C 3 8 5.5 11 7 12 C 5.5 12 2.5 13.5 2 15 C 5.5 16.5 8 16 8 16 C 6.5 17.5 6 19.5 6 21 C 8.5 21 10.5 19.5 12 18" />
+</svg>

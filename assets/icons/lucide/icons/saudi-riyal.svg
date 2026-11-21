@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-saudi-riyal"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 2.977 V 16.167 C 10.0001 16.9742 9.5149 17.7022 8.77 18.013 L 4 19.999" />
+  <path d="M 14 4 V 13.523 C 14.0002 13.8546 14.1648 14.1646 14.4395 14.3505 C 14.7141 14.5364 15.063 14.574 15.371 14.451 L 19 13" />
+  <path d="M 19 18 L 14 20" />
+  <path d="M 19 8 L 4 14" />
+</svg>

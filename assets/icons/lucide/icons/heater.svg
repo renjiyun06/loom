@@ -1,0 +1,24 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-heater"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 8 C 13 5 9 5 11 2" />
+  <path d="M 15.5 8 C 17.5 5 13.5 5 15.5 2" />
+  <path d="M 6 10 H 6.01" />
+  <path d="M 6 14 H 6.01" />
+  <path d="M 10 16 V 12" />
+  <path d="M 14 16 V 12" />
+  <path d="M 18 16 V 12" />
+  <path d="M 20 6 C 21.1046 6 22 6.8954 22 8 V 18 C 22 19.1046 21.1046 20 20 20 H 4 C 2.8954 20 2 19.1046 2 18 V 8 C 2 6.8954 2.8954 6 4 6 H 7" />
+  <path d="M 5 20 V 22" />
+  <path d="M 19 20 V 22" />
+</svg>

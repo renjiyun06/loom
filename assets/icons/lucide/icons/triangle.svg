@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-triangle"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 13.73 4 C 13.3722 3.3832 12.7131 3.0035 12 3.0035 C 11.2869 3.0035 10.6278 3.3832 10.27 4 L 2.27 18 C 1.9129 18.6185 1.9127 19.3804 2.2695 19.9991 C 2.6263 20.6178 3.2858 20.9993 4 21 H 20 C 20.7142 20.9993 21.3737 20.6178 21.7305 19.9991 C 22.0873 19.3804 22.0871 18.6185 21.73 18 Z" />
+</svg>

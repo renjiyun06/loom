@@ -1,0 +1,22 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-pencil-sparkles"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 3 H 8" />
+  <path d="M 15.007 5.008 L 18.994 8.994" />
+  <path d="M 20 15 V 19" />
+  <path d="M 21.174 6.813 C 22.2227 5.7038 22.1984 3.9614 21.1191 2.8819 C 20.0399 1.8023 18.2975 1.7776 17.188 2.826 L 3.842 16.175 C 3.6098 16.4065 3.4381 16.6915 3.342 17.005 L 2.021 21.357 C 1.9683 21.5332 2.0167 21.7241 2.1468 21.854 C 2.2769 21.9839 2.4679 22.0319 2.644 21.979 L 6.997 20.659 C 7.3102 20.5638 7.5952 20.3931 7.827 20.162 Z" />
+  <path d="M 22 17 H 18" />
+  <path d="M 4 5 V 9" />
+  <path d="M 6 7 H 2" />
+  <path d="M 9 2 V 4" />
+</svg>

@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-turntable"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10 12.01 H 10.01" />
+  <path d="M 18 8 V 12 C 18.0005 13.4041 17.6315 14.7837 16.93 16" />
+  <circle cx="10" cy="12" r="4" />
+  <rect x="2" y="4" width="20" height="16" rx="2" />
+</svg>

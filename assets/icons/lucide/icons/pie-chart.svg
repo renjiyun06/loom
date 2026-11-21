@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-pie-chart"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 21 12 C 21.552 12 22.005 11.551 21.95 11.002 C 21.4747 6.2686 17.7305 2.5253 12.997 2.051 C 12.447 1.996 11.999 2.449 11.999 3.001 V 11.001 C 11.999 11.5533 12.4467 12.001 12.999 12.001 Z" />
+  <path d="M 21.21 15.89 C 19.4598 20.0289 15.1638 22.492 10.7078 21.9115 C 6.2517 21.331 2.7301 17.8494 2.0988 13.4003 C 1.4674 8.9512 3.8814 4.6273 8 2.83" />
+</svg>

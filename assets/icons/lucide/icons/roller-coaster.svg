@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-roller-coaster"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 6 19 V 5" />
+  <path d="M 10 19 V 6.8" />
+  <path d="M 14 19 V 11.2" />
+  <path d="M 18 5 V 9" />
+  <path d="M 18 19 V 13" />
+  <path d="M 22 19 V 9" />
+  <path d="M 2 19 V 9 C 2 6.7909 3.7909 5 6 5 C 8 5 10 6.33 12 9 C 14 11.67 16 13 18 13 C 19.8404 12.9983 21.4421 11.741 21.8809 9.9538 C 22.3197 8.1665 21.4824 6.3104 19.8521 5.4566 C 18.2218 4.6027 16.2192 4.9715 15 6.35" />
+</svg>

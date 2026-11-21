@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-moped"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 18.16 14.12 L 15.233 5.673 C 15.0936 5.2702 14.7142 5 14.288 5 H 13" />
+  <path d="M 19 10 C 15.5204 10.0001 12.5691 12.5561 12.072 16" />
+  <path d="M 2 10 H 7.5 C 8.6908 10.0001 9.7687 10.7045 10.247 11.795 L 11.916 15.598 C 12.0511 15.9057 12.0226 16.2606 11.8403 16.5428 C 11.6579 16.825 11.346 16.9968 11.01 17 H 8" />
+  <circle cx="19" cy="17" r="3" />
+  <circle cx="5" cy="17" r="3" />
+</svg>

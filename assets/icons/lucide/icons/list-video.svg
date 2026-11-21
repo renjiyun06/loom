@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-list-video"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 21 5 H 3" />
+  <path d="M 10 12 H 3" />
+  <path d="M 10 19 H 3" />
+  <path d="M 15 12.003 C 14.9989 11.6417 15.1928 11.3078 15.5073 11.1298 C 15.8217 10.9518 16.2077 10.9572 16.517 11.144 L 21.514 14.141 C 21.8166 14.3214 22.002 14.6477 22.002 15 C 22.002 15.3523 21.8166 15.6786 21.514 15.859 L 16.517 18.856 C 16.2075 19.0429 15.8213 19.0482 15.5068 18.87 C 15.1923 18.6917 14.9985 18.3575 15 17.996 Z" />
+</svg>

@@ -1,0 +1,26 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-qr-code"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="5" height="5" x="3" y="3" rx="1" />
+  <rect width="5" height="5" x="16" y="3" rx="1" />
+  <rect width="5" height="5" x="3" y="16" rx="1" />
+  <path d="M 21 16 H 18 C 16.8954 16 16 16.8954 16 18 V 21" />
+  <path d="M 21 21 V 21.01" />
+  <path d="M 12 7 V 10 C 12 11.1046 11.1046 12 10 12 H 7" />
+  <path d="M 3 12 H 3.01" />
+  <path d="M 12 3 H 12.01" />
+  <path d="M 12 16 V 16.01" />
+  <path d="M 16 12 H 17" />
+  <path d="M 21 12 V 12.01" />
+  <path d="M 12 21 V 20" />
+</svg>

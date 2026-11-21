@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-parasol"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12.5 11.134 L 18.196 21" />
+  <path d="M 20.425 5.299 C 17.2654 1.7924 12.0841 0.9725 7.9962 3.3324 C 3.9084 5.6923 2.0273 10.5893 3.484 15.079 C 3.667 15.642 4.327 15.853 4.839 15.557 L 20.16 6.711 C 20.672 6.415 20.82 5.738 20.424 5.298" />
+  <path d="M 21 21 H 3" />
+</svg>

@@ -1,0 +1,24 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-biohazard"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="12" cy="11.9" r="2" />
+  <path d="M 6.7 3.4 C 5.8 5.9 6.7 8.6 8.9 10.1 C 6.5 9 3.7 9.6 2 11.6" />
+  <path d="M 8.9 10.1 L 10.3 10.9" />
+  <path d="M 17.3 3.4 C 18.2 5.9 17.3 8.6 15.1 10.1 C 17.5 8.9 20.3 9.5 22 11.6" />
+  <path d="M 15.1 10.1 L 13.7 10.9" />
+  <path d="M 16.7 20.8 C 14.1 20.4 12.1 18.2 12 15.5 C 11.8 18.1 9.9 20.3 7.3 20.7" />
+  <path d="M 12 13.9 V 15.5" />
+  <path d="M 13.5 5.4 C 12.5 5.2 11.5 5.2 10.5 5.4" />
+  <path d="M 17 16.4 C 17.7 15.7 18.2 14.8 18.5 13.9" />
+  <path d="M 5.5 13.9 C 5.8 14.8 6.3 15.7 7 16.4" />
+</svg>

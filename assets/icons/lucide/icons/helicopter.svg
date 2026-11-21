@@ -1,0 +1,22 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-helicopter"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 17 V 21" />
+  <path d="M 14 3 V 11 C 14 12.1046 14.8954 13 16 13 H 21.865" />
+  <path d="M 17 17 V 21" />
+  <path d="M 18 17 C 20.2091 17 22 15.2091 22 13 C 22 9.6863 18.4183 7 14 7 C 10.6863 7 8 9.2386 8 12 V 15 C 8 16.1046 8.8954 17 10 17 Z" />
+  <path d="M 2 10 V 15" />
+  <path d="M 6 3 H 22" />
+  <path d="M 7 21 H 21" />
+  <path d="M 8 13 H 2" />
+</svg>

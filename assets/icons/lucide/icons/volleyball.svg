@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-volleyball"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 7 C 15.0825 7 19.0105 8.5605 21.98 11.362" />
+  <path d="M 12 12 C 9.8954 14.7546 6.7779 16.5546 3.34 17" />
+  <path d="M 16.83 13.634 C 14.789 17.1694 11.4737 19.791 7.563 20.962" />
+  <path d="M 20.66 17 C 18.5554 14.2454 15.4379 12.4454 12 12 C 10.6667 8.8 10.6667 5.2 12 2" />
+  <path d="M 8.17 15.366 C 6.1285 11.8306 5.5157 7.6485 6.457 3.676" />
+  <circle cx="12" cy="12" r="10" />
+</svg>

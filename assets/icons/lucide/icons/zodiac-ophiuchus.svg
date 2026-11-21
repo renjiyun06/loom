@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-ophiuchus"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 10 C 4.1491 8.726 5.7843 7.9988 7.5 7.9988 C 9.2157 7.9988 10.8509 8.726 12 10 C 13.1491 11.274 14.7843 12.0012 16.5 12.0012 C 18.2157 12.0012 19.8509 11.274 21 10" />
+  <path d="M 6 3 V 15 C 6 18.3137 8.6863 21 12 21 C 15.3137 21 18 18.3137 18 15 V 3" />
+</svg>

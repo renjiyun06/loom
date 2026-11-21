@@ -1,0 +1,15 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-bitcoin"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11.767 19.089 C 16.691 19.957 17.907 13.064 12.983 12.195 M 11.767 19.089 L 5.86 18.047 M 11.768 19.089 L 11.421 21.059 M 12.984 12.195 C 17.908 13.064 19.124 6.17 14.199 5.302 M 12.984 12.195 L 9.044 11.501 M 14.199 5.301 L 8.29 4.26 M 14.198 5.302 L 14.546 3.332 M 7.48 20.364 L 10.606 2.637" />
+</svg>

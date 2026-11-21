@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-concierge-bell"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 20 C 2.4477 20 2 19.5523 2 19 V 18 C 2 16.8954 2.8954 16 4 16 H 20 C 21.1046 16 22 16.8954 22 18 V 19 C 22 19.5523 21.5523 20 21 20 Z" />
+  <path d="M 20 16 C 20 11.5817 16.4183 8 12 8 C 7.5817 8 4 11.5817 4 16" />
+  <path d="M 12 4 V 8" />
+  <path d="M 10 4 H 14" />
+</svg>

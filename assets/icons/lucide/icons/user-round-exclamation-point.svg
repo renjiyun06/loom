@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-user-round-exclamation-point"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 19.99 13 V 17" />
+  <path d="M 19.99 21 H 20" />
+  <path d="M 4 21 C 4 18.1439 5.5226 15.5045 7.995 14.0747 C 10.4674 12.6448 13.5145 12.6415 15.99 14.066" />
+  <circle cx="12" cy="8" r="5" />
+</svg>

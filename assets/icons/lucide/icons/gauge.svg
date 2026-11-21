@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-gauge"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 14 L 16 10" />
+  <path d="M 3.34 19 C 0.9133 14.7972 1.8544 9.4588 5.572 6.3392 C 9.2896 3.2197 14.7104 3.2197 18.428 6.3392 C 22.1456 9.4588 23.0867 14.7972 20.66 19" />
+</svg>

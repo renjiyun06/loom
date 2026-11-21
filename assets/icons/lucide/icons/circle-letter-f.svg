@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-circle-letter-f"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 9 16 V 8.5 C 9 8.2239 9.2239 8 9.5 8 H 15" />
+  <path d="M 9 12 H 13" />
+  <circle cx="12" cy="12" r="10" />
+</svg>

@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-cassette-tape"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="20" height="16" x="2" y="4" rx="2" />
+  <circle cx="8" cy="10" r="2" />
+  <path d="M 8 12 H 16" />
+  <circle cx="16" cy="10" r="2" />
+  <path d="M 6 20 L 6.7 17.1 C 6.8434 16.4456 7.4303 15.9845 8.1 16 H 15.9 C 16.5406 15.9734 17.1174 16.3854 17.3 17 L 18 20" />
+</svg>

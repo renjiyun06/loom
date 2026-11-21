@@ -1,0 +1,25 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-calendar-check-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 19 3 L 5 3" />
+  <path d="M 21 13 L 21 5" />
+  <path d="M 21 5 C 21 3.8954 20.1046 3 19 3" />
+  <path d="M 3 19 C 3 20.1046 3.8954 21 5 21" />
+  <path d="M 3 5 L 3 19" />
+  <path d="M 5 3 C 3.8954 3 3 3.8954 3 5" />
+  <path d="M 16 19 L 18 21 L 22 17" />
+  <path d="M 16 2 V 5" />
+  <path d="M 3 9 H 21" />
+  <path d="M 5 21 L 12.5 21" />
+  <path d="M 8 2 V 5" />
+</svg>

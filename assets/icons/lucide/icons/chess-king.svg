@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-chess-king"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 4 20 C 4 18.8954 4.8954 18 6 18 H 18 C 19.1046 18 20 18.8954 20 20 V 21 C 20 21.5523 19.5523 22 19 22 H 5 C 4.4477 22 4 21.5523 4 21 Z" />
+  <path d="M 6.7 18 L 5.7 17 C 4.35 15.682 3 14.09 3 12 C 2.9999 9.258 5.2081 7.0274 7.95 7 C 9.534 7 10.65 7.455 12 8.818 C 13.35 7.455 14.466 7 16.05 7 C 18.7919 7.0274 21.0001 9.258 21 12 C 21 14.082 19.641 15.673 18.3 17 L 17.3 18" />
+  <path d="M 10 4 H 14" />
+  <path d="M 12 2 V 8.818" />
+</svg>

@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-lasso"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3.704 14.467 C 0.8534 11.08 1.6487 6.519 5.5491 3.8854 C 9.4496 1.2518 15.2033 1.3907 18.8981 4.2078 C 22.5929 7.0248 23.0428 11.6158 19.942 14.8591 C 16.8412 18.1025 11.1849 18.9571 6.819 16.842" />
+  <path d="M 7 22 C 5.7427 21.057 5.0019 19.5777 5 18.006" />
+  <circle cx="5" cy="16" r="2" />
+</svg>

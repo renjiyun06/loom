@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-map-pin-minus-inside"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 20 10 C 20 14.993 14.461 20.193 12.601 21.799 C 12.245 22.0667 11.755 22.0667 11.399 21.799 C 9.539 20.193 4 14.993 4 10 C 4 5.5817 7.5817 2 12 2 C 16.4183 2 20 5.5817 20 10" />
+  <path d="M 9 10 H 15" />
+</svg>

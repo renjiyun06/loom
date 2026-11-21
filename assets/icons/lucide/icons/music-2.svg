@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-music-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 19 6 L 13.8 2.1 C 13.6485 1.9864 13.4458 1.9681 13.2764 2.0528 C 13.107 2.1375 13 2.3106 13 2.5 V 18" />
+  <circle cx="9" cy="18" r="4" />
+</svg>

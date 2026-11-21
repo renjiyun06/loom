@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-soap-dispenser-droplet"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 10.5 2 V 6" />
+  <path d="M 14 2 H 7 C 5.8954 2 5 2.8954 5 4" />
+  <path d="M 19.29 14.76 C 18.1231 13.802 17.3158 12.4764 17 11 C 16.6895 12.4785 15.8812 13.8057 14.71 14.76 C 13.56 15.68 13 16.8 13 17.95 C 13 20.17 14.8 22 17 22 C 19.2 22 21 20.17 21 17.95 C 21 16.79 20.43 15.69 19.29 14.76" />
+  <path d="M 9.607 21 H 6 C 4.8954 21 4 20.1046 4 19 V 12 C 4 10.8954 4.8954 10 6 10 H 13 V 7 C 13 6.4477 12.5523 6 12 6 H 9 C 8.4477 6 8 6.4477 8 7 V 10" />
+</svg>

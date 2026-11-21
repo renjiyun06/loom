@@ -1,0 +1,16 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-plane-landing"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2 22 H 22" />
+  <path d="M 3.77 10.77 L 2 9 L 4 4.5 L 5.1 5.05 C 5.65 5.33 6 5.89 6 6.5 C 6 7.11 6.35 7.67 6.9 7.95 L 8 8.5 L 11 2.5 L 12.05 3.03 C 12.6425 3.3251 13.0506 3.8942 13.14 4.55 L 13.86 9.95 C 13.9494 10.6058 14.3575 11.1749 14.95 11.47 L 19.35 13.67 C 19.77 13.89 20.13 14.22 20.36 14.63 L 20.96 15.66 C 21.45 16.54 20.9 17.64 19.9 17.76 L 18.72 17.91 C 18.25 17.97 17.77 17.89 17.35 17.67 L 4.29 11.15 C 4.0973 11.0523 3.9217 10.9239 3.77 10.77 Z" />
+</svg>

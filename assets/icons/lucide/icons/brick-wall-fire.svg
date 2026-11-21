@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-brick-wall-fire"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 16 3 V 5.107" />
+  <path d="M 17 9 C 18 12 19.5 12.5 20.5 13.5 C 21.4421 14.4232 21.9812 15.6812 22 17 C 22 19.7614 19.7614 22 17 22 C 14.2386 22 12 19.7614 12 17 C 12 16.7 12 16.4 12.1 16.1 C 12.3316 16.9107 13.0468 17.489 13.888 17.5459 C 14.7292 17.6029 15.5157 17.1262 15.8545 16.3541 C 16.1932 15.5821 16.0115 14.6805 15.4 14.1 C 13 11.5 16 9 17 9" />
+  <path d="M 21 8.274 V 5 C 21 3.8954 20.1046 3 19 3 H 5 C 3.8954 3 3 3.8954 3 5 V 19 C 3 20.1046 3.8954 21 5 21 H 8.938" />
+  <path d="M 3 15 H 8.253" />
+  <path d="M 3 9 H 11.228" />
+  <path d="M 8 15 V 21" />
+  <path d="M 8 3 V 9" />
+</svg>

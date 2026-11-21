@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-calendar-x-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 16 2 V 5" />
+  <path d="M 17 16 L 22 21" />
+  <path d="M 17 21 L 22 16" />
+  <path d="M 21 12 V 5 C 21 3.8954 20.1046 3 19 3 H 5 C 3.8954 3 3 3.8954 3 5 V 19 C 3 20.1046 3.8954 21 5 21 H 13" />
+  <path d="M 3 9 H 21" />
+  <path d="M 8 2 V 5" />
+</svg>

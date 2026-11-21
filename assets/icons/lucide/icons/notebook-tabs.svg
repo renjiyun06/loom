@@ -1,0 +1,23 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-notebook-tabs"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 2 6 H 6" />
+  <path d="M 2 10 H 6" />
+  <path d="M 2 14 H 6" />
+  <path d="M 2 18 H 6" />
+  <rect width="16" height="20" x="4" y="2" rx="2" />
+  <path d="M 15 2 V 22" />
+  <path d="M 15 7 H 20" />
+  <path d="M 15 12 H 20" />
+  <path d="M 15 17 H 20" />
+</svg>

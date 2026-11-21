@@ -1,0 +1,17 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-circle-euro"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 15 9.4 C 13.9115 8.1274 12.1454 7.6675 10.5744 8.2477 C 9.0035 8.8279 7.9603 10.3253 7.9603 12 C 7.9603 13.6747 9.0035 15.1721 10.5744 15.7523 C 12.1454 16.3325 13.9115 15.8726 15 14.6" />
+  <path d="M 7 12 H 12" />
+  <circle cx="12" cy="12" r="10" />
+</svg>

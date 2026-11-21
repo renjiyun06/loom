@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-chess-bishop"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 5 20 C 5 18.8954 5.8954 18 7 18 H 17 C 18.1046 18 19 18.8954 19 20 V 21 C 19 21.5523 18.5523 22 18 22 H 6 C 5.4477 22 5 21.5523 5 21 Z" />
+  <path d="M 15 18 C 16.5 17.385 18 15.539 18 13.077 C 18 8.769 14.5 4.462 12 2 C 9.5 4.462 6 8.77 6 13.077 C 6 15.539 7.5 17.385 9 18" />
+  <path d="M 16 7 L 13.5 9.5" />
+  <path d="M 9 2 H 15" />
+</svg>

@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-chart-bar-increasing"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 3 3 V 19 C 3 20.1046 3.8954 21 5 21 H 21" />
+  <path d="M 7 11 H 15" />
+  <path d="M 7 16 H 19" />
+  <path d="M 7 6 H 10" />
+</svg>

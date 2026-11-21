@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-credit-card-check"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12.5 19 H 4 C 2.8954 19 2 18.1046 2 17 V 7 C 2 5.8954 2.8954 5 4 5 H 20 C 21.1046 5 22 5.8954 22 7 V 11" />
+  <path d="M 2 10 H 22" />
+  <path d="M 6 14 H 8" />
+  <path d="M 16 17 L 18 19 L 22 15" />
+</svg>

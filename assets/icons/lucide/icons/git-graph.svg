@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-git-graph"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="5" cy="6" r="3" />
+  <path d="M 5 9 V 15" />
+  <circle cx="5" cy="18" r="3" />
+  <path d="M 12 3 V 21" />
+  <circle cx="19" cy="6" r="3" />
+  <path d="M 16 15.7 C 17.9068 13.9945 18.9977 11.5582 19 9" />
+</svg>

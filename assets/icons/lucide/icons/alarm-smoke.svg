@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-alarm-smoke"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 21 C 11 18.5 13 18.5 13 16" />
+  <path d="M 16 21 C 16 18.5 18 18.5 18 16" />
+  <path d="M 19 8 L 18.2 11 C 18.0832 11.573 17.5847 11.9884 17 12 H 7 C 6.4153 11.9884 5.9168 11.573 5.8 11 L 5 8" />
+  <path d="M 21 3 C 21.5523 3 22 3.4477 22 4 V 6 C 22 7.1046 21.1046 8 20 8 H 4 C 2.8954 8 2 7.1046 2 6 V 4 C 2 3.4477 2.4477 3 3 3 Z" />
+  <path d="M 6 21 C 6 18.5 8 18.5 8 16" />
+</svg>

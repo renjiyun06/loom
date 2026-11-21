@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-utensils-crossed"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 16 2 L 13.7 4.3 C 12.5566 5.4665 12.5566 7.3335 13.7 8.5 L 15.5 10.3 C 16.6665 11.4434 18.5335 11.4434 19.7 10.3 L 22 8" />
+  <path d="M 15 15 L 3.3 3.3 C 2.4937 4.09 2.0394 5.1712 2.0394 6.3 C 2.0394 7.4288 2.4937 8.51 3.3 9.3 L 10.6 16.6 C 11.3 17.3 12.6 17.3 13.4 16.6 L 15 15 Z M 15 15 L 22 22" />
+  <path d="M 2.1 21.8 L 8.5 15.5" />
+  <path d="M 19 5 L 12 12" />
+</svg>

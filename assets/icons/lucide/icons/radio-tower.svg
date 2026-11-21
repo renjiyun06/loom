@@ -1,0 +1,21 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-radio-tower"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 4.9 16.1 C 1 12.2 1 5.8 4.9 1.9" />
+  <path d="M 7.8 4.7 C 5.8483 6.7223 5.5187 9.8115 7 12.2" />
+  <circle cx="12" cy="9" r="2" />
+  <path d="M 16.2 4.8 C 18.2 6.8 18.46 9.91 17 12.27" />
+  <path d="M 19.1 1.9 C 20.9723 3.7684 22.0244 6.3049 22.0244 8.95 C 22.0244 11.5951 20.9723 14.1316 19.1 16" />
+  <path d="M 9.5 18 H 14.5" />
+  <path d="M 8 22 L 12 11 L 16 22" />
+</svg>

@@ -1,0 +1,20 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-birdhouse"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 12 18 V 22" />
+  <path d="M 17 18 L 18.956 6.532" />
+  <path d="M 3 8 L 10.82 2.385 C 11.5228 1.8714 12.4772 1.8714 13.18 2.385 L 21 8" />
+  <path d="M 4 18 H 20" />
+  <path d="M 7 18 L 5.044 6.532" />
+  <circle cx="12" cy="10" r="2" />
+</svg>

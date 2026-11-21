@@ -1,0 +1,19 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-hat-glasses"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 14 18 C 14 16.8954 13.1046 16 12 16 C 10.8954 16 10 16.8954 10 18" />
+  <path d="M 19 11 L 16.89 4.343 C 16.7032 3.8053 16.2961 3.3727 15.7708 3.1535 C 15.2454 2.9343 14.6515 2.9494 14.138 3.195 L 12.862 3.805 C 12.5928 3.9335 12.2983 4.0001 12 4 H 8.5 C 7.6048 3.9998 6.8185 4.5945 6.575 5.456 L 5 11" />
+  <path d="M 2 11 H 22" />
+  <circle cx="17" cy="18" r="3" />
+  <circle cx="7" cy="18" r="3" />
+</svg>

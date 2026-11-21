@@ -1,0 +1,18 @@
+<!-- @license lucide-static v1.77.0 - ISC -->
+<svg
+  class="lucide lucide-zodiac-virgo"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M 11 5.5 C 11 4.1193 12.1193 3 13.5 3 C 14.8807 3 16 4.1193 16 5.5 V 16 C 16 18.7614 18.2386 21 21 21" />
+  <path d="M 16 11.5 C 16 10.1193 17.1193 9 18.5 9 C 19.8807 9 21 10.1193 21 11.5 V 16 C 21 18.7614 18.7614 21 16 21" />
+  <path d="M 6 19 V 6 C 6 4.3431 4.6569 3 3 3 H 3" />
+  <path d="M 6 5.5 C 6 4.1193 7.1193 3 8.5 3 C 9.8807 3 11 4.1193 11 5.5 V 19" />
+</svg>

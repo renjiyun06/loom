@@ -1,4 +1,4 @@
-"Native visual checks against the approved compact local prototype."
+"Visual checks for the compact native conversation interface."
 | report checks check ui card body editor text entry row values list bytes before |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].

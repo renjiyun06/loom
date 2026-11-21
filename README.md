@@ -2,7 +2,7 @@
 id: "readme"
 title: "织境（Loom）"
 summary: "面向使用者的启动入口，说明怎样打开织境环境、原生文字对话标签，以及到哪里阅读现行说明。"
-updated: "2026-11-21T09:39:21+08:00"
+updated: "2026-11-22T07:24:15+08:00"
 ---
 # 织境（Loom）
 
@@ -28,4 +28,4 @@ Codex 的 `cwd` 指向 `workspace`，这里只作为环境加载入口，不是�
 - [文档编写与维护](workspace/06-文档编写与维护.md)
 - [长录音消息与转录](workspace/07-长录音消息与转录.md)
 
-运行程序、长期状态、日志和验证结果各自保存在根目录下的对应位置。同版 App Server 参考保留在 [协议目录](docs/codex-protocol/) 和 [JSON Schema 目录](docs/codex-json-schema/)。
+运行程序、长期状态、日志和验证结果各自保存在根目录下的对应位置。

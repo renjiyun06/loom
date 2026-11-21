@@ -66,7 +66,6 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
 clientClass compile: 'activeRequestId ^ activeRequestId'.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'object-invocation.st') contents.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'loom-sessions.st') contents.
-clientClass class compile: 'bridgeVersion ^ 11'.
 client := existing ifNil: [ clientClass new ].
 client timeoutSeconds: nil.
 Smalltalk globals at: #LoomCodex put: client.

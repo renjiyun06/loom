@@ -111,6 +111,9 @@ try {
   if(version.value<11) {
     const result=await evaluate(fs.readFileSync(path.join(root,'src/runtime/codex-client.st'),'utf8'),'install-codex-client');
     if(!result.ok)throw new Error(JSON.stringify(result));
+  } else if(version.value<12) {
+    const result=await evaluate(fs.readFileSync(path.join(root,'src/runtime/object-invocation.st'),'utf8'),'upgrade-object-invocation');
+    if(!result.ok)throw new Error(JSON.stringify(result));
   }
   const conversationInstalled=await evaluate('Smalltalk globals includesKey: #LoomConversation','check-conversation');
   if(!conversationInstalled.ok)throw new Error(JSON.stringify(conversationInstalled));

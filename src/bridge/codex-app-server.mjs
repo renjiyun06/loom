@@ -94,12 +94,10 @@ export class CodexAppServer extends EventEmitter {
     // The request ID has been validated by ingress. Resolve the session from the active client binding.
     const sessionId=this.sessionRegistry.loomSessionIdForClient(active.clientKey);
     const sessionLiteral=sessionId===null?'nil':"'"+sessionId.replaceAll("'","''")+"'";
-    const evaluated=await run(`[ :loomInvocation :loomSessionId | | value |
-      value := [
+    const evaluated=await run(`(LMInvocation pendingAt: '${active.requestId}')
+      evaluate: [ :loomCaller :loomMessage :loomSessionId :loomReturn |
       ${code}
-      ] value.
-      { loomInvocation hasResult. value }
-    ] value: (LMInvocation pendingAt: '${active.requestId}') value: ${sessionLiteral}`.replace(/\r?\n/g,'\r'));
+      ] sessionId: ${sessionLiteral}`.replace(/\r?\n/g,'\r'));
     if(!evaluated.ok)return evaluated;
     if(!Array.isArray(evaluated.value)||typeof evaluated.value[0]!=='boolean') {
       throw new Error('Invalid result from Loom object invocation callback');
@@ -151,7 +149,7 @@ export class CodexAppServer extends EventEmitter {
           ...params,
           dynamicTools:[{
             type:'function',name:'runtime_eval',
-            description:'Evaluate Smalltalk in the live GT runtime that issued this call. Object calls bind loomInvocation and loomSessionId. Explore classes, source code, objects and call contexts, or change code when the user task requires it. Return JSON-serializable values. Do not synchronously invoke LoomCodex from this tool.',
+            description:'Evaluate Smalltalk in the live GT runtime that issued this call. Object calls bind loomCaller (Context), loomMessage (Message), loomSessionId (Loom session ID), and loomReturn (a one-argument block for returning a live object). Tool output must be JSON-serializable. See AGENTS.md. Do not synchronously invoke LoomCodex from this tool.',
             inputSchema:{type:'object',properties:{code:{type:'string'}},required:['code'],additionalProperties:false},
           }],
         },30000,result=>this.sessionRegistry.bindCreated(request.clientKey,request.id,result.thread.id));

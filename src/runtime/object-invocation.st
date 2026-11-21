@@ -17,11 +17,10 @@ invocation compile: 'detach
  requestId ifNotNil: [
   LoomPendingInvocations removeKey: requestId ifAbsent: [ ].
   requestId := nil ]'.
-invocation compile: 'selector ^ message selector'.
-invocation compile: 'arguments ^ message arguments copy'.
-invocation compile: 'argumentAt: index ^ message arguments at: index'.
-invocation compile: 'caller ^ caller'.
-invocation compile: 'hasResult ^ submitted'.
+invocation compile: 'evaluate: toolCode sessionId: sessionId
+ | value |
+ value := toolCode valueWithArguments: { caller. message. sessionId. [ :object | self return: object ] }.
+ ^ { submitted. value }'.
 invocation compile: 'return: anObject
  requestId ifNil: [ self error: ''This Loom object invocation is no longer active'' ].
  submitted ifTrue: [
@@ -31,17 +30,10 @@ invocation compile: 'return: anObject
  submitted := true.
  ^ true'.
 invocation compile: 'result
- submitted ifFalse: [ self error: ''Codex did not return a GT object for '', self selector asString ].
+ submitted ifFalse: [ self error: ''Codex did not return a GT object for '', message selector asString ].
  ^ result'.
-invocation compile: 'markedCallerSource
- | source node |
- source := [ caller method sourceCode ] on: Error do: [ :error | ^ ''Caller source unavailable'' ].
- node := [ caller sourceNodeExecuted ] on: Error do: [ :error | nil ].
- (node isNil or: [ node isMessage not or: [ node selector ~= message selector ] ]) ifTrue: [ ^ source ].
- ^ (source first: node start - 1), ''<<< CALL >>>'',
-   (source copyFrom: node start to: node stop), ''<<< END CALL >>>'',
-   (source allButFirst: node stop)'.
-(invocation includesSelector: #prompt) ifTrue: [ invocation removeSelector: #prompt ].
+#(selector arguments argumentAt: caller hasResult markedCallerSource prompt) do: [ :selector |
+ (invocation includesSelector: selector) ifTrue: [ invocation removeSelector: selector ] ].
 LMCodexClient compile: 'doesNotUnderstand: message
  | invocation |
  Processor activeProcess == BridgeMailboxProcess ifTrue: [
@@ -54,4 +46,5 @@ LMCodexClient compile: 'doesNotUnderstand: message
   [ self performRequest: ''Loom 调用了你。'' action: ''ask'' invocation: invocation.
     invocation result ]
    ensure: [ invocation detach. activeRequestId := nil ] ]'.
+LMCodexClient class compile: 'bridgeVersion ^ 12'.
 'Loom object invocation installed'

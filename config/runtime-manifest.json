@@ -65,8 +65,8 @@
     },
     {
       "path": "runtime/audio/AudioHost.exe",
-      "bytes": 9216,
-      "sha256": "8d35f02520a43d78d583c7d9b1cffcb4e20cd213fd213eeff7b952beebea0d28"
+      "bytes": 9728,
+      "sha256": "612ac275dc324eea4eb63cdea0738124f92d1d49af457c1b315ad9f0a5109127"
     },
     {
       "path": "runtime/media/ffmpeg.exe",

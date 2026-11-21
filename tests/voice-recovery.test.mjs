@@ -40,3 +40,34 @@ test('recording never restarts the microphone after a runtime crash',async()=>{
  const {directory,id}=fixture('recording');const service=new VoiceService(directory,{provider:{configured:()=>true}});
  assert.equal(service.get(id).state,'draft');assert.equal(service.recorder,null);await service.close();
 });
+
+test('pause and resume control the same recorder and publish its retained waveform',async()=>{
+ const {directory,id}=fixture('draft');
+ const service=new VoiceService(directory,{provider:{configured:()=>false}});
+ const commands=[];
+ const recorder={id,state:'recording',levels:[20,42],child:{stdin:{write(command){
+   commands.push(command);recorder.state=command==='pause\n'?'paused':'recording';
+ }}}};
+ service.recorder=recorder;
+ await service.command({action:'pause',audioId:id});
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(service.ipc,'meter.json'))),{audioId:id,state:'paused',levels:[20,42]});
+ await service.command({action:'resume',audioId:id});
+ assert.equal(service.recorder,recorder);
+ assert.deepEqual(commands,['pause\n','resume\n']);
+ service.recorder=null;await service.close();
+});
+
+test('confirm leaves a local draft and cancel discards only the unsent recording',async()=>{
+ const {directory,id}=fixture('draft',{source:'microphone'});
+ const service=new VoiceService(directory,{provider:{configured:()=>false}});
+ const wav=service.file(service.get(id),'original.wav');
+ fs.writeFileSync(wav,'recording fixture');
+ assert.deepEqual(await service.command({action:'stop',audioId:id}),{audioId:id,state:'draft',error:undefined});
+ await service.poll();
+ assert.equal(service.get(id).state,'draft');
+ assert.equal(service.get(id).messageId,undefined);
+ await service.command({action:'cancel',audioId:id});
+ assert.equal(fs.existsSync(wav),false);
+ assert.throws(()=>service.get(id),/音频不存在/);
+ await service.close();
+});

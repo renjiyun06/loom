@@ -3,7 +3,8 @@ import path from 'node:path';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
-import {replaceFileSync} from '../bridge/atomic-files.mjs';
+import {createInterface} from 'node:readline';
+import {atomicJSON,replaceFileSync} from '../bridge/atomic-files.mjs';
 import {Xfyun,SpeechError,randomSignature,parseTranscript} from './xfyun.mjs';
 const exec=promisify(execFile);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -37,6 +38,7 @@ export class VoiceService {
       this.jobs.set(job.id,job);this.save(job);
     }
     this.publish();
+    this.publishMeter();
   }
   file(job,name) {return path.join(this.directory,job.id,name);}
   get(id) {if(!uuid(id)||!this.jobs.has(id))throw Error('音频不存在。');return this.jobs.get(id);}
@@ -67,28 +69,89 @@ export class VoiceService {
   async record() {
     if(this.recorder)throw Error('已有录音正在进行。');
     this.stopPlayback();
-    const job=this.makeJob('录音 '+new Date().toLocaleString('zh-CN'), 'original.wav');job.state='recording';
+    const job=this.makeJob('录音 '+new Date().toLocaleString('zh-CN'), 'original.wav');
+    job.state='recording';job.source='microphone';
     const child=spawn(this.host,['record',this.file(job,job.original)],{windowsHide:true,stdio:['pipe','pipe','pipe']});
-    let output='',error='';child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>error+=b);
-    const recorder={id:job.id,child};this.recorder=recorder;
+    const recorder={id:job.id,child,state:'starting',levels:[],pipeError:null};this.recorder=recorder;
+    const lines=createInterface({input:child.stdout});
+    lines.on('line',line=>{
+      if(line==='recording'||line==='resumed')recorder.state='recording';
+      if(line==='paused')recorder.state='paused';
+      const level=/^level (\d{1,3})$/.exec(line);
+      if(level){
+        recorder.levels.push(Math.min(100,Number(level[1])));
+        if(recorder.levels.length>24)recorder.levels.shift();
+      }
+    });
+    child.stdin.on('error',error=>{recorder.pipeError=error;});
+    child.stderr.resume();
+    const meterTimer=setInterval(()=>this.publishMeter(),100);
     recorder.finished=new Promise(resolve=>{
-      const finish=async code=>{
-        if(this.recorder===recorder)this.recorder=null;
+      child.once('error',error=>{recorder.pipeError=error;});
+      child.once('close',async code=>{
+        lines.close();clearInterval(meterTimer);recorder.state='closed';
         job.state='draft';
         try {job.duration=await this.probe(this.file(job,job.original));if(code!==0)job.error='录音已中断，现有音频已保留。';}
         catch {job.state='failed';job.error='录音设备不可用或音频为空。';}
-        this.save(job);resolve();
-      };
-      child.once('error',()=>{error='无法启动录音工具。';void finish(1);});child.once('exit',code=>void finish(code));
+        if(this.recorder===recorder)this.recorder=null;
+        try {this.save(job);}catch(error){recorder.saveError=error;}
+        this.publishMeter();resolve(job);
+      });
     });
     this.save(job);
-    const deadline=Date.now()+10000;
-    while(!output.includes('recording')){if(error||Date.now()>deadline){child.stdin.end('stop\n');throw Error('无法启动麦克风录音，请核对设备和Windows麦克风权限。');}await sleep(50);}
+    try {await this.waitForRecorder(recorder,'recording',10000);}
+    catch {await this.stopRecording(job.id);throw Error('无法启动麦克风录音，请核对设备和 Windows 麦克风权限。');}
     return {audioId:job.id};
   }
-  async stopRecording() {
-    const recorder=this.recorder;if(!recorder)return {};
-    recorder.child.stdin.end('stop\n');await recorder.finished;return {audioId:recorder.id};
+  publishMeter() {
+    const recorder=this.recorder;
+    const value={audioId:recorder?.id??null,state:recorder?.state??null,levels:recorder?.levels??[]};
+    const serialized=JSON.stringify(value);
+    if(this.lastMeter===serialized)return;
+    // The meter is a transient projection. A reader can keep its previous frame on a sharing violation.
+    try {atomicJSON(path.join(this.ipc,'meter.json'),value);this.lastMeter=serialized;}
+    catch(error){if(!['EPERM','EACCES','EBUSY'].includes(error.code))console.error('Voice meter:',error.message);}
+  }
+  async waitForRecorder(recorder,state,timeout) {
+    const deadline=Date.now()+timeout;
+    while(recorder.state!==state){
+      if(recorder.pipeError||recorder.state==='closed'||Date.now()>=deadline)throw Error('录音设备未响应。');
+      await sleep(25);
+    }
+    this.publishMeter();
+  }
+  async controlRecording(id,action) {
+    const recorder=this.recorder;
+    if(!recorder||recorder.id!==id)throw Error('录音已经结束。');
+    recorder.child.stdin.write(action+'\n');
+    await this.waitForRecorder(recorder,action==='pause'?'paused':'recording',5000);
+    return {audioId:id};
+  }
+  async stopRecording(id) {
+    const recorder=this.recorder;
+    if(!recorder){
+      const job=id?this.get(id):null;
+      return job?{audioId:job.id,state:job.state,error:job.error}:{};
+    }
+    if(id&&recorder.id!==id)throw Error('录音已经结束。');
+    if(!recorder.child.stdin.destroyed&&!recorder.child.stdin.writableEnded)recorder.child.stdin.end('stop\n');
+    const timeout=setTimeout(()=>{
+      if(recorder.state!=='closed')recorder.child.kill();
+    },5000);
+    let job;
+    try {job=await recorder.finished;}finally{clearTimeout(timeout);}
+    if(recorder.saveError)throw recorder.saveError;
+    return {audioId:job.id,state:job.state,error:job.error};
+  }
+  async cancelRecording(id) {
+    const job=this.get(id);
+    if(this.recorder?.id===id)await this.stopRecording(id);
+    if(job.source!=='microphone'||job.messageId||!['draft','failed'].includes(job.state))throw Error('此录音无法取消。');
+    fs.rmSync(this.file(job,job.original),{force:true});
+    fs.rmSync(this.file(job,'message.json'),{force:true});
+    fs.rmdirSync(this.file(job,''));
+    this.jobs.delete(id);this.publish();
+    return {audioId:id};
   }
   async import(file) {
     const source=path.resolve(file);
@@ -159,7 +222,10 @@ export class VoiceService {
   async command(request) {
     switch(request.action) {
       case 'record':return this.record();
-      case 'stop':return this.stopRecording();
+      case 'pause':return this.controlRecording(request.audioId,'pause');
+      case 'resume':return this.controlRecording(request.audioId,'resume');
+      case 'stop':return this.stopRecording(request.audioId);
+      case 'cancel':return this.cancelRecording(request.audioId);
       case 'import':return this.import(request.file);
       case 'pick':return this.pick();
       case 'play':return this.play(request.audioId);

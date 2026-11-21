@@ -173,7 +173,7 @@ try {
   if(!dialogue.ok)throw new Error(JSON.stringify(dialogue));
   const uiVersion=await evaluate('(Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ]) ifNil: [ 0 ] ifNotNil: [ :ui | ui featureVersion ]','check-ui');
   if(!uiVersion.ok)throw new Error(JSON.stringify(uiVersion));
-  if(uiVersion.value<19){
+  if(uiVersion.value<20){
     const ui=await evaluate(fs.readFileSync(path.join(root,'src/runtime/conversation-ui.st'),'utf8').replace(/\r?\n/g,'\r'),'install-ui');
     if(!ui.ok)throw new Error(JSON.stringify(ui));
   }

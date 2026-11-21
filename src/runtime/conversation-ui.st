@@ -15,7 +15,8 @@ textRunRenderer := (SkiaTextPainter >> #fillTextRun:withColor:strokeColor:) sour
 ((Smalltalk globals includesKey: #LMConversationActivityView) and: [
  (Smalltalk globals at: #LMConversationActivityView) includesSelector: #activityIconName ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-components.st') contents ].
-slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane).
+Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-voice.st') contents.
+slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer).
 oldClass := Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ].
 oldView := Smalltalk globals at: #LoomConversationWindow ifAbsent: [ nil ].
 oldView ifNotNil: [ oldView stopRefreshing ].
@@ -70,6 +71,7 @@ ui compile: 'bindMessageRow: row item: value
  ^ [ row descriptor: value ] on: Error do: [ :error | row showRenderingError: error descriptor: value ]'.
 ui compile: 'build
  | body left composer footer draft splitter divider anchor historyFrame inputInset activityLimit |
+ voiceComposer ifNotNil: [ voiceComposer close ].
  anchor := self historyAnchor.
  draft := input ifNil: [ '''' ] ifNotNil: [ input text asString ].
  activityLimit := bodyPane ifNotNil: [
@@ -131,6 +133,8 @@ ui compile: 'build
  stopButton border: (BlBorder paint: (Color gray: 0.84) width: 1); geometry: (BlRoundedRectangleGeometry cornerRadius: 4).
  stopButton visibility: BlVisibility gone.
  footer addChild: stopButton.
+ voiceComposer := LMVoiceComposer new.
+ footer addChild: (voiceComposer buildFor: self).
  footer addChild: ((LMChatStyle button: ''发送'' action: [ self sendMessage ]
   foreground: Color white background: (Color gray: 0.2)) hExact: 50; vExact: 28; margin: (BlInsets left: 5); yourself).
  composer addChild: footer. left addChild: composer.
@@ -216,7 +220,9 @@ ui compile: 'cancelCurrentTurn
   temporary binaryWriteStreamDo: [ :out | out nextPutAll: ''{}'' utf8Encoded; truncate: 2 ].
   temporary renameTo: file basename ].
  status text: ''正在停止…'''.
-ui compile: 'closed self stopRefreshing'.
+ui compile: 'closed
+ voiceComposer ifNotNil: [ voiceComposer close ].
+ self stopRefreshing'.
 ui compile: 'collectUpdate
  | directory key current records invocation messages statusText reply page limit partial |
  directory := LoomConversation directory.
@@ -528,6 +534,9 @@ ui compile: 'sendMessage
   on: Error do: [ :error | errorText := error messageText ].
  self refresh.
  self resizeComposer'.
+ui compile: 'voiceNotice: text
+ errorText := text.
+ self refresh'.
 ui compile: 'shouldRestore
  ^ self isOpen or: [ layoutVersion ~= 7 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
@@ -535,7 +544,7 @@ ui compile: 'show
  self stopRefreshing.
  (space notNil and: [ space isOpened ]) ifTrue: [
   (BlParallelUniverse forHost: space host class) closeSpaceSynchronously: space ].
- layoutVersion = 7 ifFalse: [ self build ].
+ (layoutVersion ~= 7 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
  world := self hostWorld ifNil: [
   GtWorld allOpenWorlds detect: [ :each | each host isKindOf: BlWinitHost ]
    ifNone: [ self error: ''请先打开 GT 主界面'' ] ].
@@ -682,7 +691,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 19'.
+ui class compile: 'featureVersion ^ 20'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

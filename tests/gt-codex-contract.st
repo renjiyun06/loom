@@ -1,5 +1,5 @@
 "Native session registry, activity, and settings checks. The test root is disposable."
-| base registry request receipt binding file cache settings verify page older protected requestId data roster log |
+| base registry request receipt binding file settings verify page older protected requestId data roster |
 base := ExperimentRoot / 'codex-contract'.
 verify := [ :condition :message | condition ifFalse: [ self error: message ] ].
 registry := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
@@ -22,18 +22,15 @@ receipt := Dictionary new at: 'ok' put: true; at: 'threadId' put: 'fixture-threa
  at: 'startedAt' put: '2026-11-01T10:00:00Z'; at: 'completedAt' put: '2026-11-01T10:01:00Z'; yourself.
 registry completeCall: requestId result: receipt.
 verify value: (registry callResult: requestId) = receipt value: 'completed receipt is durable'.
-log := base / 'logs' / 'codex-events' / (requestId, '.events.jsonl').
-log parent ensureCreateDirectory.
-data := '{"direction":"server","at":"2026-11-01T10:00:30Z","message":{"method":"item/completed","params":{"item":{"id":"legacy","type":"agentMessage","phase":"commentary","text":"Imported history"}}}}'.
-log writeStreamDo: [ :stream | stream nextPutAll: data; lf ].
-registry migrateActivityLogs: base / 'logs' codexHome: base / 'codex'.
-registry migrateActivityLogs: base / 'logs' codexHome: base / 'codex'.
+data := STONJSON fromString: '{"method":"item/completed","params":{"item":{"id":"progress","type":"agentMessage","phase":"commentary","text":"Live activity"}}}'.
+registry acceptActivity: data call: requestId.
+registry acceptActivity: data call: requestId.
 page := registry activityPageFrom: nil limit: 1 previous: 1 focus: nil session: 'Fixture-1' managedOnly: true.
-verify value: (((page at: 'items') first at: 'text') = 'Imported history' and: [ page at: 'older' ])
+verify value: (((page at: 'items') first at: 'text') = 'Live activity' and: [ page at: 'older' ])
  value: 'latest activity page retains older history'.
 older := registry activityPageFrom: (page at: 'first') limit: 2 previous: 1 focus: nil session: 'Fixture-1' managedOnly: true.
 verify value: ((older at: 'items') size = 2 and: [ (older at: 'older') not ])
- value: 'legacy activity imports once and paginates by session'.
+ value: 'duplicate events update one activity and paginate by session'.
 request := Dictionary new at: 'id' put: UUID new asString; at: 'action' put: 'newConversation'; at: 'clientKey' put: 'default'; yourself.
 receipt := registry reset: request.
 verify value: (registry reset: request) = receipt value: 'replaying a completed reset is idempotent'.
@@ -41,10 +38,9 @@ binding := registry initializeDefault: 'old-thread'.
 verify value: ((binding at: 'state') = 'unbound' and: [ (binding at: 'generation') = 1 ])
  value: 'reset survives old image state'.
 file := base / 'codex.json'.
-cache := base / 'models_cache.json'.
 LMPlatformTools writeJSON: (STONJSON fromString: '{"model":"fixture","effort":"medium","fast":false}') to: file.
-LMPlatformTools writeJSON: (STONJSON fromString: '{"models":[{"visibility":"list","slug":"fixture","display_name":"Fixture","supported_reasoning_levels":[{"effort":"medium"},{"effort":"high"}],"service_tiers":[{"id":"priority"}]}]}') to: cache.
-settings := LMNativeCodexSettings new initializeAt: file cache: cache; yourself.
+settings := LMNativeCodexSettings new initializeAt: file;
+ models: (STONJSON fromString: '[{"model":"fixture","displayName":"Fixture","supportedReasoningEfforts":[{"reasoningEffort":"medium"},{"reasoningEffort":"high"}],"serviceTiers":[{"id":"priority"}]}]'); yourself.
 settings save: (STONJSON fromString: '{"model":"fixture","effort":"high","fast":true}').
 verify value: ((settings turnParams at: 'effort') = 'high' and: [ (settings turnParams at: 'serviceTier') = 'priority' ])
  value: 'settings select the requested effort and tier'.

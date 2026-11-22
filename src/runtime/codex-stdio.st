@@ -2,7 +2,7 @@
 | transport |
 transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending #loaded #models #toolProcesses #writeMutex #serial #session #epoch #registry #failure #active); package: 'Loom-Codex') install.
 transport compile: 'start: options registry: aRegistry
- | builder cwd configHome temp logs identity |
+ | builder cwd temp logs identity |
 registry := aRegistry.
 session := BridgeRuntimeSessionId.
 epoch := OSEnvironment current at: ''LOOM_RUNTIME_EPOCH''.
@@ -13,13 +13,12 @@ toolProcesses := IdentitySet new.
 writeMutex := Mutex new.
 serial := 0.
 cwd := options at: ''workspace''.
-configHome := options at: ''codexHome''.
 temp := options at: ''temporary''.
 logs := options at: ''logs''.
-#(''workspace'' ''codexHome'' ''temporary'' ''logs'') do: [ :name | (options at: name) ensureCreateDirectory ].
+#(''workspace'' ''temporary'' ''logs'') do: [ :name | (options at: name) ensureCreateDirectory ].
 builder := (GtExternalProcessBuilder new: (options at: ''codexExecutable'') fullName)
  arguments: #(''app-server'' ''--stdio''); workingDirectory: cwd fullName;
- env: ''CODEX_HOME'' value: configHome fullName; env: ''TMP'' value: temp fullName; env: ''TEMP'' value: temp fullName;
+ env: ''TMP'' value: temp fullName; env: ''TEMP'' value: temp fullName;
  pipeStdin; pipeStdout; yourself.
 builder stderr: (GtExternalProcessFileStdio new fileReference: (logs / ''codex.stderr.log'') asAbsolute;
  create: true; append: true; yourself).
@@ -31,6 +30,18 @@ identity := self rpc: ''initialize'' params: (STONJSON fromString:
  ''{"clientInfo":{"name":"loom_bridge","title":"Loom","version":"0.1.0"},"capabilities":{"experimentalApi":true,"requestAttestation":false}}'').
 self send: (Dictionary new at: ''method'' put: ''initialized''; yourself).
 ^ identity'.
+transport compile: 'modelCatalog
+ | params page cursor models deadline |
+ params := Dictionary new at: ''limit'' put: 100; yourself.
+ models := OrderedCollection new.
+ deadline := DateAndTime now + 8 seconds.
+ [
+  page := self rpc: ''model/list'' params: params timeout: ((deadline - DateAndTime now) asSeconds max: 1).
+  models addAll: (page at: ''data'').
+  cursor := page at: ''nextCursor'' ifAbsent: [ nil ].
+  cursor isNil or: [ DateAndTime now >= deadline ]
+ ] whileFalse: [ params at: ''cursor'' put: cursor ].
+ ^ models asArray'.
 transport compile: 'pid
  ^ child id'.
 transport compile: 'active

@@ -44,6 +44,10 @@ public static class FakeCodexAppServer {
             switch (method) {
                 case "initialize":
                     Reply(id,new { userAgent="Loom offline protocol fixture" }); break;
+                case "model/list":
+                    Reply(id,new { data=new[] { new { model="offline", displayName="Offline fixture",
+                        defaultReasoningEffort="medium",
+                        supportedReasoningEfforts=new[] { new { reasoningEffort="medium" } } } } }); break;
                 case "thread/start":
                     threadId="fixture-"+Guid.NewGuid().ToString("D");
                     Reply(id,new { thread=new { id=threadId }, model="offline" }); break;

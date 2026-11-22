@@ -17,18 +17,16 @@ views := Dictionary new.
 state := STONJSON fromString: (BridgeIPC / ''bridge-ready.json'') contents.
 status := state copy at: ''objectInvocation'' put: true; at: ''sessionControl'' put: session;
  at: ''runtimeDirectory'' put: BridgeIPC fullName; at: ''cwd'' put: (options at: ''workspace'') fullName;
- at: ''codexHome'' put: (options at: ''codexHome'') fullName;
  at: ''workingImage'' put: Smalltalk imageFile fullName; at: ''transport'' put: ''GT / Codex App Server stdio''; yourself.
 registry := LMNativeSessionRegistry new initializeAt: ExperimentRoot / ''state'' / ''bridge''; yourself.
-settings := LMNativeCodexSettings new initializeAt: ExperimentRoot / ''config'' / ''codex.json''
- cache: (options at: ''codexHome'') / ''models_cache.json''; yourself.
 default := registry initializeDefault: LoomCodex threadId.
 LoomCodex clientKey: ''default''; synchronizeThreadId: (default at: ''threadId'').
-registry migrateActivityLogs: (options at: ''logs'') codexHome: (options at: ''codexHome'').
 registry recoverActivities.
 registry recoveredCalls do: [ :entry | self reply: entry value for: entry key ].
 transport := LMNativeCodexTransport new.
 identity := transport start: options registry: registry.
+settings := LMNativeCodexSettings new initializeAt: (ExperimentRoot / ''config'' / ''codex.json''); yourself.
+settings models: ([ transport modelCatalog ] on: Error do: [ :error | #() ]).
 status at: ''codexPid'' put: transport pid; at: ''appServer'' put: (identity at: ''userAgent'' ifAbsent: [ nil ]).
 LMPlatformTools writeJSON: settings options to: BridgeIPC / ''codex-options.json''.
 self publishStatus: ''ready''.

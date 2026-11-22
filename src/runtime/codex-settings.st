@@ -1,22 +1,24 @@
 "Model settings owned by Loom."
 | settings |
-settings := (Object << #LMNativeCodexSettings slots: #(#file #cache); package: 'Loom-Codex') install.
-settings compile: 'initializeAt: configuration cache: modelCache
- file := configuration. cache := modelCache'.
+settings := (Object << #LMNativeCodexSettings slots: #(#file #catalog); package: 'Loom-Codex') install.
+(settings includesSelector: #initializeAt:cache:) ifTrue: [ settings removeSelector: #initializeAt:cache: ].
+settings compile: 'initializeAt: configuration
+ file := configuration. catalog := #()'.
+settings compile: 'models: models
+ catalog := models'.
 settings compile: 'current
  ^ STONJSON fromString: file contents'.
 settings compile: 'options
- | current catalog models |
+ | current models |
 current := self current.
-catalog := [ (STONJSON fromString: cache contents) at: ''models'' ifAbsent: [ #() ] ]
- on: Error do: [ :error | #() ].
-models := (catalog select: [ :model | (model at: ''visibility'' ifAbsent: [ '''' ]) = ''list'' ]) collect: [ :model |
+models := (catalog reject: [ :model | model at: ''hidden'' ifAbsent: [ false ] ]) collect: [ :model |
  | tiers efforts |
- tiers := model at: ''service_tiers'' ifAbsent: [ #() ].
- efforts := (model at: ''supported_reasoning_levels'' ifAbsent: [ #() ]) collect: [ :level | level at: ''effort'' ].
- Dictionary new at: ''id'' put: (model at: ''slug''); at: ''label'' put: (model at: ''display_name'');
-  at: ''efforts'' put: efforts; at: ''defaultEffort'' put: (model at: ''default_reasoning_level'' ifAbsent: [ nil ]);
-  at: ''fast'' put: (tiers anySatisfy: [ :tier | (tier at: ''id'') = ''priority'' ]); yourself ].
+ tiers := model at: ''serviceTiers'' ifAbsent: [ #() ].
+ efforts := (model at: ''supportedReasoningEfforts'' ifAbsent: [ #() ]) collect: [ :level | level at: ''reasoningEffort'' ].
+ Dictionary new at: ''id'' put: (model at: ''model''); at: ''label'' put: (model at: ''displayName'');
+  at: ''efforts'' put: efforts; at: ''defaultEffort'' put: (model at: ''defaultReasoningEffort'' ifAbsent: [ nil ]);
+  at: ''fast'' put: ((tiers anySatisfy: [ :tier | (tier at: ''id'') = ''priority'' ]) or: [
+   (model at: ''additionalSpeedTiers'' ifAbsent: [ #() ]) includes: ''fast'' ]); yourself ].
 (models anySatisfy: [ :model | (model at: ''id'') = (current at: ''model'') ]) ifFalse: [
  models := { Dictionary new at: ''id'' put: (current at: ''model''); at: ''label'' put: (current at: ''model'');
   at: ''efforts'' put: { current at: ''effort'' }; at: ''defaultEffort'' put: (current at: ''effort'');

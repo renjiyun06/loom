@@ -13,6 +13,7 @@ const temporary = path.resolve(os.tmpdir());
 const fixture = fs.mkdtempSync(path.join(temporary, 'loom-application-isolation-'));
 const ipc = path.join(fixture, 'ipc');
 const sessionFile = path.join(ipc, 'bridge-ready.json');
+const codexHome = path.join(fixture, 'app-server-home');
 const runtimeLinks = ['node', 'codex', 'gtoolkit', 'audio', 'media'];
 const mockCodex = process.argv.includes('--mock-codex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -54,7 +55,9 @@ async function waitForApplication(name, phase) {
 }
 
 async function start(previousPid) {
-  child = spawn(path.join(fixture, 'runtime/LoomSupervisor.exe'), [fixture], {cwd: fixture, windowsHide: true});
+  child = spawn(path.join(fixture, 'runtime/LoomSupervisor.exe'), [fixture], {
+    cwd: fixture, windowsHide: true, env: {...process.env, CODEX_HOME: codexHome, CODEX_SQLITE_HOME: codexHome},
+  });
   return until('bridge readiness', () => {
     if (child.exitCode !== null || child.signalCode !== null) throw Error('Supervisor quit before readiness: ' + JSON.stringify(read(sessionFile)));
     const state = read(sessionFile);
@@ -94,6 +97,7 @@ try {
   fs.copyFileSync(path.join(root, 'tests/gt-codex-contract.st'), path.join(fixture, 'tests/gt-codex-contract.st'));
   fs.mkdirSync(path.join(fixture, 'config'));
   fs.mkdirSync(path.join(fixture, 'runtime'));
+  fs.mkdirSync(codexHome);
   fs.copyFileSync(path.join(root, 'runtime/supervisor/LoomSupervisor.exe'), path.join(fixture, 'runtime/LoomSupervisor.exe'));
   const config = read(path.join(root, 'config/runtime.json'));
   if (mockCodex) {
@@ -116,6 +120,12 @@ try {
   const core = await start();
   assert.equal(core.pid, core.enginePid);
   assert.equal(core.transport, 'GT / Codex App Server stdio');
+  assert.equal(core.codexHome, undefined);
+  if (mockCodex) {
+    const models = read(path.join(ipc, 'codex-options.json')).models;
+    assert.ok(models.some(model => model.id === 'offline' && model.label === 'Offline fixture'));
+  } else assert.ok(fs.existsSync(path.join(codexHome, 'state_5.sqlite')));
+  await waitForApplication('conversation-model', 'ready');
   await waitForApplication('conversation', 'failed');
   await waitForApplication('voice', 'ready');
   await waitForApplication('conversation-view', 'ready');

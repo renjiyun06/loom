@@ -8,4 +8,3 @@ export const paths=Object.fromEntries(Object.entries(configuration.paths).map(([
   if(!target.startsWith(root+path.sep))throw new Error(`Path outside runtime directory: ${key}`);
   return [key,target];
 }));
-export const childEnvironment={...process.env,CODEX_HOME:paths.codexHome,TEMP:paths.temporary,TMP:paths.temporary};

@@ -36,6 +36,23 @@ if ($previous) {
     }
 }
 New-Item -ItemType Directory -Path $ipc,$logs -Force | Out-Null
+$legacyCodexHome = Join-Path $runtimeRoot 'state\codex'
+foreach ($variable in @('CODEX_HOME','CODEX_SQLITE_HOME')) {
+    $value = [Environment]::GetEnvironmentVariable($variable, 'Process')
+    if ($value -and [IO.Path]::GetFullPath($value) -eq $legacyCodexHome) {
+        [Environment]::SetEnvironmentVariable($variable, $null, 'Process')
+    }
+}
+$migrationReceipt = Join-Path $runtimeRoot 'state\bridge\codex-home-migrated.json'
+if (-not (Test-Path -LiteralPath $migrationReceipt) -and (Test-Path -LiteralPath (Join-Path $legacyCodexHome 'state_5.sqlite'))) {
+    $codexExecutable = Join-Path $runtimeRoot $settings.paths.codexExecutable
+    if (Get-CimInstance Win32_Process -Filter "Name='codex.exe'" | Where-Object { $_.ExecutablePath -eq $codexExecutable }) {
+        throw 'The previous Loom Codex App Server is still running. Wait for saved shutdown before migrating.'
+    }
+    & (Join-Path $runtimeRoot $settings.paths.nodeExecutable) (Join-Path $runtimeRoot 'src\runtime\migrate-codex-home.mjs') |
+        Add-Content -LiteralPath (Join-Path $logs 'codex-home-migration.log') -Encoding UTF8
+    if ($LASTEXITCODE -ne 0) { throw 'Codex home migration failed. See launcher-start.stderr.log.' }
+}
 if ($Gui -or $Headless) {
     $settings | Add-Member -NotePropertyName gui -NotePropertyValue ([bool]$Gui) -Force
     [System.IO.File]::WriteAllText((Join-Path $runtimeRoot 'config\runtime.json'), ($settings | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))

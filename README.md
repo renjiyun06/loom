@@ -2,11 +2,11 @@
 id: "readme"
 title: "织境（Loom）"
 summary: "面向使用者的启动入口，说明怎样打开织境环境、原生文字对话标签，以及到哪里阅读现行说明。"
-updated: "2026-11-22T09:23:16+08:00"
+updated: "2026-11-22T18:19:56+08:00"
 ---
 # 织境（Loom）
 
-本环境统一位于 `D:\Loom`。Glamorous Toolkit 承载程序、活对象和原生界面，程序通过本机 Codex App Server 请求模型，模型可以检查并演进发起调用的同一个运行环境。
+本环境统一位于 `D:\Loom`。Windows 监管程序启动 Glamorous Toolkit（GT），GT 承载程序、活对象和原生界面，通过标准输入输出管道直连本机 Codex App Server。模型可以检查并演进发起调用的同一个运行环境。进程职责见 [环境组成与目录](workspace/00-环境组成与目录.md)。
 
 桌面 **织境** 快捷方式启动或唤出本工程的 Glamorous Toolkit，沿用当前已提交镜像。它不额外打开对话窗口。也可以执行：
 

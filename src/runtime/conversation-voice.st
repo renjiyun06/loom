@@ -115,8 +115,7 @@ controls compile: 'startMeter
  poller := [ | previous |
   [ closed not and: [ audioId = recording ] ] whileTrue: [
    meterQueued ifFalse: [ | snapshot |
-    snapshot := [ STONJSON fromString: (BridgeIPC / ''voice'' / ''meter.json'') contents ]
-     on: Error do: [ :error | nil ].
+    snapshot := LMVoice meter.
     (snapshot notNil and: [ snapshot ~= previous or: [
      pending not and: [ (snapshot at: ''audioId'') ~= recording ] ] ]) ifTrue: [
      previous := snapshot. meterQueued := true.

@@ -1,6 +1,8 @@
 | execution |
 execution := (Object << #LMExecution slots: {}; package: 'Loom-Execution') install.
 (Smalltalk globals includesKey: #BridgeCheckpointMutex) ifFalse: [ Smalltalk globals at: #BridgeCheckpointMutex put: Mutex new ].
+execution class compile: 'nativeStateCritical: operation
+ ^ (Smalltalk globals at: #BridgeNativeStateMutex ifAbsentPut: [ Mutex new ]) critical: operation'.
 execution class compile: 'checkpoint
  | id gate request checkpoint |
  Processor activeProcess == BridgeMailboxProcess ifTrue: [ self error: ''Run checkpointed work in a separate runtime Process'' ].

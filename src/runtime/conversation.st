@@ -7,7 +7,7 @@ conversation := (Object << #LMConversation
 conversation comment: 'A persistent conversation program living in the GT image. SQLite stores messages and replies. The worker waits on a semaphore between messages. Inspect the LoomConversation global for live state.'.
 conversation compile: 'initialize
  super initialize. client := LoomCodex session: #main. gate := Semaphore new. mutex := Mutex new'.
-conversation class compile: 'bootstrapVersion ^ 3'.
+conversation class compile: 'bootstrapVersion ^ 4'.
 conversation compile: 'directory
  ^ ExperimentRoot / ''state'' / ''conversation'''.
 conversation compile: 'write: object to: file
@@ -20,29 +20,17 @@ conversation compile: 'write: object to: file
  temporary writeStreamDo: [ :stream | stream nextPutAll: (STONJSON toString: object) ].
  temporary renameTo: file basename'.
 conversation compile: 'storage: action options: options
- | id ipc request receipt deadline result bridgeStatus |
+ | store |
  self waitForStorage.
- id := UUID new asString.
- ipc := ExperimentRoot / ''ipc'' / ''conversation''.
- request := ipc / ''requests'' / (id, ''.json'').
- receipt := ipc / ''results'' / (id, ''.json'').
- self write: (options copy at: ''action'' put: action; yourself) to: request.
- deadline := DateAndTime now + (Duration seconds: (action = ''pick'' ifTrue: [ 605 ] ifFalse: [ 30 ])).
- bridgeStatus := ExperimentRoot / ''ipc'' / ''bridge-ready.json''.
- [ receipt exists ] whileFalse: [
-  self checkStorageFailure.
-  DateAndTime now >= deadline ifTrue: [
-   | phase |
-   phase := [ (STONJSON fromString: bridgeStatus contents) at: ''status'' ]
-    on: Error do: [ :error | nil ].
-   ((#(''submit'' ''reply'') includes: action) and: [ phase = ''ready'' ])
-    ifFalse: [ self error: ''对话存储尚未返回，请查看当前状态'' ].
-   deadline := DateAndTime now + (Duration seconds: 30) ].
-  (Delay forMilliseconds: 30) wait ].
- [ result := STONJSON fromString: receipt contents ]
-  ensure: [ request ensureDelete. receipt ensureDelete ].
- (result at: ''ok'') ifFalse: [ self error: (result at: ''error'') ].
- ^ result at: ''value'''.
+ store := Smalltalk globals at: #LoomConversationStore.
+ action = ''records'' ifTrue: [ ^ store records ].
+ action = ''pending'' ifTrue: [ ^ store pending ].
+ action = ''audio-messages'' ifTrue: [ ^ store audioMessages ].
+ action = ''attachment'' ifTrue: [ ^ store attachment: (options at: ''attachmentId'') ].
+ action = ''submit'' ifTrue: [ ^ store submit: options ].
+ action = ''reply'' ifTrue: [ ^ store saveReply: (options at: ''reply'') ].
+ action = ''pick'' ifTrue: [ ^ LMPlatformTools selectFiles ].
+ self error: ''未知对话操作'''.
 conversation compile: 'storageStatus ^ LoomApplications statusFor: ''conversation'''.
 conversation compile: 'checkStorageFailure
  | status |
@@ -59,9 +47,7 @@ conversation compile: 'waitForStorage
 conversation compile: 'storage: action
  ^ self storage: action options: Dictionary new'.
 conversation compile: 'storageRevision
- | file |
- file := ExperimentRoot / ''ipc'' / ''conversation'' / ''revision.json''.
- ^ file exists ifTrue: [ file contents ] ifFalse: [ nil ]'.
+ ^ (Smalltalk globals at: #LoomConversationStore ifAbsent: [ nil ]) ifNotNil: #revision'.
 conversation compile: 'attachment: id
  ^ self storage: ''attachment'' options: (Dictionary new at: ''attachmentId'' put: id; yourself)'.
 conversation compile: 'fileForAttachment: attachment

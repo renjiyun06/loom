@@ -11,6 +11,10 @@ Smalltalk globals at: #BridgeIPC put: ipc.
 
 Smalltalk globals at: #ExperimentRunning put: true.
 Smalltalk globals at: #BridgeRuntimeSessionId put: UUID new asString.
+(Smalltalk globals at: #LoomApplications ifAbsent: [ nil ]) ifNotNil: [ :applications |
+ (applications respondsTo: #resetAfterRuntimeRestart) ifTrue: [
+  [ applications resetAfterRuntimeRestart ]
+   on: Error do: [ :error | Smalltalk globals at: #LoomApplicationLoadError put: error messageText ] ] ].
 heartbeatPrevious := Smalltalk globals at: #BridgeHeartbeatProcess ifAbsent: [ nil ].
 heartbeatPrevious ifNotNil: [ heartbeatPrevious terminate ].
 Smalltalk globals at: #BridgeHeartbeatProcess put: ([

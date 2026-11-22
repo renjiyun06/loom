@@ -1,18 +1,14 @@
 "Add audio behavior without reinstalling or replacing the text program."
 | voice |
 voice := (Object << #LMVoice package: 'Loom-Voice') install.
-voice class compile: 'featureVersion ^ 5'.
+voice class compile: 'featureVersion ^ 6'.
 voice class compile: 'directory ^ ExperimentRoot / ''state'' / ''audio'''.
 voice class compile: 'index
- | file previous index |
- previous := Smalltalk globals at: #LMVoiceLastIndex ifAbsent: [ Dictionary new at: ''jobs'' put: #(); yourself ].
- file := self directory / ''index.json''.
- [ index := file exists ifTrue: [ STONJSON fromString: file contents ] ifFalse: [ previous ].
-   Smalltalk globals at: #LMVoiceLastIndex put: index.
-   Smalltalk globals at: #LMVoiceLastReadError put: nil.
-   ^ index
- ] on: Error do: [ :error |
-  Smalltalk globals at: #LMVoiceLastReadError put: error messageText. ^ previous ]'.
+ ^ (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ])
+  ifNil: [ Dictionary new at: ''jobs'' put: #(); at: ''configured'' put: false; yourself ]
+  ifNotNil: #index'.
+voice class compile: 'meter
+ ^ (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #meter'.
 voice class compile: 'job: id
  ^ (self index at: ''jobs'') detect: [ :job | (job at: ''id'') = id ] ifNone: [ nil ]'.
 voice class compile: 'jobsById: index
@@ -33,24 +29,43 @@ voice class compile: 'transcriptionStatus: job
  state = ''unknown'' ifTrue: [ ^ ''转录结果待核对'' ].
  ^ ''正在转录…'''.
 voice class compile: 'request: action options: options
- | id request directory status |
+ | id request manager status arguments |
  status := LoomApplications statusFor: ''voice''.
- (status at: ''phase'') = ''failed'' ifTrue: [
-  self error: ''录音服务不可用：'', (status at: ''error'') ].
+ (status at: ''phase'') = ''ready'' ifFalse: [
+  self error: ''录音服务不可用：'', (status at: ''error'' ifAbsent: [ ''正在启动'' ]) ].
+ manager := Smalltalk globals at: #LoomGtVoice.
+ arguments := options copy.
  id := UUID new asString.
- request := options copy at: ''action'' put: action; yourself.
- directory := ExperimentRoot / ''ipc'' / ''voice'' / ''requests''.
- directory ensureCreateDirectory.
- LoomConversation write: request to: directory / (id , ''.json'').
+ request := Dictionary new at: ''gate'' put: Semaphore new; yourself.
+ self requests at: id put: request.
+ request at: ''process'' put: ([
+  | result |
+  result := [
+   (manager execute: action options: arguments) at: ''ok'' put: true; yourself
+  ] on: Error do: [ :error |
+   Dictionary new at: ''ok'' put: false; at: ''error'' put: error messageText; yourself ].
+  request at: ''result'' put: result.
+  (request at: ''gate'') signal
+ ] fork).
  ^ id'.
 voice class compile: 'await: id
- | file deadline |
- file := ExperimentRoot / ''ipc'' / ''voice'' / ''results'' / (id , ''.json'').
- deadline := Time millisecondClockValue + 660000.
- [ file exists ] whileFalse: [
-  Time millisecondClockValue > deadline ifTrue: [ self error: ''音频操作尚未返回，请查看当前状态'' ].
-  (Delay forMilliseconds: 100) wait ].
- ^ STONJSON fromString: file contents'.
+ | request file |
+ request := self requests at: id ifAbsent: [ nil ].
+ request ifNotNil: [
+  [ (request at: ''gate'') wait. ^ request at: ''result'' ]
+   ensure: [ self requests removeKey: id ifAbsent: [ ] ] ].
+ file := BridgeIPC / ''voice'' / ''results'' / (id, ''.json'').
+ ^ file exists ifTrue: [ STONJSON fromString: file contents ] ifFalse: [
+  Dictionary new at: ''ok'' put: false; at: ''error'' put: ''音频操作已中断，请核对当前状态。''; yourself ]'.
+voice class compile: 'requests
+ ^ Smalltalk globals at: #LoomVoiceRequests ifAbsentPut: [ Dictionary new ]'.
+voice class compile: 'retireRequests
+ self requests values do: [ :request |
+  request at: ''result'' ifAbsent: [
+   (request at: ''process'' ifAbsent: [ nil ]) ifNotNil: #terminate.
+   request at: ''result'' put: (Dictionary new at: ''ok'' put: false;
+    at: ''error'' put: ''音频操作因运行环境重启而中断。''; yourself).
+   (request at: ''gate'') signal ] ]'.
 voice class compile: 'label: job
  | state duration |
  state := Dictionary new

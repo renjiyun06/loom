@@ -12,7 +12,6 @@ import {CodexSettings} from './codex-settings.mjs';
 import {Checkpoints} from './checkpoints.mjs';
 import {NativeLifecycle} from './native-lifecycle.mjs';
 import {atomicJSON} from './atomic-files.mjs';
-import {launchApplications} from '../runtime/launch-applications.mjs';
 
 const live=paths.ipc;
 const statusFile=path.join(live,'bridge-ready.json');
@@ -27,7 +26,7 @@ const status={status:'starting',pid:process.pid,startedAt:new Date().toISOString
   supervisorPid:Number(process.env.LOOM_JOB_SUPERVISOR_PID)||null};
 const gui=JSON.parse(fs.readFileSync(path.join(root,'config/runtime.json'),'utf8').replace(/^\uFEFF/,'' )).gui===true;
 status.gui=gui;
-let vm,server,registry,checkpoints,checkpointWatcher,nativeLifecycle,nativeWatcher,nativeShutdown,applications,shutdownRequested=false,expectedVmExit=false,watcher,activeRequest=null,fatalError=null,finished=false;
+let vm,server,registry,checkpoints,checkpointWatcher,nativeLifecycle,nativeWatcher,nativeShutdown,shutdownRequested=false,expectedVmExit=false,watcher,activeRequest=null,fatalError=null,finished=false;
 function writeStatus(phase,extra={}){
   if(phase==='ready')fs.writeFileSync(path.join(live,'bridge-heartbeat.txt'),new Date().toISOString());
   atomicJSON(statusFile,{...status,status:phase,...extra});
@@ -135,7 +134,6 @@ try {
     fs.writeFileSync(path.join(live,'bridge-heartbeat.txt'),new Date().toISOString());
     try { activityFeed.poll(); } catch(error) { console.error(`Activity view: ${error.message}`); }
     try { sessionControl.poll(); } catch(error) { console.error(`Loom sessions: ${error.message}`); }
-    applications?.poll();
     const heartbeat=path.join(live,'runtime-heartbeat.txt');
     if(!checkpoints.busy&&(!fs.existsSync(heartbeat)||Date.now()-fs.statSync(heartbeat).mtimeMs>10000)) {
       fail(new Error('Runtime heartbeat stopped; terminating the complete execution environment'));return;
@@ -150,7 +148,10 @@ try {
   atomicJSON(path.join(live,'codex-options.json'),settings.options());
   status.objectInvocation=true;
   writeStatus('ready');
-  applications=launchApplications({runtimeSession,gui});
+  void evaluate(`[
+    [ (Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'applications.st') contents) start ]
+     on: Error do: [ :error | Smalltalk globals at: #LoomApplicationLoadError put: error messageText ]
+   ] fork. true`,'start-gt-applications').catch(error=>console.error('GT application startup:',error.message));
   console.log(JSON.stringify({...status,status:'ready'}));
   while(!shutdownRequested) {
     for(const name of fs.readdirSync(path.join(live,'codex-requests')).filter(n=>n.endsWith('.json')).sort()) {
@@ -207,7 +208,10 @@ try {
   clearInterval(nativeWatcher);
   if(fatalError)throw fatalError;
   writeStatus('stopping');
-  await applications?.prepareShutdown();
+  try {
+    const prepared=await evaluate("(Smalltalk globals at: #LoomApplications ifAbsent: [ nil ]) ifNotNil: #prepareShutdown. true",'prepare-gt-applications',10000);
+    if(!prepared.ok)console.error('GT application shutdown:',prepared.message??prepared.error);
+  } catch(error) { console.error('GT application shutdown:',error.message); }
   const shouldSave=nativeShutdown?.save!==false;
   const shutdownCheckpoint=shouldSave?await checkpoints.saveAndWait():null;status.image=checkpoints.image;
   if(nativeShutdown)nativeLifecycle.completeQuit(nativeShutdown,shutdownCheckpoint);
@@ -217,7 +221,6 @@ try {
   const exitDeadline=Date.now()+20000;
   while(vm.exitCode===null&&Date.now()<exitDeadline)await sleep(50);
   if(vm.exitCode!==0)throw new Error('Runtime did not finish saving its image');
-  await applications?.stop();
   // The verified committed checkpoint is also the saved-shutdown recovery copy.
   // Do not accumulate another full image/changes pair on every exit.
   const backup=null;

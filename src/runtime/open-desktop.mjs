@@ -7,6 +7,10 @@ import {evaluate} from '../bridge/runtime-client.mjs';
 export async function openEnvironment({restoreApplications=false}={}) {
  const id=randomUUID();
  const requested=await evaluate(`| universe requests request |
+  (Smalltalk globals at: #LoomApplications ifAbsent: [ nil ]) ifNotNil: [ :applications |
+   (applications respondsTo: #openDesktopRequest:restore:) ifTrue: [
+    applications openDesktopRequest: '${id}' restore: ${restoreApplications}.
+    ^ true ] ].
   (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ])
    ifFalse: [ self error: 'The runtime is not in desktop mode' ].
   requests := Smalltalk globals at: #LoomDesktopRequests ifAbsentPut: [ Dictionary new ].

@@ -57,15 +57,16 @@ export class Checkpoints {
   const workingImage=path.join(working,'main.image').replaceAll("'","''");
   const snapshotCode=`[
     | operation |
-    BridgeMailboxProcess suspend.
-    operation := LMExecution nativeSnapshotDuring: [
-      Smalltalk imageFile fullName = '${workingImage}'
-       ifTrue: [ Smalltalk snapshot: true andQuit: false ]
-       ifFalse: [ Smalltalk saveAs: '${stem}' ] ].
-    operation isImageStarting ifFalse: [
-      BridgeMailboxProcess resume.
-      (BridgeIPC / 'checkpoint-saved' / '${id}.json') writeStreamDo: [ :s | s nextPutAll: '{}' ]
-    ]
+    LMExecution nativeStateCritical: [
+      BridgeMailboxProcess suspend.
+      operation := LMExecution nativeSnapshotDuring: [
+        Smalltalk imageFile fullName = '${workingImage}'
+         ifTrue: [ Smalltalk snapshot: true andQuit: false ]
+         ifFalse: [ Smalltalk saveAs: '${stem}' ] ].
+      operation isImageStarting ifFalse: [
+        BridgeMailboxProcess resume.
+        (BridgeIPC / 'checkpoint-saved' / '${id}.json') writeStreamDo: [ :s | s nextPutAll: '{}' ]
+      ] ]
    ]`;
   const started=await evaluate(`(Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ])
     ifTrue: [ BlHost pickHost universe postpone: ${snapshotCode} ]

@@ -12,8 +12,7 @@ const temporary = path.resolve(os.tmpdir());
 const fixture = fs.mkdtempSync(path.join(temporary, 'loom-application-isolation-'));
 const ipc = path.join(fixture, 'ipc');
 const sessionFile = path.join(ipc, 'bridge-ready.json');
-const appFile = path.join(ipc, 'application-status.json');
-const runtimeLinks = ['node', 'codex', 'gtoolkit'];
+const runtimeLinks = ['node', 'codex', 'gtoolkit', 'audio', 'media'];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let child;
 
@@ -29,17 +28,52 @@ async function until(description, check, timeout = 45000) {
     if (result) return result;
     await sleep(100);
   }
-  throw Error(`${description} timed out: ${JSON.stringify({bridge: read(sessionFile), application: read(appFile)})}`);
+  throw Error(`${description} timed out: ${JSON.stringify(read(sessionFile))}`);
 }
 
-async function gt(source, label) {
-  const result = await evaluate(source, label, 20000, ipc);
+async function gt(source, label, timeout = 20000) {
+  const result = await evaluate(source, label, timeout, ipc);
   assert.equal(result.ok, true, JSON.stringify(result));
   return result.value;
 }
 
+async function waitForApplication(name, phase) {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const status = await gt(`(Smalltalk globals at: #LoomApplications ifAbsent: [ nil ])
+      ifNotNil: [ :apps | (apps respondsTo: #statusFor:) ifTrue: [ apps statusFor: '${name}' ] ]`, 'application-status');
+    if (status?.phase === phase) return status;
+    if (status?.phase === 'failed' && phase !== 'failed') throw Error(status.error);
+    await sleep(200);
+  }
+  throw Error(`Application ${name} did not report ${phase}`);
+}
+
+async function start(previousPid) {
+  child = spawn(path.join(root, 'runtime/supervisor/supervisor.exe'), [fixture], {cwd: fixture, windowsHide: true});
+  return until('bridge readiness', () => {
+    const state = read(sessionFile);
+    if (!state || state.pid === previousPid) return false;
+    if (state.status === 'failed') throw Error(state.error);
+    return state.status === 'ready' && state;
+  });
+}
+
+async function stoppedAfter(save) {
+  const stopped = await until('runtime shutdown', () => {
+    const state = read(sessionFile);
+    if (state?.status === 'failed') throw Error(state.error);
+    return state?.status === 'stopped' && state;
+  });
+  assert.equal(stopped.saved, save);
+  await until('supervisor exit', () => child.exitCode !== null || child.signalCode !== null);
+  assert.equal(child.exitCode, 0);
+}
+
 try {
   fs.cpSync(path.join(root, 'src'), path.join(fixture, 'src'), {recursive: true});
+  fs.mkdirSync(path.join(fixture, 'tests'));
+  fs.copyFileSync(path.join(root, 'tests/gt-voice-recovery.st'), path.join(fixture, 'tests/gt-voice-recovery.st'));
   fs.mkdirSync(path.join(fixture, 'config'));
   fs.mkdirSync(path.join(fixture, 'runtime'));
   const config = read(path.join(root, 'config/runtime.json'));
@@ -54,36 +88,32 @@ try {
   const input = path.join(legacy, 'inputs', id + '.json');
   fs.writeFileSync(input, '{invalid fixture');
 
-  child = spawn(path.join(root, 'runtime/supervisor/supervisor.exe'), [fixture], {cwd: fixture, windowsHide: true});
-  const core = await until('bridge readiness', () => {
-    const state = read(sessionFile);
-    if (state?.status === 'failed') throw Error(state.error);
-    return state?.status === 'ready' && state;
-  });
-  const failed = await until('isolated application failure', () => {
-    const status = read(appFile);
-    return status?.phase === 'ready' && status.conversation.phase === 'failed' && status;
-  });
-  assert.equal(failed.voice.phase, 'ready');
+  const core = await start();
+  await waitForApplication('conversation', 'failed');
+  await waitForApplication('voice', 'ready');
+  await waitForApplication('conversation-view', 'ready');
   const text = await gt("(LMConversationUI new build collectUpdate) at: 'status'", 'conversation-error-status');
   assert.match(text, /对话存储不可用/);
   const named = await gt("LoomSessions register: 'isolation-check'", 'independent-session');
   assert.equal(named.id, 'isolation-check');
 
   const createdAt = '2026-11-22T04:45:00.000Z';
-  fs.writeFileSync(input, JSON.stringify({id, sequence: 1, text: 'old history', createdAt}));
+  fs.writeFileSync(input, JSON.stringify({id, sequence: 1, text: "旧记录'内容", createdAt}));
   fs.writeFileSync(path.join(legacy, 'replies', id + '.json'), JSON.stringify({id, ok: true, text: 'old reply'}));
-  await gt('LoomApplications reload. true', 'reload-application');
-  const recovered = await until('application reload', () => {
-    const status = read(appFile);
-    return status?.phase === 'ready' && status.pid !== failed.pid && status.conversation.phase === 'ready' && status;
-  });
+  await gt('Smalltalk globals at: #LoomTestReload put: LoomApplications reload. true', 'reload-application');
+  const reloadDeadline = Date.now() + 30000;
+  while (!(await gt('LoomTestReload isTerminated', 'reload-progress'))) {
+    if (Date.now() >= reloadDeadline) throw Error('The GT reload did not finish');
+    await sleep(100);
+  }
+  await waitForApplication('conversation', 'ready');
+  await waitForApplication('voice', 'ready');
+  await waitForApplication('conversation-view', 'ready');
   const sameCore = read(sessionFile);
   assert.deepEqual([sameCore.pid, sameCore.enginePid, sameCore.codexPid], [core.pid, core.enginePid, core.codexPid]);
   assert.equal(sameCore.status, 'ready');
-  assert.equal(recovered.session, failed.session);
   const history = await gt("LoomConversation records collect: [ :record | { record at: 'text'. (record at: 'reply') at: 'text' } ]", 'migrated-history');
-  assert.deepEqual(history, [['old history', 'old reply']]);
+  assert.deepEqual(history, [["旧记录'内容", 'old reply']]);
   fs.writeFileSync(path.join(fixture, 'fixture.txt'), 'attachment example');
   const attachment = await gt(`| id record reference |
    (LoomConversation instVarNamed: #worker) ifNotNil: [ :worker | worker terminate ].
@@ -91,25 +121,42 @@ try {
    LoomConversation storage: 'submit' options: (Dictionary new
     at: 'id' put: id; at: 'text' put: ''; at: 'createdAt' put: DateAndTime now asString;
     at: 'files' put: { (ExperimentRoot / 'fixture.txt') fullName }; yourself).
+   (ExperimentRoot / 'fixture.txt') delete.
    record := LoomConversation nextInput.
    reference := LoomConversation attachment: (record at: 'attachmentIds') first.
    LoomConversation storage: 'reply' options: (Dictionary new at: 'reply' put:
     (Dictionary new at: 'id' put: id; at: 'ok' put: true; at: 'text' put: 'fixture'; yourself); yourself).
    { reference at: 'name'. (LoomConversation fileForAttachment: reference) contents }`, 'attachment-after-reload');
   assert.deepEqual(attachment, ['fixture.txt', 'attachment example']);
+  fs.writeFileSync(path.join(fixture, 'valid.txt'), 'partial import fixture');
+  const rejected = await gt(`[
+   LoomConversation storage: 'submit' options: (Dictionary new
+    at: 'id' put: UUID new asString; at: 'text' put: ''; at: 'createdAt' put: DateAndTime now asString;
+    at: 'files' put: { (ExperimentRoot / 'valid.txt') fullName. (ExperimentRoot / 'absent.txt') fullName }; yourself).
+   false
+  ] on: Error do: [ :error | true ]`, 'failed-attachment-copy');
+  assert.equal(rejected, true);
+  assert.equal(fs.readdirSync(path.join(legacy, 'attachments')).length, 1);
+  const audio = await gt("Smalltalk compiler evaluate: (ExperimentRoot / 'tests' / 'gt-voice-recovery.st') contents",
+    'native-voice-recovery', 60000);
+  assert.equal(audio, 'GT voice recovery passed');
 
   fs.writeFileSync(path.join(ipc, 'stop.json'), '{}');
-  const stopped = await until('saved shutdown', () => {
-    const state = read(sessionFile);
-    if (state?.status === 'failed') throw Error(state.error);
-    return state?.status === 'stopped' && state;
-  });
-  assert.equal(stopped.saved, true);
-  await until('supervisor exit', () => child.exitCode !== null || child.signalCode !== null);
-  assert.equal(child.exitCode, 0);
-  console.log('Conversation migration failure is isolated. The application reloaded without restarting the bridge.');
+  await stoppedAfter(true);
+  await start(core.pid);
+  await waitForApplication('conversation', 'ready');
+  await waitForApplication('voice', 'ready');
+  const restored = await gt(`{
+   LoomConversation records size.
+   ((LMVoice index at: 'jobs') anySatisfy: [ :job | (job at: 'title') = 'offline.wav' ]).
+   (LoomSessions show: 'isolation-check') at: 'id'
+  }`, 'restored-applications');
+  assert.deepEqual(restored, [2, true, 'isolation-check']);
+  await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
+  await stoppedAfter(false);
+  console.log('GT hot reload, fault isolation, attachments, native audio and checkpoint restart passed.');
 } catch (error) {
-  for (const name of ['logs/service.stderr.log', 'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
+  for (const name of ['voice-test/test-progress.json', 'logs/service.stderr.log', 'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
     const file = path.join(fixture, name);
     if (fs.existsSync(file)) console.error(fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-14).join('\n'));
   }

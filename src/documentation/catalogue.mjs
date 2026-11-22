@@ -2,12 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
-const root=path.resolve(import.meta.dirname,'../..');
-const entry=path.join(root,'workspace');
+const entry=path.resolve(import.meta.dirname,'../../workspace');
 const start='<!-- DOCUMENT-CATALOGUE:START -->';
 const end='<!-- DOCUMENT-CATALOGUE:END -->';
 const fields=['id','title','summary','updated'];
-const auxiliaryNames=['README.md'];
 const timestampPattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+08:00$/;
 const stamp=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,19)+'+08:00';
 function read(file){
@@ -61,8 +59,7 @@ export function catalogue(args=process.argv.slice(2)){
  const names=fs.readdirSync(entry).filter(name=>/^\d{2}-.+\.md$/.test(name)).sort();
  if(!names.length)throw Error('No numbered entry documents found');
  const agentsFile=path.join(entry,'AGENTS.md');
- const auxiliary=auxiliaryNames.map(name=>path.join(root,name)).filter(file=>fs.existsSync(file));
- if(touchAll){const time=stamp();for(const file of [agentsFile,...names.map(name=>path.join(entry,name)),...auxiliary])touch(file,time);}
+ if(touchAll){const time=stamp();for(const file of [agentsFile,...names.map(name=>path.join(entry,name))])touch(file,time);}
  else for(const name of touched)touch(path.join(entry,name),stamp());
  const docs=names.map(name=>read(path.join(entry,name)));
  const agents=read(agentsFile);
@@ -73,11 +70,6 @@ export function catalogue(args=process.argv.slice(2)){
   if(numbers.has(number))throw Error('Duplicate number: '+number);numbers.add(number);
   if(name.slice(3,-3)!==doc.meta.title)throw Error(name+': filename must match title');
   checkLinks(doc);
- }
- for(const file of auxiliary){
-  const doc=read(file);
-  if(ids.has(doc.meta.id))throw Error('Duplicate id: '+doc.meta.id);
-  ids.add(doc.meta.id);checkLinks(doc);
  }
  const generated=[start,'',...docs.flatMap(doc=>[
   `### ${path.basename(doc.file).slice(0,2)} · ${doc.meta.title}`,'',
@@ -96,7 +88,7 @@ export function catalogue(args=process.argv.slice(2)){
   fs.writeFileSync(agentsFile,expected);
  }
  checkLinks(read(agentsFile));
- return {mode:check?'check':'refresh',documents:docs.length,navigationDocuments:auxiliary.length,fields,updatedFormat:'YYYY-MM-DDTHH:mm:ss+08:00',catalogueChanged:!check&&changed};
+ return {mode:check?'check':'refresh',documents:docs.length,fields,updatedFormat:'YYYY-MM-DDTHH:mm:ss+08:00',catalogueChanged:!check&&changed};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  try{console.log(JSON.stringify(catalogue(),null,2));}

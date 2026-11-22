@@ -2,15 +2,19 @@
 | root loader usesWorkingChanges reopenChanges host oldHost snapshotProcess previous deadline |
 root := FileLocator workingDirectory.
 usesWorkingChanges := [
- | changes writer buffer binary file |
- changes := SourceFiles changesFileStream.
- (changes notNil and: [ changes isReadOnly not ]) and: [
-  "SourceFile path reports the requested path, even when the opener used its fallback."
-  writer := (changes instVarNamed: #stream) instVarNamed: #writeStream.
-  buffer := writer instVarNamed: #stream.
-  binary := buffer instVarNamed: #innerStream.
-  file := binary instVarNamed: #file.
-  file name asFileReference = Smalltalk changesFile asFileReference ] ].
+ [ | changes writer buffer binary file |
+  changes := SourceFiles changesFileStream.
+  (changes notNil and: [ changes closed not and: [ changes isReadOnly not ] ]) and: [
+   "SourceFile path reports the requested path, even when the opener used its fallback."
+   writer := (changes instVarNamed: #stream) instVarNamed: #writeStream.
+   buffer := writer instVarNamed: #stream.
+   binary := buffer instVarNamed: #innerStream.
+   file := binary instVarNamed: #file.
+   file name asFileReference = Smalltalk changesFile asFileReference ]
+ ] on: MessageNotUnderstood do: [ :error |
+  "The source stream can close during snapshot recovery. Let the loader reopen it."
+  error receiver isNil ifFalse: [ error pass ].
+  false ] ].
 reopenChanges := [
  | matches reopenDeadline |
  reopenDeadline := DateAndTime now + 5 seconds.

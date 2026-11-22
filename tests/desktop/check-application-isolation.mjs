@@ -265,12 +265,19 @@ try {
   `, 'tabs-behind-restored-shutdown-prompt');
   assert.deepEqual(recoveredTabs, [true, true, true, true]);
   fs.appendFileSync(path.join(fixture, 'src/runtime/conversation-db.st'), ".\nLMConversationStore compile: 'reloadFixtureMarker ^ 7'.\n");
-  await gt('Smalltalk globals at: #LoomTestReload put: LoomApplications reload. true', 'reload-after-restart');
+  await gt(`| changes |
+   changes := SourceFiles changesFileStream.
+   changes close.
+   changes closed ifFalse: [ self error: 'Fixture changes stream is still open' ].
+   Smalltalk globals at: #LoomTestReload put: LoomApplications reload.
+   true`, 'reload-after-restart-with-closed-changes');
   const markerDeadline = Date.now() + 30000;
   while (!(await gt('LMConversationStore includesSelector: #reloadFixtureMarker', 'reloaded-marker'))) {
     if (Date.now() >= markerDeadline) throw Error('Source changed on disk, but the restored GT did not compile it');
     await sleep(150);
   }
+  await waitForApplication('conversation', 'ready');
+  assert.equal(await gt('SourceFiles changesFileStream closed not', 'reopened-changes-stream'), true);
   assert.equal(fs.readFileSync(path.join(fixture, 'main.changes'), 'utf8'), '\n');
   if (mockCodex) {
     const interrupted = read(path.join(ipc, 'codex-responses', uncertain + '.json'));

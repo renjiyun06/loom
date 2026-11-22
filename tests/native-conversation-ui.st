@@ -96,6 +96,11 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (LoomConversation orderedInputs size = before) value: 'UI validation submits no model request'.
  check value: shortcut name = 'Send Loom message'
   value: 'Enter shortcut remains installed'.
+ shortcut := editor editor editorShortcuts
+  detectShortcutLike: (BrEditorShortcut new combination: BlKeyCombination primaryV; yourself)
+  ifPresent: [ :item | item ] ifAbsent: [ nil ].
+ check value: (shortcut notNil and: [ shortcut name = 'Paste Loom attachments or text' ])
+  value: 'the composer handles attachment paste through the regular paste shortcut'.
  check value: ((LoomConversationWindow instVarNamed: 'poller') isTerminated not) value: 'live background event reader remains active'.
  check value: ((LoomConversationWindow instVarNamed: 'bodyPane') userData at: #activityTimeline) class = LMActivityReader
   value: 'live activity reads a SQLite-backed page'.

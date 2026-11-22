@@ -337,7 +337,15 @@ ui compile: 'configureInputShortcuts
   combination: (BlKeyCombination shiftReturn or: (BlKeyCombination builder shift numpadEnter build));
   performBlock: [ :editor | editor insertLineEndingAtCursor ];
   yourself).
- ^ self'.
+ self configureAttachmentPaste'.
+ui compile: 'configureAttachmentPaste
+ input addEditorShortcut: (BrEditorShortcut new
+  name: ''Paste Loom attachments or text'';
+  combination: BlKeyCombination primaryV;
+  performBlock: [ :editor |
+   self pasteAttachments ifFalse: [
+    editor paster inputFilter: editor inputFilter; fromClipboard; atCursor; paste ] ];
+  yourself)'.
 ui compile: 'configureTab: model in: world
  | worldElement |
  worldElement := world instVarNamed: ''worldElement''.
@@ -662,6 +670,7 @@ ui compile: 'draftAttachment: path width: width
    title: ''移除附件'' action: [
     composerBusy = true ifFalse: [
      draftAttachments remove: path ifAbsent: [ ].
+     self discardClipboardDraft: path.
      self renderDraftAttachments.
      input requestFocus ] ]) hExact: 22; vExact: 22; yourself.
  chip addChildren: { icon. label. remove }.
@@ -683,18 +692,40 @@ ui compile: 'draftAttachmentList: paths width: width
    row removeChildren; addChild: (self draftAttachment: path width: (width - 12 max: 74)) ];
   items: paths; yourself'.
 ui compile: 'pickAttachments
+ self loadDraftAttachmentsFrom: [ LoomConversation storage: ''pick'' ]'.
+ui compile: 'pasteAttachments
+ | request image |
+ request := LMPlatformTools clipboardAttachmentRequest.
+ request ifNil: [ ^ false ].
+ composerBusy = true ifTrue: [ ^ true ].
+ image := self clipboardDraftDirectory / UUID new asString / ''剪贴板图片.png''.
+ self loadDraftAttachmentsFrom: [
+  [ LMPlatformTools readClipboardAttachments: request imageAt: image ]
+   on: Error do: [ :error | self discardClipboardDraft: image. error pass ] ].
+ ^ true'.
+ui compile: 'clipboardDraftDirectory
+ ^ LoomConversation directory / ''clipboard-drafts'''.
+ui compile: 'discardClipboardDraft: path
+ | file folder |
+ file := path asFileReference.
+ folder := file parent.
+ (file basename = ''剪贴板图片.png'' and: [ folder parent = self clipboardDraftDirectory ]) ifTrue: [
+  [ file ensureDelete.
+    folder exists ifTrue: [ folder ensureDelete ] ] on: Error do: [ :ignored | nil ] ]'.
+ui compile: 'loadDraftAttachmentsFrom: source
  composerBusy = true ifTrue: [ ^ self ].
  composerBusy := true.
- [ [ | files |
-    files := LoomConversation storage: ''pick''.
-    self defer: [
-     composerBusy := false.
+ self updateSendAvailability.
+ [ | files notice |
+   [ files := source value ] on: Error do: [ :error | notice := error messageText ].
+   (BlParallelUniverse forHost: BlWinitHost) defer: [
+    composerBusy := false.
+    files ifNotNil: [
      files do: [ :path | (draftAttachments includes: path) ifFalse: [ draftAttachments add: path ] ].
-     self renderDraftAttachments.
-     input requestFocus ]
-   ] on: Error do: [ :error | | notice |
-    notice := error messageText.
-    self defer: [ composerBusy := false. self voiceNotice: notice ] ]
+     self renderDraftAttachments ].
+    self isOpen ifTrue: [ input requestFocus ].
+    self voiceNotice: notice.
+    self updateSendAvailability ]
  ] fork'.
 ui compile: 'sendMessage
  | text files |
@@ -709,6 +740,7 @@ ui compile: 'sendMessage
      composerBusy := false.
      input text asString = text ifTrue: [ input text: '''' ].
      draftAttachments removeAll.
+     files do: [ :path | self discardClipboardDraft: path ].
      self renderDraftAttachments.
      self voiceNotice: nil.
      self resizeComposer.

@@ -24,10 +24,7 @@ child := (self builderFor: program arguments: arguments) pipeStdin; pipeStdout; 
 child terminateOnShutdown.
 ^ child'.
 cls class compile: 'selectFiles
- | script executable encoded stdout |
-script := ''$ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
-Add-Type -AssemblyName System.Windows.Forms
+ ^ self powerShellJSON: ''Add-Type -AssemblyName System.Windows.Forms
 $picker = [Windows.Forms.OpenFileDialog]::new()
 try {
   $picker.Title = "选择附件"
@@ -36,7 +33,12 @@ try {
   $files = @()
   if ($picker.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) { $files = $picker.FileNames }
   ConvertTo-Json -Compress -InputObject $files
-} finally { $picker.Dispose() }''.
+} finally { $picker.Dispose() }'' timeout: 600'.
+cls class compile: 'powerShellJSON: command timeout: seconds
+ | script executable encoded stdout |
+script := ''$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+'', command.
 executable := (OSEnvironment current at: ''SystemRoot'') asFileReference
  / ''System32'' / ''WindowsPowerShell'' / ''v1.0'' / ''powershell.exe''.
 encoded := ZnBase64Encoder new encode:
@@ -44,8 +46,128 @@ encoded := ZnBase64Encoder new encode:
   | codec |
   codec := ZnUTF16Encoder newForEncoding: ''utf-16le''.
   script do: [ :character | codec nextPut: character toStream: bytes ] ]).
-stdout := self run: executable arguments: #(''-NoProfile'' ''-STA'' ''-EncodedCommand''), {encoded} timeout: 600.
+stdout := self run: executable arguments: #(''-NoProfile'' ''-STA'' ''-EncodedCommand''), {encoded} timeout: seconds.
 ^ STONJSON fromString: stdout'.
+cls class compile: 'clipboardAttachmentRequest
+ | sequence png |
+ sequence := self clipboardSequence.
+ "CF_HDROP takes priority. Prefer text over the bitmap that accompanies formatted text."
+ (self clipboardHasFormat: 15) ifTrue: [ ^ { 15. sequence } ].
+ png := self clipboardFormatNamed: (Win32WideString fromString: ''PNG'').
+ (png ~= 0 and: [ self clipboardHasFormat: png ]) ifTrue: [ ^ { png. sequence } ].
+ (self clipboardHasFormat: 13) ifTrue: [ ^ nil ].
+ "Windows can synthesize CF_BITMAP from CF_DIB and CF_DIBV5."
+ (self clipboardHasFormat: 2) ifTrue: [ ^ { 2. sequence } ].
+ ^ nil'.
+cls class compile: 'clipboardHasFormat: format
+ ^ (self clipboardFormatAvailable: format) ~= 0'.
+cls class compile: 'clipboardFormatAvailable: format
+ ^ self ffiCall: #(uint32 IsClipboardFormatAvailable(uint32 format)) module: ''user32.dll'''.
+cls class compile: 'clipboardFormatNamed: name
+ ^ self ffiCall: #(uint32 RegisterClipboardFormatW(Win32WideString name)) module: ''user32.dll'''.
+cls class compile: 'clipboardSequence
+ ^ self ffiCall: #(uint32 GetClipboardSequenceNumber()) module: ''user32.dll'''.
+cls class compile: 'readClipboardAttachments: request imageAt: target
+ | encodedPath result |
+ encodedPath := ZnBase64Encoder new encode: target fullName utf8Encoded.
+ result := self powerShellJSON:
+  self clipboardReaderScript,
+  (String lf join: {
+   ''$expectedSequence = '', request second asString.
+   ''$format = '', request first asString.
+   ''$target = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("'', encodedPath, ''"))''.
+   self clipboardCaptureScript }) timeout: 15.
+ result at: ''error'' ifPresent: [ :reason | self error: reason ].
+ ^ result at: ''files'''.
+cls class compile: 'clipboardReaderScript
+ ^ ''Add-Type -AssemblyName System.Drawing
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
+using System;
+using System.IO;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class LoomClipboardReader {
+    [DllImport("user32.dll")] public static extern bool OpenClipboard(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool CloseClipboard();
+    [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] public static extern IntPtr GetClipboardData(uint format);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint DragQueryFile(IntPtr handle, uint index, StringBuilder path, uint size);
+    [DllImport("kernel32.dll")] private static extern UIntPtr GlobalSize(IntPtr handle);
+    [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr handle);
+    [DllImport("kernel32.dll")] private static extern bool GlobalUnlock(IntPtr handle);
+
+    public static string[] ReadFiles(IntPtr handle) {
+        var paths = new string[DragQueryFile(handle, uint.MaxValue, null, 0)];
+        for (uint index = 0; index < paths.Length; index++) {
+            uint size = DragQueryFile(handle, index, null, 0) + 1;
+            var path = new StringBuilder(checked((int)size));
+            DragQueryFile(handle, index, path, size);
+            paths[index] = path.ToString();
+        }
+        return paths;
+    }
+
+    public static byte[] ReadBytes(IntPtr handle) {
+        var bytes = new byte[checked((int)GlobalSize(handle).ToUInt64())];
+        IntPtr data = GlobalLock(handle);
+        if (data == IntPtr.Zero) throw new IOException("无法读取剪贴板图片");
+        try { Marshal.Copy(data, bytes, 0, bytes.Length); }
+        finally { GlobalUnlock(handle); }
+        return bytes;
+    }
+
+    public static void SaveImage(byte[] png, Bitmap bitmap, string target) {
+        Directory.CreateDirectory(Path.GetDirectoryName(target));
+        if (bitmap != null) {
+            bitmap.Save(target, ImageFormat.Png);
+            return;
+        }
+        using (var stream = new MemoryStream(png))
+        using (var image = Image.FromStream(stream, false, true)) {
+            image.Save(target, ImageFormat.Png);
+        }
+    }
+}
+"@
+'''.
+cls class compile: 'clipboardCaptureScript
+ ^ ''$bitmap = $null
+try {
+  $opened = $false
+  for ($attempt = 0; $attempt -lt 8; $attempt++) {
+    if ([LoomClipboardReader]::OpenClipboard([IntPtr]::Zero)) { $opened = $true; break }
+    Start-Sleep -Milliseconds 20
+  }
+  if (!$opened) { throw "剪贴板暂时无法读取，请再粘贴一次" }
+  try {
+    if ([LoomClipboardReader]::GetClipboardSequenceNumber() -ne $expectedSequence) {
+      throw "剪贴板内容已更改，请再粘贴一次"
+    }
+    $data = [LoomClipboardReader]::GetClipboardData($format)
+    if ($data -eq [IntPtr]::Zero) { throw "剪贴板附件暂时无法读取，请再粘贴一次" }
+    if ($format -eq 15) { $paths = [LoomClipboardReader]::ReadFiles($data) }
+    elseif ($format -eq 2) { $bitmap = [Drawing.Image]::FromHbitmap($data) }
+    else { $png = [LoomClipboardReader]::ReadBytes($data) }
+  } finally {
+    [void][LoomClipboardReader]::CloseClipboard()
+  }
+  if ($format -eq 15) {
+    $files = @($paths | Where-Object { [IO.File]::Exists($_) })
+    if ($files.Length -eq 0) { throw "剪贴板里没有可附加的文件" }
+  } else {
+    [LoomClipboardReader]::SaveImage($png, $bitmap, $target)
+    $files = @($target)
+  }
+  ConvertTo-Json -Compress -InputObject @{ files = $files }
+} catch {
+  ConvertTo-Json -Compress -InputObject @{ error = $_.Exception.Message }
+} finally {
+  if ($null -ne $bitmap) { $bitmap.Dispose() }
+}'''.
 cls class compile: 'move: source to: target
  | from to |
 from := Win32WideString fromString: source fullName.

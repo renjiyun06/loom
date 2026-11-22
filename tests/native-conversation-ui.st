@@ -1,5 +1,5 @@
 "Native conversation regression. Never invokes a model or executes Markdown code."
-| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider |
+| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider space footer send attach hovered focus applyStyle |
 report := Dictionary new.
 checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
@@ -25,6 +25,34 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (LMChatStyle tableCells: '| a\|b | c |') = #('a|b' 'c') value: 'escaped pipes stay inside table cells'.
  check value: (LMChatStyle tableCells: '| D:\Loom | 路径 |') = #('D:\Loom' '路径') value: 'Windows paths retain backslashes inside tables'.
  ui := LMConversationUI new build.
+ space := ui presentationSpace.
+ footer := (ui instVarNamed: 'status') parent.
+ send := footer children last.
+ attach := footer children at: 3.
+ hovered := BlElementState hovered.
+ focus := BlElementState focused.
+ applyStyle := [ :button | space doStyle: button; doComputePropertiesFromRoot: button ].
+ send states addState: hovered.
+ applyStyle value: send.
+ check value: send background paint color = (Color gray: 0.25)
+  value: 'send button uses its hover background'.
+ send states addState: focus; removeState: hovered.
+ applyStyle value: send.
+ check value: ((send background isKindOf: BlPaintBackground)
+  and: [ send background paint color = (Color gray: 0.2) ])
+  value: 'send button stays visible when hover leaves while it is focused'.
+ send states removeState: focus.
+ applyStyle value: send.
+ check value: send background paint color = (Color gray: 0.2)
+  value: 'send button restores its default background after a hover'.
+ attach states addState: hovered.
+ applyStyle value: attach.
+ check value: attach background paint color = (Color gray: 0.955)
+  value: 'attachment button uses its light hover background'.
+ attach states removeState: hovered.
+ applyStyle value: attach.
+ check value: attach background paint color alpha = 0
+  value: 'attachment button restores its transparent background'.
  row := LMConversationActivityView new controller: ui; yourself.
  one := Dictionary new at: 'id' put: 'activity-one'; at: 'type' put: 'dynamicToolCall';
   at: 'tool' put: 'pharo_eval'; at: 'status' put: 'completed'; at: 'success' put: true;

@@ -6,7 +6,7 @@ cls := (Object << #LMChatStyle slots: #(); package: 'Loom-Interface') install.
 cls class compile: 'button: title action: block
  ^ self button: title action: block foreground: (Color gray: 0.3) background: Color white'.
 cls class compile: 'button: title action: block foreground: foreground background: background
- | apt label button |
+ | apt label button hoverBackground |
  apt := BrGlamorousButtonWithLabelAptitude new.
  label := apt instVarNamed: ''labelAptitude''.
  label defaultColor: foreground; hoveredColor: foreground; pressedColor: foreground; selectedColor: foreground.
@@ -15,9 +15,13 @@ cls class compile: 'button: title action: block foreground: foreground backgroun
  button := BrButton new aptitude: apt; label: title; action: block;
   vExact: 26; padding: (BlInsets left: 8 right: 8); background: background;
   border: (BlBorder paint: (Color gray: 0.88) width: 0); yourself.
+ hoverBackground := background alpha = 0
+  ifTrue: [ Color gray: 0.955 ]
+  ifFalse: [ background brightness > 0.5
+   ifTrue: [ Color gray: background brightness - 0.045 ] ifFalse: [ Color gray: 0.25 ] ].
  button addAptitude: (BrStyleCommonAptitude new
-  hovered: [ :style | style background: (background brightness > 0.5
-   ifTrue: [ Color gray: background brightness - 0.045 ] ifFalse: [ Color gray: 0.25 ]) ];
+  default: [ :style | style background: background ];
+  hovered: [ :style | style background: hoverBackground ];
   focused: [ :style | style border: (BlBorder paint: (Color gray: 0.55) width: 1) ]).
  ^ button'.
 cls class compile: 'chevron: expanded
@@ -47,10 +51,8 @@ cls class compile: 'editor: size
   hMatchParent; yourself'.
 cls class compile: 'flatButton: title action: block
  | button |
- button := self button: title action: block.
- button background: Color transparent.
+ button := self button: title action: block foreground: (Color gray: 0.3) background: Color transparent.
  button addAptitude: (BrStyleCommonAptitude new
-  default: [ :style | style background: Color transparent ];
   hovered: [ :style | style background: (Color gray: 0.95) ];
   pressed: [ :style | style background: (Color gray: 0.92) ]).
  ^ button'.
@@ -105,8 +107,8 @@ cls class compile: 'iconButton: stencil title: title action: block
  ^ self iconElementButton: icon title: title action: block'.
 cls class compile: 'iconElementButton: icon title: title action: block
  | button |
- button := self button: '''' action: block.
- button hExact: 27; vExact: 26; padding: (BlInsets all: 4); background: Color transparent.
+ button := self button: '''' action: block foreground: (Color gray: 0.3) background: Color transparent.
+ button hExact: 27; vExact: 26; padding: (BlInsets all: 4).
  button addChild: icon.
  button addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self label: title size: 12 ]).
  ^ button'.

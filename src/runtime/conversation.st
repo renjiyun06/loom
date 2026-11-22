@@ -60,9 +60,12 @@ conversation compile: 'submit: text
  ^ self submit: text files: #()'.
 conversation compile: 'submit: text files: files
  ^ self submitMessage: (Dictionary new at: ''text'' put: text; at: ''files'' put: files; yourself)'.
+conversation compile: 'isProcessing ^ currentId notNil'.
 conversation compile: 'submitMessage: message
  | id |
  id := mutex critical: [
+  (self isProcessing or: [ self nextInput notNil ]) ifTrue: [
+   self error: ''请等当前消息处理完成后再发送'' ].
   self storage: ''submit'' options: (message copy
    at: ''id'' put: UUID new asString;
    at: ''createdAt'' put: DateAndTime now asUTC asString; yourself) ].
@@ -79,7 +82,7 @@ conversation compile: (ExperimentRoot / 'src' / 'runtime' / 'conversation-answer
 conversation compile: 'process: message
  | reply id |
  id := message at: ''id''.
- currentId := id.
+ mutex critical: [ currentId := id ].
  [
   [ reply := Dictionary new at: ''ok'' put: true;
     at: ''text'' put: (self answer: message);

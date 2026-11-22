@@ -153,19 +153,31 @@ try {
   const history = await gt("LoomConversation records collect: [ :record | { record at: 'text'. (record at: 'reply') at: 'text' } ]", 'migrated-history');
   assert.deepEqual(history, [["旧记录'内容", 'old reply']]);
   fs.writeFileSync(path.join(fixture, 'fixture.txt'), 'attachment example');
-  const attachment = await gt(`| id record reference |
+  const attachment = await gt(`| id record reference view payload before waiting blocked reset after |
    (LoomConversation instVarNamed: #worker) ifNotNil: [ :worker | worker terminate ].
-   id := UUID new asString.
-   LoomConversation storage: 'submit' options: (Dictionary new
-    at: 'id' put: id; at: 'text' put: ''; at: 'createdAt' put: DateAndTime now asString;
-    at: 'files' put: { (ExperimentRoot / 'fixture.txt') fullName }; yourself).
+   view := LMConversationUI new build.
+   view applyUpdate: view collectUpdate.
+   before := view canSendMessage.
+   id := LoomConversation submit: '' files: { (ExperimentRoot / 'fixture.txt') fullName }.
    (ExperimentRoot / 'fixture.txt') delete.
+   payload := view collectUpdate.
+   waiting := (payload at: 'sendAllowed') not and: [ (((payload at: 'messages') last) at: 'role') = 'user' ].
+   blocked := [ LoomConversation submit: 'reject before the worker claims the first message'. nil ]
+    on: Error do: [ :error | error messageText ].
    record := LoomConversation nextInput.
    reference := LoomConversation attachment: (record at: 'attachmentIds') first.
+   LoomConversation instVarNamed: #currentId put: id.
+   [
+    view applyUpdate: view collectUpdate.
+    reset := ((view instVarNamed: #status) parent childNamed: #loomSendMessage) states isDisabled.
+   ] ensure: [ LoomConversation instVarNamed: #currentId put: nil ].
    LoomConversation storage: 'reply' options: (Dictionary new at: 'reply' put:
     (Dictionary new at: 'id' put: id; at: 'ok' put: true; at: 'text' put: 'fixture'; yourself); yourself).
-   { reference at: 'name'. (LoomConversation fileForAttachment: reference) contents }`, 'attachment-after-reload');
-  assert.deepEqual(attachment, ['fixture.txt', 'attachment example']);
+   view applyUpdate: view collectUpdate.
+   after := ((view instVarNamed: #status) parent childNamed: #loomSendMessage) states isEnabled.
+   { reference at: 'name'. (LoomConversation fileForAttachment: reference) contents.
+     before. waiting. blocked. reset. after }`, 'attachment-and-single-send-after-reload');
+  assert.deepEqual(attachment, ['fixture.txt', 'attachment example', true, true, '请等当前消息处理完成后再发送', true, true]);
   fs.writeFileSync(path.join(fixture, 'valid.txt'), 'partial import fixture');
   const rejected = await gt(`[
    LoomConversation storage: 'submit' options: (Dictionary new

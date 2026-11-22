@@ -52,11 +52,17 @@ controls compile: 'refreshControls
  entry visibility: (phase = #idle ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  strip visibility: (phase = #idle ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
  available := pending not and: [ audioId notNil ].
- cancel enabled: available. toggle enabled: available. confirm enabled: available.
+ cancel enabled: available. toggle enabled: (available and: [ phase ~= #draft ]).
+ self updateSendAvailability.
  icon := LMIcons iconNamed: (phase = #paused ifTrue: [ ''play'' ] ifFalse: [ ''pause'' ]).
  icon constraintsDo: [ :c | c frame horizontal alignCenter. c frame vertical alignCenter ].
  toggle removeChildren; addChild: icon.
  toggle label: (phase = #paused ifTrue: [ ''继续录音'' ] ifFalse: [ ''暂停录音'' ])'.
+controls compile: 'isBusy ^ pending = true'.
+controls compile: 'updateSendAvailability
+ | allowed |
+ allowed := self isBusy not and: [ audioId notNil and: [ owner canSendMessage ] ].
+ confirm states isEnabled = allowed ifFalse: [ confirm enabled: allowed ]'.
 controls compile: 'start
  (closed or: [ pending or: [ phase ~= #idle ] ]) ifTrue: [ ^ self ].
  phase := #starting.
@@ -82,7 +88,8 @@ controls compile: 'sendRecording: id
  (stopped at: ''ok'') ifFalse: [ ^ stopped ].
  (stopped at: ''state'') = ''draft'' ifFalse: [
   self error: (stopped at: ''error'' ifAbsent: [ ''无法保存录音'' ]) ].
- LoomConversation submitAudio: id text: ''''.
+ [ LoomConversation submitAudio: id text: '''' ] on: Error do: [ :error |
+  stopped at: ''ok'' put: false; at: ''error'' put: error messageText ].
  ^ stopped'.
 controls compile: 'request: action for: id
  | options |
@@ -92,7 +99,9 @@ controls compile: 'request: action for: id
 controls compile: 'run: action then: success
  | id |
  (closed or: [ pending or: [ action ~= ''record'' and: [ audioId isNil ] ] ]) ifTrue: [ ^ self ].
+ (action = ''confirm'' and: [ owner canSendMessage not ]) ifTrue: [ ^ self ].
  id := audioId. pending := true. self refreshControls.
+ owner updateSendAvailability.
  [ | reply |
   reply := [ action = ''confirm''
    ifTrue: [ self sendRecording: id ] ifFalse: [ self request: action for: id ] ] on: Error do: [ :error |
@@ -105,9 +114,13 @@ controls compile: 'run: action then: success
     closed ifTrue: [ (#(''record'' ''pause'' ''resume'') includes: action) ifTrue: [
      self stopDetached: (reply at: ''audioId'' ifAbsent: [ id ]) ] ] ifFalse: [
      (reply at: ''ok'') ifTrue: [ success value: reply ] ifFalse: [
-      (#(''record'' ''confirm'') includes: action) ifTrue: [ self reset ].
+      (#(''record'' ''confirm'') includes: action) ifTrue: [
+       (action = ''confirm'' and: [ (reply at: ''state'' ifAbsent: [ nil ]) = ''draft'' ])
+        ifTrue: [ phase := #draft. poller ifNotNil: [ poller terminate. poller := nil ] ]
+        ifFalse: [ self reset ] ].
       owner voiceNotice: (reply at: ''error'') ].
-     self refreshControls ] ] ]
+     self refreshControls.
+     owner updateSendAvailability ] ] ]
  ] fork'.
 controls compile: 'startMeter
  | recording |

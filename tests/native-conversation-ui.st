@@ -1,5 +1,5 @@
 "Native conversation regression. Never invokes a model or executes Markdown code."
-| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle offset |
+| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle offset editor shortcut |
 report := Dictionary new.
 checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
@@ -32,6 +32,7 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  hovered := BlElementState hovered.
  focus := BlElementState focused.
  applyStyle := [ :button | space doStyle: button; doComputePropertiesFromRoot: button ].
+ send enable.
  send states addState: hovered.
  applyStyle value: send.
  check value: send background paint color = (Color gray: 0.25)
@@ -74,9 +75,18 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (ui instVarNamed: 'historyItems') size = (payload at: 'messages') size value: 'message list loads real persisted conversation'.
  result := ui syncList: (ui instVarNamed: 'history') collection: (ui instVarNamed: 'historyItems') with: (payload at: 'messages').
  check value: result not value: 'unchanged messages do not rebind list rows'.
- ui applyUpdate: (payload copy at: 'status' put: '正在处理'; at: 'processing' put: true; yourself).
+ ui applyUpdate: (payload copy at: 'status' put: '正在处理'; at: 'processing' put: true; at: 'sendAllowed' put: false; yourself).
  check value: (ui instVarNamed: 'status') text asString = 'Enter 发送 · Shift Enter 换行'
   value: 'composer keeps shortcuts while processing'.
+ check value: send states isDisabled value: 'the send button is disabled while processing'.
+ editor := ui instVarNamed: 'input'.
+ shortcut := editor editor editorShortcuts
+  detectShortcutLike: (BrEditorShortcut new combination: BlKeyCombination return; yourself)
+  ifPresent: [ :item | item ] ifAbsent: [ nil ].
+ editor text: '仍可修改的草稿'.
+ (shortcut instVarNamed: #performBlock) value.
+ check value: (editor text asString = '仍可修改的草稿' and: [ (ui instVarNamed: 'composerBusy') ~= true ])
+  value: 'Enter leaves typed text in the composer while processing'.
  check value: ((ui instVarNamed: 'status') parent children size = 4
   and: [ (LMConversationUI includesSelector: #cancelCurrentTurn) not ])
   value: 'composer has no stop button or action'.
@@ -84,9 +94,7 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (ui instVarNamed: 'status') text asString = '本轮未完成'
   value: 'composer still shows failure status'.
  check value: (LoomConversation orderedInputs size = before) value: 'UI validation submits no model request'.
- check value: ((ui instVarNamed: 'input') editor editorShortcuts
-  detectShortcutLike: (BrEditorShortcut new combination: BlKeyCombination return; yourself)
-  ifPresent: [ :shortcut | shortcut name = 'Send Loom message' ] ifAbsent: [ false ])
+ check value: shortcut name = 'Send Loom message'
   value: 'Enter shortcut remains installed'.
  check value: ((LoomConversationWindow instVarNamed: 'poller') isTerminated not) value: 'live background event reader remains active'.
  check value: ((LoomConversationWindow instVarNamed: 'bodyPane') userData at: #activityTimeline) class = LMActivityReader

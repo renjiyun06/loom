@@ -47,6 +47,7 @@ ui compile: 'applyUpdate: payload
     activityAnchor := self listAnchor: activity with: activityItems ].
   LMChatStyle syncActivities: activity collection: activityItems with: incomingActivities ].
  lastPayload := payload.
+ self updateSendAvailability.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
  statusText := errorText ifNil: [
   (#(''等待消息'' ''已完成'' ''正在处理'') includes: (payload at: ''status''))
@@ -139,8 +140,7 @@ ui compile: 'build
  voiceComposer := LMVoiceComposer new.
  footer addChild: (voiceComposer buildFor: self).
  footer addChild: self attachmentPickerButton.
- footer addChild: ((LMChatStyle button: ''发送'' action: [ self sendMessage ]
-  foreground: Color white background: (Color gray: 0.2)) hExact: 50; vExact: 28; margin: (BlInsets left: 5); yourself).
+ footer addChild: self sendButton.
  composer addChild: footer. left addChild: composer.
  left addEventHandlerOn: BlElementExtentChangedEvent do: [ :event | self layoutComposerForWidth: left width ].
  activityFollow := true.
@@ -169,6 +169,7 @@ ui compile: 'build
  self updateResponsiveGeometry.
  space root addChild: root.
  lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 10. pendingAnchor := anchor.
+ self updateSendAvailability.
  self layoutComposerForWidth: left width.
  self refresh.
  ^ self'.
@@ -220,12 +221,31 @@ ui compile: 'activityToolbarRule
 ui compile: 'attachmentPickerButton
  ^ (LMChatStyle replyAction: #loomPickAttachments icon: ''paperclip'' action: [ self pickAttachments ])
   label: ''添加附件''; hExact: 27; yourself'.
+ui compile: 'sendButton
+ ^ (LMChatStyle button: ''发送'' action: [ self sendMessage ] foreground: Color white background: (Color gray: 0.2))
+  id: #loomSendMessage; hExact: 50; vExact: 28; margin: (BlInsets left: 5);
+  addAptitude: (BrStyleCommonAptitude new disabled: [ :style | style background: (Color gray: 0.68) ]);
+  yourself'.
+ui compile: 'canSendMessage
+ ^ composerBusy ~= true and: [ LoomConversation isProcessing not and: [
+  lastPayload ifNil: [ true ] ifNotNil: [
+   lastPayload at: ''sendAllowed'' ifAbsent: [ (lastPayload at: ''processing'') not ] ] ] ]'.
+ui compile: 'canSendText
+ ^ self canSendMessage and: [ voiceComposer isNil or: [ voiceComposer isBusy not ] ]'.
+ui compile: 'updateSendAvailability
+ | footer allowed |
+ footer := status ifNotNil: [ status parent ].
+ allowed := self canSendText.
+ footer ifNotNil: [
+  footer childWithId: #loomSendMessage ifFound: [ :button |
+   button states isEnabled = allowed ifFalse: [ button enabled: allowed ] ] ifNone: [ ] ].
+ voiceComposer ifNotNil: [ voiceComposer updateSendAvailability ]'.
 ui compile: 'button: title action: block ^ LMChatStyle button: title action: block'.
 ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | key current records invocation messages statusText reply reader page limit partial audioIndex jobs activeClient storage phase |
+ | key current records invocation messages statusText reply reader page limit partial audioIndex jobs activeClient storage phase sendAllowed |
  storage := LoomConversation storageStatus.
  phase := storage at: ''phase''.
  phase = ''ready'' ifTrue: [
@@ -242,7 +262,8 @@ ui compile: 'collectUpdate
  partial := reader streamedReplyFor: invocation.
  activeClient activeRequestId ~= invocation ifTrue: [ partial := '''' ].
  messages := OrderedCollection new.
- records do: [ :record | | response content entry id audioId showReply audio |
+ sendAllowed := current isNil.
+ records do: [ :record | | response content entry id audioId showReply audio recording |
   id := record at: ''id''.
   response := record at: ''reply'' ifAbsent: [ nil ].
   audioId := record at: ''audioId'' ifAbsent: [ nil ].
@@ -250,14 +271,17 @@ ui compile: 'collectUpdate
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
    at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
   record at: ''attachments'' ifPresent: [ :attachments | entry at: ''attachments'' put: attachments ].
-  showReply := response notNil or: [ audioId isNil or: [ current = id ] ].
+  showReply := response notNil or: [ current = id ].
   audioId ifNotNil: [
    jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
-   self addRecording: (jobs at: audioId ifAbsent: [ nil ]) id: audioId
+   recording := jobs at: audioId ifAbsent: [ nil ].
+   self addRecording: recording id: audioId
     playing: (audioIndex at: ''playingId'' ifAbsent: [ nil ]) = audioId
     correction: (LoomConversation speechCorrectionAt: id) awaitingReply: response isNil to: entry.
    audio := entry at: ''audio''.
    (#(correcting correctionFailed) includes: (audio at: ''stage'')) ifTrue: [ showReply := false ] ].
+  (sendAllowed and: [ response isNil and: [
+    audioId isNil or: [ (LMVoice transcribedText: recording) notEmpty ] ] ]) ifTrue: [ sendAllowed := false ].
   messages add: entry.
   showReply ifTrue: [
    content := response ifNil: [ current = id ifTrue: [ partial ] ifFalse: [ '''' ] ]
@@ -278,7 +302,8 @@ ui compile: 'collectUpdate
   at: ''activities'' put: (page ifNil: [ #() ] ifNotNil: [ page at: ''items'' ]);
   at: ''activityLimit'' put: (page ifNil: [ 0 ] ifNotNil: [ page at: ''limit'' ]);
   at: ''hasOlderActivities'' put: (page notNil and: [ page at: ''older'' ]);
-  at: ''status'' put: statusText; at: ''processing'' put: current notNil; yourself'.
+  at: ''status'' put: statusText; at: ''processing'' put: current notNil;
+  at: ''sendAllowed'' put: sendAllowed; yourself'.
 ui compile: 'addRecording: job id: id playing: playing correction: correction awaitingReply: awaitingReply to: entry
  | transcript caption original stage state |
  transcript := LMVoice transcribedText: job.
@@ -673,11 +698,12 @@ ui compile: 'pickAttachments
  ] fork'.
 ui compile: 'sendMessage
  | text files |
- composerBusy = true ifTrue: [ ^ self ].
+ self canSendText ifFalse: [ ^ self ].
  text := input text asString.
  files := draftAttachments asArray.
  (text trimBoth isEmpty and: [ files isEmpty ]) ifTrue: [ ^ self ].
  composerBusy := true.
+ self updateSendAvailability.
  [ [ LoomConversation submit: text files: files.
     self defer: [
      composerBusy := false.
@@ -685,10 +711,11 @@ ui compile: 'sendMessage
      draftAttachments removeAll.
      self renderDraftAttachments.
      self voiceNotice: nil.
-     self resizeComposer ]
+     self resizeComposer.
+     self updateSendAvailability ]
    ] on: Error do: [ :error | | notice |
     notice := error messageText.
-    self defer: [ composerBusy := false. self voiceNotice: notice ] ]
+    self defer: [ composerBusy := false. self voiceNotice: notice. self updateSendAvailability ] ]
  ] fork'.
 ui compile: 'voiceNotice: text
  errorText := text.

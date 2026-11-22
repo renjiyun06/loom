@@ -57,7 +57,7 @@ test('pause and resume control the same recorder and publish its retained wavefo
  service.recorder=null;await service.close();
 });
 
-test('confirm leaves a local draft and cancel discards only the unsent recording',async()=>{
+test('stopping capture preserves a draft and cancel discards only an unsent recording',async()=>{
  const {directory,id}=fixture('draft',{source:'microphone'});
  const service=new VoiceService(directory,{provider:{configured:()=>false}});
  const wav=service.file(service.get(id),'original.wav');
@@ -69,5 +69,36 @@ test('confirm leaves a local draft and cancel discards only the unsent recording
  await service.command({action:'cancel',audioId:id});
  assert.equal(fs.existsSync(wav),false);
  assert.throws(()=>service.get(id),/音频不存在/);
+ await service.close();
+});
+
+test('a persisted audio message starts one order and survives a failed GT wake',async()=>{
+ const {directory,id}=fixture('draft',{source:'microphone'});
+ const messageId=randomUUID();
+ durableJSON(path.join(directory,'state/conversation/inputs',`${messageId}.json`),{id:messageId,audioId:id,text:''});
+ let uploads=0,wakes=0;
+ const service=new VoiceService(directory,{
+  provider:{configured:()=>true,
+   upload:async()=>{uploads++;return {orderId:'one-order'};},
+   query:async()=>({orderInfo:{status:4},orderResult:JSON.stringify(result)}),
+  },
+  notify:async()=>{if(++wakes===1)throw Error('GT mailbox unavailable');},
+ });
+ service.probe=async()=>5;
+ service.convert=async()=>path.join(directory,'synthetic.flac');
+ await service.poll();
+ const job=service.get(id);
+ await job.operation;
+ assert.equal(job.messageId,messageId);
+ assert.equal(job.state,'processing');
+ assert.equal(uploads,1);
+ await service.query(job);
+ assert.equal(job.state,'completed');
+ assert.equal(job.transcript,'测试');
+ assert.equal(service.wakePending,true);
+ await service.poll();
+ assert.equal(service.wakePending,false);
+ assert.equal(wakes,2);
+ assert.equal(uploads,1);
  await service.close();
 });

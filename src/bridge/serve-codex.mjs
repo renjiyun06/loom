@@ -125,7 +125,7 @@ try {
   if(!mainSession.ok)throw new Error(JSON.stringify(mainSession));
   const voiceVersion=await evaluate('(Smalltalk globals includesKey: #LMVoice) ifTrue: [ (Smalltalk globals at: #LMVoice) featureVersion ] ifFalse: [ 0 ]','check-voice');
   if(!voiceVersion.ok)throw new Error(JSON.stringify(voiceVersion));
-  if(voiceVersion.value!==1){
+  if(voiceVersion.value<2){
     const installedVoice=await evaluate(fs.readFileSync(path.join(root,'src/runtime/voice.st'),'utf8').replace(/\r?\n/g,'\r'),'install-voice');
     if(!installedVoice.ok)throw new Error(JSON.stringify(installedVoice));
   }
@@ -171,12 +171,9 @@ try {
     }
   },100);
   nativeWatcher=setInterval(()=>{void nativeLifecycle.poll().catch(fail);},100);
-  voiceWatcher=setInterval(()=>{void voice.poll().catch(fail);},200);
-  const dialogue=await evaluate("LoomConversation start. 'conversation ready'",'start-conversation');
-  if(!dialogue.ok)throw new Error(JSON.stringify(dialogue));
   const uiVersion=await evaluate('(Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ]) ifNil: [ 0 ] ifNotNil: [ :ui | ui featureVersion ]','check-ui');
   if(!uiVersion.ok)throw new Error(JSON.stringify(uiVersion));
-  if(uiVersion.value<20){
+  if(uiVersion.value<21){
     const ui=await evaluate(fs.readFileSync(path.join(root,'src/runtime/conversation-ui.st'),'utf8').replace(/\r?\n/g,'\r'),'install-ui');
     if(!ui.ok)throw new Error(JSON.stringify(ui));
   }
@@ -193,7 +190,11 @@ try {
   }
   atomicJSON(path.join(live,'codex-options.json'),settings.options());
   status.objectInvocation=true;
-  writeStatus('ready');console.log(JSON.stringify({...status,status:'ready'}));
+  writeStatus('ready');
+  const dialogue=await evaluate("LoomConversation start. 'conversation ready'",'start-conversation');
+  if(!dialogue.ok)throw new Error(JSON.stringify(dialogue));
+  voiceWatcher=setInterval(()=>{void voice.poll().catch(fail);},200);
+  console.log(JSON.stringify({...status,status:'ready'}));
   while(!shutdownRequested) {
     for(const name of fs.readdirSync(path.join(live,'codex-requests')).filter(n=>n.endsWith('.json')).sort()) {
       if(shutdownRequested)break;

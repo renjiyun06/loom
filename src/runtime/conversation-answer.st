@@ -1,5 +1,5 @@
 answer: message
- "Answer the user's request using the prepared context. Read the second argument to get that context. Return the full user-facing reply as a GT String. Keep the Loom invocation protocol out of the user-facing reply."
+ "The first argument is the user message and the second is its prepared context. A message with kind audio has the transcript in text. Return the full user-facing reply as a GT String. Keep the Loom invocation protocol out of the user-facing reply."
  | context reply |
  context := self preparePrompt: message.
  reply := (LoomCodex session: #main)

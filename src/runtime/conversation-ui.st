@@ -12,11 +12,11 @@ textRunRenderer := (SkiaTextPainter >> #fillTextRun:withColor:strokeColor:) sour
 ((Smalltalk globals includesKey: #LMActivityReader) and: [
  (Smalltalk globals at: #LMActivityReader) includesSelector: #pageOf:focus:session: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'activity-timeline.st') contents ].
-((Smalltalk globals includesKey: #LMConversationActivityView) and: [
- (Smalltalk globals at: #LMConversationActivityView) includesSelector: #activityIconName ])
+((Smalltalk globals includesKey: #LMConversationMessageView) and: [
+ (Smalltalk globals at: #LMConversationMessageView) includesSelector: #renderRecording: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-components.st') contents ].
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-voice.st') contents.
-slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer).
+slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer #voicePlaybackPending).
 oldClass := Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ].
 oldView := Smalltalk globals at: #LoomConversationWindow ifAbsent: [ nil ].
 oldView ifNotNil: [ oldView stopRefreshing ].
@@ -224,7 +224,7 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | directory key current records invocation messages statusText reply page limit partial |
+ | directory key current records invocation messages statusText reply page limit partial audioIndex jobs |
  directory := LoomConversation directory.
  key := { (directory / ''inputs'') modificationTime. (directory / ''replies'') modificationTime }.
  (recordCache isNil or: [ recordKey ~= key ]) ifTrue: [
@@ -238,19 +238,25 @@ ui compile: 'collectUpdate
  partial := (page notNil and: [ invocation notNil and: [ (page at: ''focus'') = invocation ] ])
   ifTrue: [ page at: ''answer'' ] ifFalse: [ '''' ].
  messages := OrderedCollection new.
- records do: [ :record | | response content entry |
-  messages add: (Dictionary new at: ''id'' put: (record at: ''id''), ''-user'';
+ records do: [ :record | | response content entry id audioId |
+  id := record at: ''id''.
+  audioId := record at: ''audioId'' ifAbsent: [ nil ].
+  entry := Dictionary new at: ''id'' put: id, ''-user'';
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
-   at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself).
+   at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
+  audioId ifNotNil: [
+   jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
+   self addRecording: (jobs at: audioId ifAbsent: [ nil ]) id: audioId
+    playing: (audioIndex at: ''playingId'' ifAbsent: [ nil ]) = audioId to: entry ].
+  messages add: entry.
   response := record at: ''reply'' ifAbsent: [ nil ].
-  content := response ifNil: [
-   current = (record at: ''id'') ifTrue: [ partial ] ifFalse: [ '''' ] ]
-   ifNotNil: [ response at: ''text'' ].
-  entry := Dictionary new at: ''id'' put: (record at: ''id''), ''-assistant'';
-   at: ''role'' put: ''assistant''; at: ''text'' put: content;
-   at: ''pending'' put: response isNil;
-   at: ''ok'' put: (response ifNil: [ true ] ifNotNil: [ response at: ''ok'' ]); yourself.
-  messages add: entry ].
+  (response notNil or: [ audioId isNil or: [ current = id ] ]) ifTrue: [
+   content := response ifNil: [ current = id ifTrue: [ partial ] ifFalse: [ '''' ] ]
+    ifNotNil: [ response at: ''text'' ].
+   messages add: (Dictionary new at: ''id'' put: id, ''-assistant'';
+    at: ''role'' put: ''assistant''; at: ''text'' put: content;
+    at: ''pending'' put: response isNil;
+    at: ''ok'' put: (response ifNil: [ true ] ifNotNil: [ response at: ''ok'' ]); yourself) ] ].
  statusText := current ifNil: [ ''已完成'' ] ifNotNil: [
   invocation ifNil: [ ''正在准备'' ] ifNotNil: [ ''正在处理'' ] ].
  records ifEmpty: [ statusText := ''等待消息'' ].
@@ -262,6 +268,19 @@ ui compile: 'collectUpdate
   at: ''activityLimit'' put: (page ifNil: [ 0 ] ifNotNil: [ page at: ''limit'' ]);
   at: ''hasOlderActivities'' put: (page notNil and: [ page at: ''older'' ]);
   at: ''status'' put: statusText; at: ''processing'' put: current notNil; yourself'.
+ui compile: 'addRecording: job id: id playing: playing to: entry
+ | transcript caption original |
+ transcript := LMVoice transcribedText: job.
+ caption := entry at: ''text''.
+ transcript ifNotEmpty: [ entry at: ''text'' put: (caption
+  ifEmpty: [ transcript ] ifNotEmpty: [ caption, String cr, transcript ]) ].
+ original := job ifNotNil: [ job at: ''original'' ifAbsent: [ nil ] ].
+ entry at: ''audio'' put: (Dictionary new
+  at: ''id'' put: id;
+  at: ''duration'' put: (job ifNil: [ 0 ] ifNotNil: [ job at: ''duration'' ifAbsent: [ 0 ] ]);
+  at: ''playing'' put: playing;
+  at: ''playable'' put: (original notNil and: [ (LMVoice directory / id / original) exists ]);
+  at: ''status'' put: (LMVoice transcriptionStatus: job); yourself)'.
 ui compile: 'configureInputShortcuts
  input addEditorShortcut: (BrEditorShortcut new
   name: ''Send Loom message'';
@@ -537,6 +556,18 @@ ui compile: 'sendMessage
 ui compile: 'voiceNotice: text
  errorText := text.
  self refresh'.
+ui compile: 'toggleRecordingPlayback: audioId
+ voicePlaybackPending = true ifTrue: [ ^ self ].
+ voicePlaybackPending := true.
+ [ [ [ | playing action receipt |
+    playing := (LMVoice index at: ''playingId'' ifAbsent: [ nil ]) = audioId.
+    action := playing ifTrue: [ ''stop-playback'' ] ifFalse: [ ''play'' ].
+    receipt := LMVoice await: (LMVoice request: action options: (Dictionary new at: ''audioId'' put: audioId; yourself)).
+    (receipt at: ''ok'') ifFalse: [ self error: (receipt at: ''error'') ].
+    self defer: [ self voiceNotice: nil ]
+   ] on: Error do: [ :error | | notice |
+    notice := error messageText. self defer: [ self voiceNotice: notice ] ]
+ ] ensure: [ voicePlaybackPending := false ] ] fork'.
 ui compile: 'shouldRestore
  ^ self isOpen or: [ layoutVersion ~= 7 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
@@ -691,7 +722,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 20'.
+ui class compile: 'featureVersion ^ 21'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

@@ -41,6 +41,24 @@ test('preserved audio and local credentials remain inside the environment',()=>{
  assert.ok(fs.existsSync(path.join(root,'config/xfyun.local.json')));
 });
 
+test('GT sends one tagged transcript message with its original ID and keeps audio storage private',async()=>{
+ const result=await evaluate(`| queued failed silent ready input message voice |
+  queued := Dictionary new at: 'state' put: 'processing'; yourself.
+  failed := Dictionary new at: 'state' put: 'failed'; at: 'error' put: 'recognizer error'; yourself.
+  silent := Dictionary new at: 'state' put: 'completed'; at: 'transcript' put: ' '; yourself.
+  ready := Dictionary new at: 'state' put: 'completed'; at: 'transcript' put: ' synthetic result '; yourself.
+  input := Dictionary new at: 'id' put: 'message-1'; at: 'audioId' put: 'internal-audio-id'; at: 'text' put: ''; yourself.
+  voice := LMVoice transcribedText: ready.
+  message := LoomConversation recordingMessage: input transcript: voice.
+  { (LMVoice transcribedText: queued) isEmpty.
+    (LMVoice transcribedText: failed) isEmpty.
+    (LMVoice transcribedText: silent) isEmpty.
+    LMVoice transcriptionStatus: failed.
+    message at: 'id'. message at: 'kind'. message at: 'text'.
+    (message includesKey: 'audioId') not. input includesKey: 'audioId' }`,'voice-message-payload');
+ assert.deepEqual(result,{ok:true,value:[true,true,true,'recognizer error','message-1','audio','synthetic result',true,true]});
+});
+
 test('runtime_eval exposes the native invocation roots and returns the very same GT object',async()=>{
  const requestId=randomUUID();
  const pending=`(LMInvocation pendingAt: '${requestId}')`;

@@ -452,7 +452,7 @@ cls compile: 'text: markdown
   view := self blockView: (next at: index). views add: view. self addChild: view ].
  specs := next.
  ^ self'.
-cls := (BrVerticalPane << #LMConversationMessageView slots: #(#controller #descriptor #body #bodyHolder #stateLabel #actions #rawShown #userMetadataLabel); package: 'Loom-Interface') install.
+cls := (BrVerticalPane << #LMConversationMessageView slots: #(#controller #descriptor #body #bodyHolder #stateLabel #actions #rawShown #userMetadataLabel #voiceButton #voiceDuration #voiceStatus); package: 'Loom-Interface') install.
 cls compile: 'build
  | bubble row spacer role |
  role := descriptor at: ''role''.
@@ -466,6 +466,7 @@ cls compile: 'build
    border: (BlBorder paint: (Color gray: 0.9) width: 1);
    geometry: (BlRoundedRectangleGeometry cornerRadius: 8); yourself.
   bubble hExact: 200.
+  (descriptor includesKey: ''audio'') ifTrue: [ self addRecordingPlayerTo: bubble ].
   body := LMChatStyle readOnly: (descriptor at: ''text'') trimBoth size: 14.
   bubble addChild: body.
   row addChildren: { spacer. bubble }. self addChild: row.
@@ -479,6 +480,38 @@ cls compile: 'build
  bodyHolder addChild: body. self addChild: bodyHolder.
  actions := self replyActions.
  self addChild: actions'.
+cls compile: 'addRecordingPlayerTo: bubble
+ | player caption |
+ player := BrHorizontalPane new id: #voiceMessagePlayer; hMatchParent; vExact: 26; alignCenterLeft; yourself.
+ player layout cellSpacing: 7.
+ voiceButton := LMChatStyle replyAction: #voiceMessagePlay icon: ''play'' action: [
+  controller ifNotNil: [ controller toggleRecordingPlayback: ((descriptor at: ''audio'') at: ''id'') ] ].
+ voiceDuration := LMChatStyle label: '''' size: 12.
+ voiceDuration aptitude foreground: (Color gray: 0.44).
+ caption := LMChatStyle label: ''录音'' size: 13.
+ player addChildren: { voiceButton. caption. voiceDuration }.
+ voiceStatus := (LMChatStyle label: '''' size: 12) id: #voiceMessageStatus; hMatchParent; yourself.
+ voiceStatus aptitude foreground: (Color gray: 0.42).
+ bubble layout cellSpacing: 4.
+ bubble addChildren: { player. voiceStatus }'.
+cls compile: 'renderRecording: audio
+ | duration seconds caption playing icon |
+ duration := (audio at: ''duration'') rounded.
+ seconds := duration \\ 60.
+ voiceDuration text: (duration // 60) asString, '':'',
+  (seconds < 10 ifTrue: [ ''0'' ] ifFalse: [ '''' ]), seconds asString.
+ caption := audio at: ''status''.
+ voiceStatus text: caption;
+  visibility: (caption isEmpty ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
+ body visibility: ((descriptor at: ''text'') trimBoth isEmpty ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
+ voiceButton enabled: (audio at: ''playable'').
+ playing := audio at: ''playing''.
+ (voiceButton userData at: #playing ifAbsent: [ nil ]) = playing ifFalse: [
+  icon := LMIcons iconNamed: (playing ifTrue: [ ''square'' ] ifFalse: [ ''play'' ]).
+  icon constraintsDo: [ :c | c frame horizontal alignCenter. c frame vertical alignCenter ].
+  voiceButton removeChildren; addChild: icon.
+  voiceButton label: (playing ifTrue: [ ''停止播放'' ] ifFalse: [ ''播放原音'' ]).
+  voiceButton userData at: #playing put: playing ]'.
 cls compile: 'controller: aController controller := aController'.
 cls compile: 'copyReplyWith: button
  GtClipboard clipboardText: (descriptor at: ''text'').
@@ -500,7 +533,9 @@ cls compile: 'flashCopyFeedbackOn: button
 cls compile: 'descriptor: value
  | rebuild role caption |
  rebuild := descriptor isNil or: [
-  (descriptor at: ''id'') ~= (value at: ''id'') or: [ (descriptor at: ''role'') ~= (value at: ''role'') ] ].
+  (descriptor at: ''id'') ~= (value at: ''id'') or: [
+   (descriptor at: ''role'') ~= (value at: ''role'') or: [
+    (descriptor includesKey: ''audio'') ~= (value includesKey: ''audio'') ] ] ].
  role := value at: ''role''.
  (role = ''user'' and: [ userMetadataLabel isNil ]) ifTrue: [ rebuild := true ].
  rebuild ifTrue: [ rawShown := controller ifNil: [ false ] ifNotNil: [ controller messageSourceFor: (value at: ''id'') ]. self removeChildren. descriptor := value. self build ].
@@ -508,6 +543,7 @@ cls compile: 'descriptor: value
  role = ''user''
   ifTrue: [
    body text: (LMChatStyle formattedText: (value at: ''text'') trimBoth size: 14).
+   value at: ''audio'' ifPresent: [ :audio | self renderRecording: audio ].
    caption := self userMetadata.
    userMetadataLabel text: caption;
     visibility: (caption isEmpty ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]) ]
@@ -564,6 +600,8 @@ cls compile: 'updateGeometry
   (body isNil or: [ body parent isNil ]) ifTrue: [ ^ self ].
   ideal := (descriptor at: ''text'') trimBoth lines inject: 0 into: [ :largest :line |
    largest max: (LMChatStyle measureLabel: line size: 14) ].
+  descriptor at: ''audio'' ifPresent: [ :audio |
+   ideal := (ideal max: 116) max: (LMChatStyle measureLabel: (audio at: ''status'') size: 12) ].
   limit := (self width - (inset * 2)) * (viewport <= 800 ifTrue: [ 0.94 ] ifFalse: [ 0.88 ]).
   target := ((ideal ceiling + 37) min: limit) max: 54.
   bubble := body parent.

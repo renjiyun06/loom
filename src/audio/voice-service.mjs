@@ -21,7 +21,7 @@ export class VoiceService {
     this.root=root; this.directory=path.join(root,'state/audio');this.ipc=path.join(root,'ipc/voice');
     this.host=path.join(root,'runtime/audio/AudioHost.exe');this.media=path.join(root,'runtime/media');
     this.provider=provider??new Xfyun(path.join(root,'config/xfyun.local.json'));
-    this.notify=notify;this.jobs=new Map();this.recorder=null;this.player=null;this.busy=false;this.closed=false;
+    this.notify=notify;this.wakePending=false;this.jobs=new Map();this.recorder=null;this.player=null;this.busy=false;this.closed=false;
     for(const folder of [this.directory,path.join(this.ipc,'requests'),path.join(this.ipc,'results')])fs.mkdirSync(folder,{recursive:true});
     // Requests without receipts belong to the old runtime and are never replayed.
     for(const name of fs.readdirSync(path.join(this.ipc,'requests')).filter(n=>n.endsWith('.json'))) {
@@ -165,18 +165,31 @@ export class VoiceService {
     const {stdout}=await exec(this.host,['pick'],{windowsHide:true,timeout:600000,maxBuffer:32768});
     return stdout.trim()?this.import(stdout.trim()):{};
   }
-  stopPlayback() {if(this.player){this.player.child.stdin.end('stop\n');this.player=null;this.publish();}}
+  stopPlayback() {
+    const player=this.player;if(!player)return;
+    if(!player.child.stdin.destroyed&&!player.child.stdin.writableEnded)player.child.stdin.end('stop\n');
+    this.player=null;this.publish();
+  }
   async play(id) {
     if(this.recorder)throw Error('请先停止录音再试听。');
     this.stopPlayback();const job=this.get(id);
-    const target=job.original==='original.wav'?this.file(job,job.original):await this.convert(job,'preview.wav','wav');
+    const target=job.source==='microphone'?this.file(job,job.original):await this.convert(job,'preview.wav','wav');
     const child=spawn(this.host,['play',target],{windowsHide:true,stdio:['pipe','pipe','pipe']});
     let error='',output='';child.stdout.on('data',b=>output+=b);child.stderr.on('data',b=>error+=b);
+    child.stdin.on('error',()=>{error='无法向播放设备发送命令。';});
     const player={id,child};this.player=player;
     const clear=()=>{if(this.player===player){this.player=null;this.publish();}};
-    child.once('error',clear);child.once('exit',clear);this.publish();
+    child.once('error',()=>{error='无法启动播放工具。';clear();});
+    child.once('exit',code=>{if(code!==0)error='播放设备返回错误。';clear();});
+    this.publish();
     const deadline=Date.now()+5000;
-    while(!output.includes('playing')){if(error||Date.now()>deadline)throw Error('音频播放失败，请核对Windows输出设备。');await sleep(30);}
+    while(!output.includes('playing')){
+      if(error||Date.now()>deadline){
+        if(this.player===player)this.stopPlayback();
+        throw Error('音频播放失败，请核对 Windows 输出设备。');
+      }
+      await sleep(30);
+    }
     return {audioId:id};
   }
   retry(id) {
@@ -201,7 +214,11 @@ export class VoiceService {
       job.signatureRandom=randomSignature();job.state='uploading';this.save(job);
       const order=await this.provider.upload(target,job.signatureRandom);
       job.orderId=order.orderId;job.state='processing';job.nextPoll=Date.now()+2500;this.save(job);
-    }catch(error){job.state=error.code==='UPLOAD_UNKNOWN'?'unknown':'failed';job.error=error instanceof SpeechError?error.message:'音频预处理失败，请核对原音文件。';this.save(job);await this.notify();}
+    }catch(error){job.state=error.code==='UPLOAD_UNKNOWN'?'unknown':'failed';job.error=error instanceof SpeechError?error.message:'音频预处理失败，请核对原音文件。';this.save(job);}
+  }
+  async wakeConversation() {
+    try {await this.notify();this.wakePending=false;}
+    catch {this.wakePending=true;}
   }
   async query(job) {
     try {
@@ -213,11 +230,11 @@ export class VoiceService {
       if(state!==4&&!silent)throw new SpeechError('ORDER_FAILED','讯飞未能完成此音频的转录。');
       const result=silent?{segments:[],text:''}:parseTranscript(content.orderResult);
       job.transcript=result.text;job.segments=result.segments;job.state='completed';delete job.error;
-      this.save(job);await this.notify();
     }catch(error){
       job.error=error instanceof SpeechError?error.message:'查询转录结果失败。';
       if(error.code!=='QUERY_RETRY')job.state='failed';
     }finally{job.nextPoll=Date.now()+5000;this.save(job);}
+    if(job.state==='completed')await this.wakeConversation();
   }
   async command(request) {
     switch(request.action) {
@@ -255,6 +272,7 @@ export class VoiceService {
         if(job.state==='queued'&&!job.operation)job.operation=this.transcribe(job).finally(()=>{delete job.operation;});
         if(job.state==='processing'&&Date.now()>=(job.nextPoll??0)&&!job.operation)job.operation=this.query(job).finally(()=>{delete job.operation;});
       }
+      if(this.wakePending)await this.wakeConversation();
       this.publish();
     }finally{this.busy=false;}
   }

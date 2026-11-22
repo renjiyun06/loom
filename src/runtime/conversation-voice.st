@@ -1,4 +1,4 @@
-"The recording controls own a local draft, without submitting a conversation input."
+"The recording controls submit the finished audio through the conversation model."
 | controls |
 controls := (Object << #LMVoiceComposer
  slots: #(owner view entry strip toggle cancel confirm bars phase audioId pending closed poller meterQueued);
@@ -22,8 +22,8 @@ controls compile: 'buildFor: conversationView
  cancel := LMChatStyle replyAction: #cancelVoice icon: ''x'' action: [ self finish: ''cancel'' ].
  cancel label: ''取消录音''.
  toggle := LMChatStyle replyAction: #toggleVoice icon: ''pause'' action: [ self toggle ].
- confirm := LMChatStyle replyAction: #confirmVoice icon: ''check'' action: [ self finish: ''stop'' ].
- confirm label: ''确认录音''.
+ confirm := LMChatStyle replyAction: #confirmVoice icon: ''check'' action: [ self finish: ''confirm'' ].
+ confirm label: ''发送录音''.
  strip addChildren: { cancel. left. toggle. right. confirm }.
  view addChildren: { strip. entry }.
  self refreshControls.
@@ -75,8 +75,15 @@ controls compile: 'toggle
 controls compile: 'finish: action
  self run: action then: [ :reply |
   self reset.
-  action = ''stop'' ifTrue: [
-   owner voiceNotice: (reply at: ''error'' ifAbsent: [ ''录音已保存'' ]) ] ]'.
+  owner voiceNotice: nil ]'.
+controls compile: 'sendRecording: id
+ | stopped |
+ stopped := self request: ''stop'' for: id.
+ (stopped at: ''ok'') ifFalse: [ ^ stopped ].
+ (stopped at: ''state'') = ''draft'' ifFalse: [
+  self error: (stopped at: ''error'' ifAbsent: [ ''无法保存录音'' ]) ].
+ LoomConversation submitAudio: id text: ''''.
+ ^ stopped'.
 controls compile: 'request: action for: id
  | options |
  options := Dictionary new.
@@ -87,7 +94,8 @@ controls compile: 'run: action then: success
  (closed or: [ pending or: [ action ~= ''record'' and: [ audioId isNil ] ] ]) ifTrue: [ ^ self ].
  id := audioId. pending := true. self refreshControls.
  [ | reply |
-  reply := [ self request: action for: id ] on: Error do: [ :error |
+  reply := [ action = ''confirm''
+   ifTrue: [ self sendRecording: id ] ifFalse: [ self request: action for: id ] ] on: Error do: [ :error |
    Dictionary new at: ''ok'' put: false; at: ''error'' put: error messageText; yourself ].
   (closed or: [ owner hostWorld isNil ])
    ifTrue: [ (#(''record'' ''pause'' ''resume'') includes: action) ifTrue: [
@@ -97,7 +105,7 @@ controls compile: 'run: action then: success
     closed ifTrue: [ (#(''record'' ''pause'' ''resume'') includes: action) ifTrue: [
      self stopDetached: (reply at: ''audioId'' ifAbsent: [ id ]) ] ] ifFalse: [
      (reply at: ''ok'') ifTrue: [ success value: reply ] ifFalse: [
-      action = ''record'' ifTrue: [ self reset ].
+      (#(''record'' ''confirm'') includes: action) ifTrue: [ self reset ].
       owner voiceNotice: (reply at: ''error'') ].
      self refreshControls ] ] ]
  ] fork'.

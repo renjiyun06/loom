@@ -28,7 +28,12 @@ class AudioHost {
     [DllImport("winmm.dll")] static extern uint waveInStop(IntPtr handle);
     [DllImport("winmm.dll")] static extern uint waveInReset(IntPtr handle);
     [DllImport("winmm.dll")] static extern uint waveInClose(IntPtr handle);
-    [DllImport("winmm.dll", CharSet=CharSet.Unicode)] static extern uint mciSendString(string command, StringBuilder result, int size, IntPtr window);
+    [DllImport("winmm.dll")] static extern uint waveOutOpen(out IntPtr handle, uint device, ref Format format, IntPtr signal, IntPtr instance, uint flags);
+    [DllImport("winmm.dll")] static extern uint waveOutPrepareHeader(IntPtr handle, IntPtr header, uint size);
+    [DllImport("winmm.dll")] static extern uint waveOutWrite(IntPtr handle, IntPtr header, uint size);
+    [DllImport("winmm.dll")] static extern uint waveOutReset(IntPtr handle);
+    [DllImport("winmm.dll")] static extern uint waveOutUnprepareHeader(IntPtr handle, IntPtr header, uint size);
+    [DllImport("winmm.dll")] static extern uint waveOutClose(IntPtr handle);
     static readonly uint headerSize = (uint)Marshal.SizeOf(typeof(Header));
     const int bufferSize = 1600; // 50 ms at 16 kHz, mono, 16-bit PCM.
     const uint headerDone = 1;
@@ -134,18 +139,82 @@ class AudioHost {
         }
         Report("stopped");
     }
-    static void Play(string target) {
-        if(target.Contains("\"")) throw new Exception("Invalid audio path");
-        Check(mciSendString("open \""+target+"\" type waveaudio alias clip",null,0,IntPtr.Zero));
-        try {
-            Check(mciSendString("play clip",null,0,IntPtr.Zero)); Console.WriteLine("playing"); Console.Out.Flush();
-            var command=Task.Factory.StartNew(()=>Console.ReadLine());
-            while(!command.IsCompleted) {
-                var mode=new StringBuilder(64); Check(mciSendString("status clip mode",mode,64,IntPtr.Zero));
-                if(mode.ToString()!="playing") break;
-                Thread.Sleep(100);
+    static long ReadWave(BinaryReader reader, out Format format) {
+        var stream = reader.BaseStream;
+        format = new Format();
+        if (new string(reader.ReadChars(4)) != "RIFF") throw new InvalidDataException("Expected RIFF audio");
+        reader.ReadUInt32();
+        if (new string(reader.ReadChars(4)) != "WAVE") throw new InvalidDataException("Expected WAV audio");
+        while (stream.Length - stream.Position >= 8) {
+            string kind = new string(reader.ReadChars(4));
+            uint size = reader.ReadUInt32();
+            long end = stream.Position + size;
+            if (end > stream.Length) throw new InvalidDataException("WAV chunk is truncated");
+            if (kind == "fmt " && size >= 16) {
+                format.tag = reader.ReadUInt16(); format.channels = reader.ReadUInt16();
+                format.rate = reader.ReadUInt32(); format.bytesPerSecond = reader.ReadUInt32();
+                format.align = reader.ReadUInt16(); format.bits = reader.ReadUInt16();
             }
-        } finally { mciSendString("close clip",null,0,IntPtr.Zero); }
+            if (kind == "data" && format.tag == 1 && format.align > 0 && size >= format.align)
+                return size - size % format.align;
+            stream.Position = end + (size & 1);
+        }
+        throw new InvalidDataException("Expected nonempty PCM data");
+    }
+    static void Play(string target) {
+        using (var reader = new BinaryReader(File.OpenRead(target), Encoding.ASCII))
+        using (var signal = new AutoResetEvent(false)) {
+            Format format;
+            long remaining = ReadWave(reader, out format);
+            int size = Math.Max(format.align, (int)(format.bytesPerSecond / (20U * format.align)) * format.align);
+            IntPtr handle;
+            Check(waveOutOpen(out handle, 0xffffffff, ref format, signal.SafeWaitHandle.DangerousGetHandle(), IntPtr.Zero, callbackEvent));
+            var headers = new IntPtr[4];
+            var buffers = new IntPtr[4];
+            var queued = new bool[4];
+            int prepared = 0;
+            bool started = false;
+            try {
+                for (int index = 0; index < headers.Length; index++) {
+                    buffers[index] = Marshal.AllocHGlobal(size);
+                    headers[index] = Marshal.AllocHGlobal((int)headerSize);
+                    Marshal.StructureToPtr(new Header {data=buffers[index],length=(uint)size},headers[index],false);
+                    Check(waveOutPrepareHeader(handle, headers[index], headerSize));
+                    prepared++;
+                }
+                var command = Task.Factory.StartNew(() => Console.ReadLine());
+                int next = 0, pending = 0;
+                do {
+                    for (int visited = 0; visited < headers.Length; visited++) {
+                        IntPtr pointer = headers[next];
+                        var header = (Header)Marshal.PtrToStructure(pointer, typeof(Header));
+                        if (queued[next] && (header.flags & headerDone) == 0) break;
+                        if (queued[next]) { queued[next] = false; pending--; }
+                        if (remaining > 0) {
+                            int count = (int)Math.Min(size, remaining);
+                            byte[] chunk = reader.ReadBytes(count);
+                            if (chunk.Length != count) throw new EndOfStreamException();
+                            Marshal.Copy(chunk, 0, buffers[next], count);
+                            header.length = (uint)count;
+                            Marshal.StructureToPtr(header, pointer, false);
+                            Check(waveOutWrite(handle, pointer, headerSize));
+                            queued[next] = true; pending++; remaining -= count;
+                        }
+                        next = (next + 1) % headers.Length;
+                    }
+                    if (!started) { Report("playing"); started = true; }
+                    if (pending > 0 && !command.IsCompleted) signal.WaitOne(25);
+                } while (pending > 0 && !command.IsCompleted);
+            } finally {
+                waveOutReset(handle);
+                for (int index = 0; index < headers.Length; index++) {
+                    if (index < prepared) waveOutUnprepareHeader(handle, headers[index], headerSize);
+                    if (headers[index] != IntPtr.Zero) Marshal.FreeHGlobal(headers[index]);
+                    if (buffers[index] != IntPtr.Zero) Marshal.FreeHGlobal(buffers[index]);
+                }
+                waveOutClose(handle);
+            }
+        }
     }
     [STAThread] static int Main(string[] args) {
         Console.OutputEncoding=new UTF8Encoding(false);

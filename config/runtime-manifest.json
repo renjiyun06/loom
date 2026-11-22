@@ -44,9 +44,9 @@
       "sha256": "9a4eb5f1c29c6a2e93852ead46b999e284a6a5ca8bab4d4e241d587d025a52de"
     },
     {
-      "path": "runtime\\supervisor\\supervisor.exe",
-      "bytes": 9728,
-      "sha256": "d75fe264aefe1190ec2912ad1604c6bef235ffbef0dc3167bf95f66a89b752bc"
+      "path": "runtime\\supervisor\\LoomSupervisor.exe",
+      "bytes": 24576,
+      "sha256": "19bad7bf4b5559f7ebe3481dcfec897fbb53ebdc1fe1af4065985beaaaf16fc3"
     },
     {
       "path": "downloads/GlamorousToolkit-Windows-x86_64-v1.1.699.zip",
@@ -79,7 +79,7 @@
       "sha256": "192a1d6899059765ac8c39764fc3148d4e6049955956dc2029f81f4bd6a8972d"
     }
   ],
-  "supervisorSource": "Local source src/supervisor/Supervisor.cs; built with Windows .NET Framework C# compiler",
+  "supervisorSource": "Local sources in src/supervisor; built by src/supervisor/build.ps1 with Windows .NET Framework C# compiler",
   "runtimeSource": "Official feenkcom/gtoolkit v1.1.699 Windows x86_64 portable distribution",
   "release": {
     "tag": "v1.1.699",

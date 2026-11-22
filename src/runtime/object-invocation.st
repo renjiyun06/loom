@@ -45,5 +45,4 @@ LMCodexClient compile: 'doesNotUnderstand: message
   [ self performRequest: ''Loom 调用了你。'' action: ''ask'' invocation: invocation.
     invocation result ]
    ensure: [ invocation detach. activeRequestId := nil ] ]'.
-(LMCodexClient class includesSelector: #bridgeVersion) ifTrue: [ LMCodexClient class removeSelector: #bridgeVersion ].
 'Loom object invocation installed'

@@ -1,20 +1,5 @@
 "Rebind transport while preserving application objects in the image."
 | root ipc previous heartbeatPrevious inbox outbox command code result response |
-"Saved methods retain their variable bindings. Reuse those bindings under the current names."
-#(BridgeIPC LoomIPC
- BridgeMailboxProcess LoomMailboxProcess
- BridgeHeartbeatProcess LoomHeartbeatProcess
- BridgeRuntimeSessionId LoomRuntimeSessionId
- BridgeCheckpointMutex LoomCheckpointMutex
- BridgeNativeStateMutex LoomNativeStateMutex
- BridgeNativeActionMutex LoomNativeActionMutex
- BridgeOriginalSnapshotMethod LoomOriginalSnapshotMethod) pairsDo: [ :old :current |
- | binding |
- binding := Smalltalk globals associationAt: old ifAbsent: [ nil ].
- binding ifNotNil: [
-  Smalltalk globals removeKey: old.
-  binding key: current.
-  Smalltalk globals add: binding ] ].
 previous := Smalltalk globals at: #LoomMailboxProcess ifAbsent: [ nil ].
 (previous notNil and: [ previous ~~ Processor activeProcess ]) ifTrue: [ previous terminate ].
 root := FileLocator workingDirectory.

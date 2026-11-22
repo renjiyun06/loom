@@ -6,18 +6,13 @@ $settings = Get-Content -LiteralPath (Join-Path $runtimeRoot 'config\runtime.jso
 $ipc = Join-Path $runtimeRoot $settings.paths.ipc
 $logs = Join-Path $runtimeRoot $settings.paths.logs
 $statusFile = Join-Path $ipc 'runtime-status.json'
-$previousStatusFile = $statusFile
-if (-not (Test-Path -LiteralPath $previousStatusFile)) {
-    $previousStatusFile = Join-Path $ipc 'bridge-ready.json'
-}
-if (Test-Path -LiteralPath $previousStatusFile) {
-    $previous = Get-Content -LiteralPath $previousStatusFile -Raw -Encoding UTF8 | ConvertFrom-Json
+if (Test-Path -LiteralPath $statusFile) {
+    $previous = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($previous.status -in @('ready','starting','stopping')) {
         $running = Get-CimInstance Win32_Process -Filter "ProcessId=$($previous.pid)" -ErrorAction SilentlyContinue
-        $legacyHost = $running -and $running.CommandLine -like '*src\bridge\serve-codex.mjs*'
         $directHost = $running -and $running.ExecutablePath -eq (Join-Path $runtimeRoot $settings.paths.engineExecutable) -and
             $running.CommandLine -like '*src\runtime\direct-bootstrap.st*'
-        if ($legacyHost -or $directHost) {
+        if ($directHost) {
             $modeChange = ($Gui -and -not $previous.gui) -or ($Headless -and $previous.gui)
             if (-not $modeChange) { $previous | ConvertTo-Json; exit 0 }
             & (Join-Path $runtimeRoot 'stop.ps1') | Out-Null
@@ -48,9 +43,7 @@ foreach ($variable in @('CODEX_HOME','CODEX_SQLITE_HOME')) {
     }
 }
 $migrationReceipt = Join-Path $runtimeRoot 'state\sessions\codex-home-migrated.json'
-$previousMigrationReceipt = Join-Path $runtimeRoot 'state\bridge\codex-home-migrated.json'
 if (-not (Test-Path -LiteralPath $migrationReceipt) -and
-    -not (Test-Path -LiteralPath $previousMigrationReceipt) -and
     (Test-Path -LiteralPath (Join-Path $legacyCodexHome 'state_5.sqlite'))) {
     $codexExecutable = Join-Path $runtimeRoot $settings.paths.codexExecutable
     if (Get-CimInstance Win32_Process -Filter "Name='codex.exe'" | Where-Object { $_.ExecutablePath -eq $codexExecutable }) {

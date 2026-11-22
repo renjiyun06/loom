@@ -1,6 +1,5 @@
 $ErrorActionPreference = 'Stop'
 $statusFile = Join-Path $PSScriptRoot 'ipc\runtime-status.json'
-if (-not (Test-Path -LiteralPath $statusFile)) { $statusFile = Join-Path $PSScriptRoot 'ipc\bridge-ready.json' }
 if (-not (Test-Path -LiteralPath $statusFile)) { 'Runtime is not running'; exit 0 }
 $current = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($current.status -notin @('ready','starting','stopping')) { $current | ConvertTo-Json; exit 0 }

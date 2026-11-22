@@ -100,8 +100,6 @@ public static class Supervisor {
             string statusFile = Path.Combine(ipc,"runtime-status.json");
             recovery.Write(statusFile,new {status="starting",pid=child.ProcessId,enginePid=child.ProcessId,
                 supervisorPid=Process.GetCurrentProcess().Id,root,gui,image=recovery.CommittedImage});
-            File.Delete(Path.Combine(ipc, "bridge-ready.json"));
-            File.Delete(Path.Combine(ipc, "bridge-heartbeat.txt"));
             string pulse = Path.Combine(ipc,"runtime-heartbeat.txt");
             if(File.Exists(pulse))File.Delete(pulse);
             Check(ResumeThread(child.Thread)!=0xFFFFFFFF);

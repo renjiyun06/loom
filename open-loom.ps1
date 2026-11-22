@@ -14,7 +14,6 @@ try {
     & (Join-Path $runtimeRoot 'start.ps1') -Gui 1> (Join-Path $logDirectory 'launcher-start.stdout.log') 2> (Join-Path $logDirectory 'launcher-start.stderr.log')
     if ($LASTEXITCODE -ne 0) { throw 'Startup failed. See logs\launcher-start.stderr.log.' }
     $statusFile = Join-Path $runtimeRoot 'ipc\runtime-status.json'
-    if (-not (Test-Path -LiteralPath $statusFile)) { $statusFile = Join-Path $runtimeRoot 'ipc\bridge-ready.json' }
     $live = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
     # A user may already have closed the newly opened window. That is success,
     # not a launcher failure, and must neither show an error nor relaunch it.

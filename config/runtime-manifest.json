@@ -45,8 +45,8 @@
     },
     {
       "path": "runtime\\supervisor\\LoomSupervisor.exe",
-      "bytes": 25088,
-      "sha256": "44ce765d9f62df9afafdb706b78c68f364d31d08c8aac22cf2d85b27cb1c92ae"
+      "bytes": 24576,
+      "sha256": "930d69903e25b349030fb8ebe45bcc98c943e376dfb1c3f3fb0dc07ee22de330"
     },
     {
       "path": "downloads/GlamorousToolkit-Windows-x86_64-v1.1.699.zip",

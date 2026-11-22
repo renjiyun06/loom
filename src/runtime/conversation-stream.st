@@ -132,7 +132,7 @@ cls compile: 'item: anId type: aType
 cls compile: 'poll
  | bytes start stop line |
  changed := false.
- file exists ifFalse: [ ^ false ].
+ (file notNil and: [ file exists ]) ifFalse: [ ^ false ].
  file binaryReadStreamDo: [ :stream |
   stream size < offset ifTrue: [ self reset ].
   stream position: offset.
@@ -151,8 +151,7 @@ cls compile: 'poll
  ^ changed'.
 cls compile: 'requestId ^ requestId'.
 cls compile: 'requestId: anId
- requestId := anId.
- file := ExperimentRoot / ''logs'' / ''codex-events'' / (anId , ''.events.jsonl'')'.
+ requestId := anId'.
 cls compile: 'reset
  revision := (revision ifNil: [ 0 ]) + 1.
  activityCache := nil. answerCache := nil.
@@ -173,7 +172,7 @@ cls compile: 'safeValue: value
 cls compile: 'snapshot
  ^ order collect: [ :id | (items at: id) deepCopy ] as: Array'.
 cls compile: 'hasUnreadEvents
- ^ file exists and: [ file size > offset ]'.
+ ^ file notNil and: [ file exists and: [ file size > offset ] ]'.
 cls compile: 'visibleActivities
  ^ self snapshot select: [ :entry | | type |
   type := entry at: ''type''.

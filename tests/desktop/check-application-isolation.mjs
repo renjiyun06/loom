@@ -213,33 +213,18 @@ try {
       true`, 'uncertain-durable-call');
   }
 
-  await gt(`| binding |
-   binding := Smalltalk globals associationAt: #LoomIPC.
-   Smalltalk globals removeKey: #LoomIPC.
-   binding key: #BridgeIPC.
-   Smalltalk globals add: binding.
-   Smalltalk globals at: #LoomLegacyBindingProbe put: (Smalltalk compiler evaluate: '[ BridgeIPC fullName ]').
-   true`, 'save-legacy-global-binding');
+  const migrationReceipt = path.join(fixture, 'state/sessions/codex-home-migrated.json');
+  fs.writeFileSync(migrationReceipt, '{"threads":1}');
   fs.writeFileSync(path.join(ipc, 'stop.json'), '{}');
   await stoppedAfter(true);
   const sealed = new CheckpointStorage(fixture).verify();
   assert.equal(fs.readdirSync(path.join(fixture, 'state/runtime/checkpoints')).length, 1);
   assert.equal(path.resolve(read(sessionFile).image), sealed.image);
-  const stores = path.join(fixture, 'state');
-  fs.writeFileSync(path.join(stores, 'sessions', 'codex-home-migrated.json'), '{"threads":1}');
-  fs.renameSync(path.join(stores, 'sessions'), path.join(stores, 'bridge'));
-  const oldStatus = path.join(ipc, 'bridge-ready.json');
-  fs.renameSync(sessionFile, oldStatus);
-  fs.writeFileSync(path.join(ipc, 'bridge-heartbeat.txt'), 'legacy');
   fs.writeFileSync(path.join(fixture, 'main.changes'), '\n');
   await start(core.pid);
-  assert.equal(fs.existsSync(path.join(stores, 'bridge')), false);
-  assert.deepEqual(read(path.join(stores, 'sessions', 'codex-home-migrated.json')), {threads: 1});
-  assert.equal(fs.existsSync(oldStatus), false);
-  assert.equal(fs.existsSync(path.join(ipc, 'bridge-heartbeat.txt')), false);
-  assert.deepEqual(await gt(`{ LoomLegacyBindingProbe value. LoomIPC fullName.
-   Smalltalk globals includesKey: #BridgeIPC. LMCodexClient package name asString }`, 'restore-legacy-global-binding'),
-   [ipc, ipc, false, 'Loom-Codex']);
+  assert.deepEqual(read(migrationReceipt), {threads: 1});
+  assert.deepEqual(await gt('{ LoomIPC fullName. LMCodexClient package name asString }', 'restored-runtime-bindings'),
+    [ipc, 'Loom-Codex']);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
   const restored = await gt(`{
@@ -310,7 +295,7 @@ try {
   console.log('GT hot reload, fault isolation, attachments, native audio and checkpoint restart passed.');
 } catch (error) {
   for (const name of ['voice-test/test-progress.json', 'logs/supervisor.log', 'logs/codex.stderr.log',
-    'logs/service.stderr.log', 'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
+    'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
     const file = path.join(fixture, name);
     if (fs.existsSync(file)) console.error(fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-14).join('\n'));
   }

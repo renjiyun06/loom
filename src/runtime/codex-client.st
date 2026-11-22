@@ -1,5 +1,5 @@
 "Codex transport shared by text and live-object calls."
-| clientClass client existing organizer |
+| clientClass client existing |
 existing := Smalltalk globals at: #LoomCodex ifAbsent: [ nil ].
 clientClass := (Object << #LMCodexClient
  slots: { #threadId. #lastResponse. #timeoutSeconds. #mutex. #clientKey. #activeRequestId. #requiredThreadId };
@@ -83,9 +83,6 @@ clientClass compile: 'assertIndependentProcess
   self error: ''Call LoomCodex from an independent GT Process, not from the runtime tool callback'' ]'.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'object-invocation.st') contents.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'loom-sessions.st') contents.
-organizer := clientClass package organizer.
-organizer packageNamed: #'Loom-Bridge' ifPresent: [ :package |
- package isEmpty ifTrue: [ organizer unregisterPackage: package ] ].
 client := existing ifNil: [ clientClass new ].
 client timeoutSeconds: nil.
 Smalltalk globals at: #LoomCodex put: client.

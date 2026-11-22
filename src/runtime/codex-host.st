@@ -44,8 +44,7 @@ checkpointWorker name: ''Loom execution checkpoints''.
    Smalltalk globals at: #LoomApplicationLoadTrace put: (error signalerContext stack collect: #printString) ]
 ] fork.'.
 host compile: 'restoreWaitingCallers
- (Smalltalk globals at: #LoomExecutionCheckpoint ifAbsent: [
-  Smalltalk globals removeKey: #BridgeExecutionCheckpoint ifAbsent: [ nil ] ])
+ (Smalltalk globals at: #LoomExecutionCheckpoint ifAbsent: [ nil ])
   ifNotNil: [ :state | (state at: ''gate'') signal ].
 LMExecution restoreNativeAction'.
 host compile: 'publishStatus: phase

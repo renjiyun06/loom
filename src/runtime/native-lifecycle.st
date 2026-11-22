@@ -44,8 +44,7 @@ LMExecution class compile: 'completeNativeAction: id result: result
  ^ true'.
 LMExecution class compile: 'restoreNativeAction
  | state |
- state := Smalltalk globals at: #LoomNativeAction ifAbsent: [
-  Smalltalk globals removeKey: #BridgeNativeAction ifAbsent: [ ^ false ] ].
+ state := Smalltalk globals at: #LoomNativeAction ifAbsent: [ ^ false ].
  (state at: ''session'') = LoomRuntimeSessionId ifTrue: [ ^ false ].
  "A committed image contains the waiting caller, never an instruction to quit again."
  state at: ''ok'' put: true; at: ''restored'' put: true.

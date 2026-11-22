@@ -61,6 +61,7 @@ applications class compile: 'install
    self attempt: ''conversation'' during: [ self initializeConversationStorage ].
    self attempt: ''voice'' during: [ self initializeVoice ].
    self attempt: ''conversation-view'' during: [
+    self load: ''conversation-stream.st''.
     self load: ''activity-timeline.st''.
     self load: ''conversation-components.st''.
     self load: ''conversation-ui.st'' ].

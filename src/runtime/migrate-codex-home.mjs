@@ -9,9 +9,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {paths, root} from '../tools/paths.mjs';
 
 const source = path.join(root, 'state/codex');
-const previousStore = path.join(root, 'state/bridge');
-const sessionStore = fs.existsSync(previousStore) ? previousStore : path.join(root, 'state/sessions');
-const receipt = path.join(sessionStore, 'codex-home-migrated.json');
+const receipt = path.join(root, 'state/sessions/codex-home-migrated.json');
 const target = path.resolve(process.env.CODEX_HOME?.trim() || path.join(os.homedir(), '.codex'));
 const sourceIndex = path.join(source, 'state_5.sqlite');
 

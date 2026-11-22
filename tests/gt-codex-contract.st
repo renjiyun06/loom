@@ -1,6 +1,6 @@
 "Native session registry, activity, and settings checks. The test root is disposable."
 | base registry request receipt binding file settings verify page older protected requestId data roster
-  reader previous change sequence detail savedText progress |
+  reader previous change sequence detail savedText progress restored |
 base := ExperimentRoot / 'codex-contract'.
 verify := [ :condition :message | condition ifFalse: [ self error: message ] ].
 registry := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
@@ -67,6 +67,15 @@ registry acceptActivity: data call: requestId.
 page := reader pageOf: 2 session: 'Fixture-1'.
 verify value: ((page at: 'items') noneSatisfy: [ :entry | (entry at: 'seq') = (progress at: 'seq') ])
  value: 'a row that becomes hidden is removed incrementally'.
+restored := LMActivityReader new.
+restored instVarNamed: #registry put: registry.
+restored instVarNamed: #published put: page.
+restored instVarNamed: #selection put: 'Fixture-1'.
+restored instVarNamed: #loadedLimit put: 2.
+restored instVarNamed: #revision put: registry revision.
+verify value: (((restored pageOf: 2 session: 'Fixture-1') at: 'items') isEmpty
+ and: [ restored registry == LoomNativeCodexHost registry ])
+ value: 'a restored reader discards pages cached under a previous registry'.
 request := Dictionary new at: 'id' put: UUID new asString; at: 'action' put: 'newConversation'; at: 'clientKey' put: 'default'; yourself.
 receipt := registry reset: request.
 verify value: (registry reset: request) = receipt value: 'replaying a completed reset is idempotent'.

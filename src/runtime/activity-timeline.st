@@ -5,17 +5,25 @@ previous ifNotNil: [
  #(initialize pageOf:focus: pageOf:focus:session: requestPageOf:focus:session: readPage) do: [ :selector |
   (previous includesSelector: selector) ifTrue: [ previous removeSelector: selector ] ] ].
 cls := (Object << #LMActivityReader
- slots: #(registry channel selection loadedLimit first revision older published replyKey replyText);
+ slots: #(registry explicitRegistry channel selection loadedLimit first revision older published replyKey replyText);
  package: 'Loom-Conversation') install.
 cls compile: 'channel: value channel := value'.
-cls compile: 'registry: value registry := value'.
+cls compile: 'registry: value explicitRegistry := value'.
 cls compile: 'registry
- ^ registry ifNil: [ registry := LoomNativeCodexHost registry ]'.
+ | current |
+ current := explicitRegistry ifNil: [ LoomNativeCodexHost registry ].
+ registry == current ifFalse: [
+  registry := current.
+  published := nil.
+  replyKey := nil.
+  replyText := '''' ].
+ ^ registry'.
 cls compile: 'pageOf: limit session: sessionId
- | snapshot batch items previous managed |
+ | source snapshot batch items previous managed |
+ source := self registry.
  managed := channel = ''overview''.
  (published isNil or: [ selection ~= sessionId or: [ limit < loadedLimit ] ]) ifTrue: [
-  snapshot := self registry activitySummariesBefore: nil limit: limit session: sessionId managedOnly: managed.
+  snapshot := source activitySummariesBefore: nil limit: limit session: sessionId managedOnly: managed.
   selection := sessionId.
   revision := snapshot at: ''revision''.
   older := snapshot at: ''older''.
@@ -25,13 +33,13 @@ cls compile: 'pageOf: limit session: sessionId
  previous := published at: ''items''.
  items := previous.
  limit > loadedLimit ifTrue: [
-  snapshot := self registry activitySummariesBefore: first limit: limit - loadedLimit
+  snapshot := source activitySummariesBefore: first limit: limit - loadedLimit
    session: sessionId managedOnly: managed.
   older := snapshot at: ''older''.
   (snapshot at: ''items'') ifNotEmpty: [ :earlier |
    first := earlier first at: ''seq''.
    items := earlier, items ] ].
- batch := self registry activityChangesAfter: revision from: first session: sessionId managedOnly: managed.
+ batch := source activityChangesAfter: revision from: first session: sessionId managedOnly: managed.
  revision := batch first.
  batch second ifNotEmpty: [ :changes | items := self merge: changes into: items ].
  first ifNil: [ items ifNotEmpty: [ first := items first at: ''seq'' ] ].
@@ -57,11 +65,12 @@ cls compile: 'merge: changes into: items
  index to: items size do: [ :position | merged add: (items at: position) ].
  ^ merged asArray'.
 cls compile: 'streamedReplyFor: invocation
- | key |
+ | source key |
  invocation ifNil: [ replyKey := nil. replyText := ''''. ^ replyText ].
- key := { invocation. self registry revision }.
+ source := self registry.
+ key := { invocation. source revision }.
  replyKey = key ifFalse: [
-  replyText := self registry activityAnswerFor: invocation.
+  replyText := source activityAnswerFor: invocation.
   replyKey := key ].
  ^ replyText'.
 'Loom incremental activity reader installed'

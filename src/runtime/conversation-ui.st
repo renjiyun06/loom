@@ -36,11 +36,11 @@ ui compile: 'activityExpandedFor: id
  activityExpansionStates ifNil: [ activityExpansionStates := Dictionary new ].
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
- | messagesChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor activityCount statusText |
+ | messagesChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor previousTail statusText |
  layoutVersion = 10 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
  incomingActivities := payload at: ''activities''.
- activityCount := activityItems size.
+ previousTail := activityItems ifEmpty: [ nil ] ifNotEmpty: [ activityItems last at: ''id'' ].
  (firstUpdate or: [ incomingActivities ~~ (lastPayload at: ''activities'') ]) ifTrue: [
   (activityFollow not and: [ activityItems notEmpty and: [ incomingActivities notEmpty and: [
    (activityItems first at: ''id'') ~= (incomingActivities first at: ''id'') ] ] ]) ifTrue: [
@@ -63,7 +63,8 @@ ui compile: 'applyUpdate: payload
   ifNil: [ (messagesChanged and: [ followOutput ]) ifTrue: [ self defer: [ self followLatest ] ] ].
  activityAnchor ifNotNil: [
   self restoreActivityAnchor: activityAnchor ].
- (activityItems size > activityCount and: [ activityFollow ]) ifTrue: [ self defer: [ self followActivities ] ]'.
+ (activityFollow and: [ activityItems notEmpty and: [ (activityItems last at: ''id'') ~= previousTail ] ])
+  ifTrue: [ self defer: [ self followActivities ] ]'.
 ui compile: 'bindActivityRow: row item: value
  ^ [ row descriptor: value ] on: Error do: [ :error | row showRenderingError: error descriptor: value ]'.
 ui compile: 'bindMessageRow: row item: value

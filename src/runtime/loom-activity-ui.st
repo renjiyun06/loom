@@ -138,10 +138,10 @@ ui compile: 'loadOlder
   limit := limit + 100.
   older enabled: false ]'.
 ui compile: 'apply: page
- | incoming anchor index widget previousCount brief |
+ | incoming anchor index widget previousTail brief |
  page == currentPage ifTrue: [ ^ self ].
  incoming := page at: ''items''.
- previousCount := activityItems size.
+ previousTail := activityItems ifEmpty: [ nil ] ifNotEmpty: [ activityItems last at: ''id'' ].
  (follow not and: [ activityItems notEmpty and: [ incoming notEmpty and: [
   (activityItems first at: ''id'') ~= (incoming first at: ''id'') ] ] ]) ifTrue: [
    anchor := self visibleAnchor ].
@@ -153,7 +153,7 @@ ui compile: 'apply: page
   ifNotEmpty: [ incoming size asString, '' 条已加载活动'' ].
  status text asString = brief ifFalse: [ status text: brief ].
  incoming ifEmpty: [ ^ self ].
- index := follow ifTrue: [ incoming size > previousCount ifTrue: [ incoming size ] ifFalse: [ 0 ] ] ifFalse: [
+ index := follow ifTrue: [ (incoming last at: ''id'') ~= previousTail ifTrue: [ incoming size ] ifFalse: [ 0 ] ] ifFalse: [
   anchor ifNil: [ 0 ] ifNotNil: [ incoming findFirst: [ :item | (item at: ''id'') = anchor first ] ] ].
  index > 0 ifTrue: [
   widget := list.

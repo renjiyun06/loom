@@ -5,17 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn,execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {root} from '../../src/bridge/paths.mjs';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
-import {CheckpointStorage} from '../../src/bridge/checkpoint-storage.mjs';
+import {root} from '../../src/tools/paths.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
+import {CheckpointStorage} from '../../src/tools/checkpoint-storage.mjs';
 
 const temporary = path.resolve(os.tmpdir());
 const fixture = fs.mkdtempSync(path.join(temporary, 'loom-application-isolation-'));
 const ipc = path.join(fixture, 'ipc');
-const sessionFile = path.join(ipc, 'bridge-ready.json');
+const sessionFile = path.join(ipc, 'runtime-status.json');
 const codexHome = path.join(fixture, 'app-server-home');
 const runtimeLinks = ['node', 'codex', 'gtoolkit', 'audio', 'media'];
 const mockCodex = process.argv.includes('--mock-codex');
+const supervisorBinary = process.env.LOOM_TEST_SUPERVISOR ?? path.join(root, 'runtime/supervisor/LoomSupervisor.exe');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let child;
 
@@ -58,7 +59,7 @@ async function start(previousPid) {
   child = spawn(path.join(fixture, 'runtime/LoomSupervisor.exe'), [fixture], {
     cwd: fixture, windowsHide: true, env: {...process.env, CODEX_HOME: codexHome, CODEX_SQLITE_HOME: codexHome},
   });
-  return until('bridge readiness', () => {
+  return until('runtime readiness', () => {
     if (child.exitCode !== null || child.signalCode !== null) throw Error('Supervisor quit before readiness: ' + JSON.stringify(read(sessionFile)));
     const state = read(sessionFile);
     if (!state || state.pid === previousPid) return false;
@@ -98,7 +99,7 @@ try {
   fs.mkdirSync(path.join(fixture, 'config'));
   fs.mkdirSync(path.join(fixture, 'runtime'));
   fs.mkdirSync(codexHome);
-  fs.copyFileSync(path.join(root, 'runtime/supervisor/LoomSupervisor.exe'), path.join(fixture, 'runtime/LoomSupervisor.exe'));
+  fs.copyFileSync(supervisorBinary, path.join(fixture, 'runtime/LoomSupervisor.exe'));
   const config = read(path.join(root, 'config/runtime.json'));
   if (mockCodex) {
     config.paths.codexExecutable = 'runtime/fake-codex.exe';
@@ -212,13 +213,33 @@ try {
       true`, 'uncertain-durable-call');
   }
 
+  await gt(`| binding |
+   binding := Smalltalk globals associationAt: #LoomIPC.
+   Smalltalk globals removeKey: #LoomIPC.
+   binding key: #BridgeIPC.
+   Smalltalk globals add: binding.
+   Smalltalk globals at: #LoomLegacyBindingProbe put: (Smalltalk compiler evaluate: '[ BridgeIPC fullName ]').
+   true`, 'save-legacy-global-binding');
   fs.writeFileSync(path.join(ipc, 'stop.json'), '{}');
   await stoppedAfter(true);
   const sealed = new CheckpointStorage(fixture).verify();
   assert.equal(fs.readdirSync(path.join(fixture, 'state/runtime/checkpoints')).length, 1);
   assert.equal(path.resolve(read(sessionFile).image), sealed.image);
+  const stores = path.join(fixture, 'state');
+  fs.writeFileSync(path.join(stores, 'sessions', 'codex-home-migrated.json'), '{"threads":1}');
+  fs.renameSync(path.join(stores, 'sessions'), path.join(stores, 'bridge'));
+  const oldStatus = path.join(ipc, 'bridge-ready.json');
+  fs.renameSync(sessionFile, oldStatus);
+  fs.writeFileSync(path.join(ipc, 'bridge-heartbeat.txt'), 'legacy');
   fs.writeFileSync(path.join(fixture, 'main.changes'), '\n');
   await start(core.pid);
+  assert.equal(fs.existsSync(path.join(stores, 'bridge')), false);
+  assert.deepEqual(read(path.join(stores, 'sessions', 'codex-home-migrated.json')), {threads: 1});
+  assert.equal(fs.existsSync(oldStatus), false);
+  assert.equal(fs.existsSync(path.join(ipc, 'bridge-heartbeat.txt')), false);
+  assert.deepEqual(await gt(`{ LoomLegacyBindingProbe value. LoomIPC fullName.
+   Smalltalk globals includesKey: #BridgeIPC. LMCodexClient package name asString }`, 'restore-legacy-global-binding'),
+   [ipc, ipc, false, 'Loom-Codex']);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
   const restored = await gt(`{

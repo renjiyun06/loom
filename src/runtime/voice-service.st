@@ -31,7 +31,7 @@ service compile: 'session
 service compile: 'provider: aProvider
  provider := aProvider'.
 service compile: 'isCurrent
- ^ session = BridgeRuntimeSessionId'.
+ ^ session = LoomRuntimeSessionId'.
 service compile: 'isClosed
  ^ closed'.
 service compile: 'fileFor: job named: name

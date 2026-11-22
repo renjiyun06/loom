@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {evaluate} from '../bridge/runtime-client.mjs';
+import {evaluate} from '../tools/runtime-client.mjs';
 
 // Desktop opening is an explicit request. A healthy background process does
 // not imply that Bloc has a running UI loop or an actual Windows window.

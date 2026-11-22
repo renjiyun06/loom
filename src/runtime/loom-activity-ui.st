@@ -103,7 +103,7 @@ ui compile: 'startPolling
  poller := [ | nextSessions |
   nextSessions := DateAndTime now.
   [ self tab notNil ] whileTrue: [
-   [ (STONJSON fromString: (BridgeIPC / ''bridge-ready.json'') contents) at: ''status'' ] value = ''ready'' ifTrue: [
+   [ (STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents) at: ''status'' ] value = ''ready'' ifTrue: [
     DateAndTime now >= nextSessions ifTrue: [
      self refreshSessions.
      nextSessions := DateAndTime now + 2 seconds ].

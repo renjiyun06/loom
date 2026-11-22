@@ -3,7 +3,7 @@
 host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping #views); package: 'Loom-Codex') install.
 host compile: 'start
  | config pathConfig default identity state |
-session := BridgeRuntimeSessionId.
+session := LoomRuntimeSessionId.
 epoch := OSEnvironment current at: ''LOOM_RUNTIME_EPOCH''.
 config := STONJSON fromString: (ExperimentRoot / ''config'' / ''runtime.json'') contents.
 pathConfig := config at: ''paths''.
@@ -12,13 +12,13 @@ pathConfig keysAndValuesDo: [ :key :value | options at: key put: (ExperimentRoot
 gui := config at: ''gui'' ifAbsent: [ false ].
 Smalltalk globals at: #LoomGuiEnabled put: gui.
 #(''codex-requests'' ''codex-responses'' ''codex-cancel'' ''activity-queries'' ''session-requests'' ''session-responses'' ''native-actions'' ''native-results'')
- do: [ :name | (BridgeIPC / name) ensureCreateDirectory ].
+ do: [ :name | (LoomIPC / name) ensureCreateDirectory ].
 views := Dictionary new.
-state := STONJSON fromString: (BridgeIPC / ''bridge-ready.json'') contents.
+state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
 status := state copy at: ''objectInvocation'' put: true; at: ''sessionControl'' put: session;
- at: ''runtimeDirectory'' put: BridgeIPC fullName; at: ''cwd'' put: (options at: ''workspace'') fullName;
+ at: ''runtimeDirectory'' put: LoomIPC fullName; at: ''cwd'' put: (options at: ''workspace'') fullName;
  at: ''workingImage'' put: Smalltalk imageFile fullName; at: ''transport'' put: ''GT / Codex App Server stdio''; yourself.
-registry := LMNativeSessionRegistry new initializeAt: ExperimentRoot / ''state'' / ''bridge''; yourself.
+registry := LMNativeSessionRegistry new initializeAt: ExperimentRoot / ''state'' / ''sessions''; yourself.
 default := registry initializeDefault: LoomCodex threadId.
 LoomCodex clientKey: ''default''; synchronizeThreadId: (default at: ''threadId'').
 registry recoverActivities.
@@ -28,7 +28,7 @@ identity := transport start: options registry: registry.
 settings := LMNativeCodexSettings new initializeAt: (ExperimentRoot / ''config'' / ''codex.json''); yourself.
 settings models: ([ transport modelCatalog ] on: Error do: [ :error | #() ]).
 status at: ''codexPid'' put: transport pid; at: ''appServer'' put: (identity at: ''userAgent'' ifAbsent: [ nil ]).
-LMPlatformTools writeJSON: settings options to: BridgeIPC / ''codex-options.json''.
+LMPlatformTools writeJSON: settings options to: LoomIPC / ''codex-options.json''.
 self publishStatus: ''ready''.
 self restoreWaitingCallers.
 worker := [ self runRequests ] fork.
@@ -44,23 +44,25 @@ checkpointWorker name: ''Loom execution checkpoints''.
    Smalltalk globals at: #LoomApplicationLoadTrace put: (error signalerContext stack collect: #printString) ]
 ] fork.'.
 host compile: 'restoreWaitingCallers
- (Smalltalk globals at: #BridgeExecutionCheckpoint ifAbsent: [ nil ]) ifNotNil: [ :state | (state at: ''gate'') signal ].
+ (Smalltalk globals at: #LoomExecutionCheckpoint ifAbsent: [
+  Smalltalk globals removeKey: #BridgeExecutionCheckpoint ifAbsent: [ nil ] ])
+  ifNotNil: [ :state | (state at: ''gate'') signal ].
 LMExecution restoreNativeAction'.
 host compile: 'publishStatus: phase
  status at: ''status'' put: phase.
-LMPlatformTools writeJSON: status to: BridgeIPC / ''bridge-ready.json'''.
+LMPlatformTools writeJSON: status to: LoomIPC / ''runtime-status.json'''.
 host compile: 'isCurrent
- ^ session = BridgeRuntimeSessionId and: [
+ ^ session = LoomRuntimeSessionId and: [
   epoch = (OSEnvironment current at: ''LOOM_RUNTIME_EPOCH'' ifAbsent: [ nil ]) ]'.
 host compile: 'isToolProcess
  ^ transport notNil and: [ transport isToolProcess ]'.
 host compile: 'uuid: value
  ^ value isString and: [ value matchesRegex: ''[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}'' ]'.
 host compile: 'filesIn: name
- ^ ((BridgeIPC / name) files select: [ :file |
+ ^ ((LoomIPC / name) files select: [ :file |
  file extension = ''json'' and: [ self uuid: file basenameWithoutExtension ] ]) sorted'.
 host compile: 'reply: result for: id
- LMPlatformTools writeJSON: result to: (BridgeIPC / ''codex-responses'' / (id, ''.json''))'.
+ LMPlatformTools writeJSON: result to: (LoomIPC / ''codex-responses'' / (id, ''.json''))'.
 host compile: 'failed: message request: id
  ^ Dictionary new at: ''ok'' put: false; at: ''id'' put: id; at: ''error'' put: message; yourself'.
 host compile: 'validateRequest: request id: id
@@ -83,7 +85,7 @@ registry validate: key max: 128'.
 host compile: 'performRequestFile: file
  | id result |
 id := file basenameWithoutExtension.
-(BridgeIPC / ''codex-responses'' / file basename) exists ifTrue: [ ^ self ].
+(LoomIPC / ''codex-responses'' / file basename) exists ifTrue: [ ^ self ].
 result := [
  | request |
  request := STONJSON fromString: file contents.
@@ -97,12 +99,12 @@ id := request at: ''id''.
 action := request at: ''action''.
 key := request at: ''clientKey''.
 action = ''configure'' ifTrue: [
- LMPlatformTools writeJSON: (settings save: (STONJSON fromString: (request at: ''prompt''))) to: BridgeIPC / ''codex-options.json''.
+ LMPlatformTools writeJSON: (settings save: (STONJSON fromString: (request at: ''prompt''))) to: LoomIPC / ''codex-options.json''.
  ^ Dictionary new at: ''id'' put: id; at: ''ok'' put: true; at: ''text'' put: ''''; yourself ].
 action = ''newConversation'' ifTrue: [ ^ registry reset: request ].
 action = ''status'' ifTrue: [
  ^ (registry ensureClient: key) at: ''id'' put: id; at: ''ok'' put: true; at: ''text'' put: ''''; yourself ].
-(BridgeIPC / ''codex-cancel'' / (id, ''.json'')) exists ifTrue: [
+(LoomIPC / ''codex-cancel'' / (id, ''.json'')) exists ifTrue: [
  ^ self failed: ''Request cancelled before execution'' request: id ].
 previous := registry callResult: id.
 previous ifNotNil: [ ^ previous ].
@@ -123,10 +125,10 @@ host compile: 'runControls
  [ self isCurrent ] whileTrue: [
   | active |
   (transport failure notNil and: [ stopping ~= true ]) ifTrue: [ self fatal: transport failure ].
-  (BridgeIPC / ''stop.json'') exists ifTrue: [ self scheduleShutdownSaving: true native: nil ].
+  (LoomIPC / ''stop.json'') exists ifTrue: [ self scheduleShutdownSaving: true native: nil ].
   active := transport active.
   active ifNotNil: [
-   ((stopping = true or: [ (BridgeIPC / ''codex-cancel'' / ((active at: ''requestId''), ''.json'')) exists ])
+   ((stopping = true or: [ (LoomIPC / ''codex-cancel'' / ((active at: ''requestId''), ''.json'')) exists ])
     and: [ (active at: ''turnId'') notNil and: [ (active at: ''interruptionSent'' ifAbsent: [ false ]) not ] ]) ifTrue: [
      [ [ transport interrupt ] on: Error do: [ :ignored | nil ] ] fork ] ].
   #(pollSessions pollActivity pollNativeActions) do: [ :selector |

@@ -2,7 +2,7 @@
 | invocation |
 invocation := (Object << #LMInvocation
  slots: #(message caller requestId submitted result);
- package: 'Loom-Bridge') install.
+ package: 'Loom-Codex') install.
 Smalltalk globals at: #LoomPendingInvocations ifAbsentPut: [ Dictionary new ].
 invocation class compile: 'pendingAt: id
  ^ LoomPendingInvocations at: id ifAbsent: [ self error: ''This Loom object invocation is no longer active'' ]'.
@@ -45,5 +45,5 @@ LMCodexClient compile: 'doesNotUnderstand: message
   [ self performRequest: ''Loom 调用了你。'' action: ''ask'' invocation: invocation.
     invocation result ]
    ensure: [ invocation detach. activeRequestId := nil ] ]'.
-LMCodexClient class compile: 'bridgeVersion ^ 13'.
+(LMCodexClient class includesSelector: #bridgeVersion) ifTrue: [ LMCodexClient class removeSelector: #bridgeVersion ].
 'Loom object invocation installed'

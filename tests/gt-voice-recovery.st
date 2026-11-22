@@ -11,7 +11,7 @@ step value: 'recovery'.
   at: 'createdAt' put: DateAndTime now asUTC asString; yourself.
  phase = 'processing' ifTrue: [ record at: 'orderId' put: 'existing-order'; at: 'signatureRandom' put: 'saved-nonce' ].
  LMPlatformTools writeJSON: record to: (root / 'state' / 'audio' / phase / 'message.json') ].
-manager := LMGtVoice new initializeAt: root forSession: BridgeRuntimeSessionId; yourself.
+manager := LMGtVoice new initializeAt: root forSession: LoomRuntimeSessionId; yourself.
 verify value: ((manager job: 'uploading') at: 'state') = 'unknown' value: 'uncertain upload remains unknown'.
 verify value: ((manager job: 'recording') at: 'state') = 'draft' value: 'capture recovers only a draft'.
 verify value: ((manager job: 'preparing') at: 'state') = 'queued' value: 'preparation is safe to resume'.

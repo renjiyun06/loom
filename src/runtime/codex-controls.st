@@ -9,8 +9,8 @@ current := transport active.
  | id request key |
  id := file basenameWithoutExtension.
  ((current isNil or: [ (current at: ''requestId'') ~= id ]) and: [
-  (BridgeIPC / ''codex-responses'' / file basename) exists not and: [
-  (BridgeIPC / ''codex-cancel'' / file basename) exists not ] ]) ifTrue: [
+  (LoomIPC / ''codex-responses'' / file basename) exists not and: [
+  (LoomIPC / ''codex-cancel'' / file basename) exists not ] ]) ifTrue: [
   request := [ STONJSON fromString: file contents ] on: Error do: [ :error | Dictionary new ].
   ((request at: ''id'' ifAbsent: [ nil ]) = id and: [ (request at: ''action'' ifAbsent: [ nil ]) = ''ask'' ]) ifTrue: [
    key := request at: ''clientKey'' ifAbsent: [ nil ].
@@ -25,7 +25,7 @@ record at: ''queued'' put: queued.
 current ifNil: [
  ^ record at: ''call'' put: nil; at: ''runState'' put: (queued ifEmpty: [ ''idle'' ] ifNotEmpty: [ ''queued'' ]); yourself ].
 id := current at: ''requestId''.
-stoppingCall := (BridgeIPC / ''codex-cancel'' / (id, ''.json'')) exists.
+stoppingCall := (LoomIPC / ''codex-cancel'' / (id, ''.json'')) exists.
 ^ record at: ''runState'' put: (stoppingCall ifTrue: [ ''stopping'' ] ifFalse: [ ''running'' ]);
  at: ''call'' put: (Dictionary new at: ''requestId'' put: id; at: ''threadId'' put: (current at: ''threadId'');
   at: ''turnId'' put: (current at: ''turnId''); yourself); yourself'.
@@ -50,7 +50,7 @@ kind = ''stop'' ifTrue: [
  ids := record at: ''queued''.
  call := record at: ''call''.
  call ifNotNil: [ ids := {call at: ''requestId''}, ids ].
- ids do: [ :requestId | LMPlatformTools writeJSON: Dictionary new to: BridgeIPC / ''codex-cancel'' / (requestId, ''.json'') ].
+ ids do: [ :requestId | LMPlatformTools writeJSON: Dictionary new to: LoomIPC / ''codex-cancel'' / (requestId, ''.json'') ].
  ^ Dictionary new at: ''id'' put: sessionId; at: ''cancelledRequests'' put: ids; yourself ].
 self error: ''Unknown Loom session command'''.
 host compile: 'pollSessions
@@ -61,7 +61,7 @@ host compile: 'pollSessions
   Dictionary new at: ''ok'' put: true;
    at: ''value'' put: (self control: (STONJSON fromString: file contents) id: id); yourself
  ] on: Error do: [ :error | self failed: error messageText request: id ].
- LMPlatformTools writeJSON: answer to: BridgeIPC / ''session-responses'' / file basename.
+ LMPlatformTools writeJSON: answer to: LoomIPC / ''session-responses'' / file basename.
  file ensureDelete ]'.
 host compile: 'pollActivity
  (self filesIn: ''activity-queries'') do: [ :file |
@@ -102,18 +102,18 @@ page := registry activityPageFrom: from limit: limit previous: (same ifTrue: [ p
 state at: ''first'' put: (page removeKey: ''first'').
 #(''view'' ''serial'' ''limit'' ''focus'' ''session'') do: [ :key | page at: key put: (query at: key) ].
 output := channel = ''overview'' ifTrue: [ ''activity-overview.json'' ] ifFalse: [ ''activity-view.json'' ].
-LMPlatformTools writeJSON: page to: BridgeIPC / output.
+LMPlatformTools writeJSON: page to: LoomIPC / output.
 state at: ''published'' put: (query copy at: ''revision'' put: revision; yourself)'.
 host compile: 'runCheckpoints
  [ self isCurrent ] whileTrue: [
- (Smalltalk globals at: #BridgeExecutionCheckpoint ifAbsent: [ nil ]) ifNotNil: [ :current |
+ (Smalltalk globals at: #LoomExecutionCheckpoint ifAbsent: [ nil ]) ifNotNil: [ :current |
   (current at: ''handled'' ifAbsent: [ false ]) ifFalse: [ self checkpoint: current ] ].
  (Delay forMilliseconds: 35) wait ]'.
 host compile: 'checkpoint: control
  | id receipt result deadline |
 control at: ''handled'' put: true.
 id := control at: ''id''.
-receipt := BridgeIPC / ''checkpoint-results'' / (id, ''.json'').
+receipt := LoomIPC / ''checkpoint-results'' / (id, ''.json'').
 [
  receipt exists ifFalse: [ self scheduleSnapshot: id control: control ].
  deadline := DateAndTime now + 80 seconds.
@@ -134,15 +134,15 @@ host compile: 'scheduleSnapshot: id control: control
 snapshot := [
  [ LMExecution nativeStateCritical: [
     | operation |
-    BridgeMailboxProcess suspend.
+    LoomMailboxProcess suspend.
     [
      operation := LMExecution nativeSnapshotDuring: [
       Smalltalk imageFile fullName = (status at: ''workingImage'')
        ifTrue: [ Smalltalk snapshot: true andQuit: false ]
        ifFalse: [ Smalltalk saveAs: (ExperimentRoot / ''state'' / ''runtime'' / ''working'' / ''main'') fullName ] ].
-    ] ensure: [ (self isCurrent and: [ BridgeMailboxProcess isSuspended ]) ifTrue: [ BridgeMailboxProcess resume ] ].
+    ] ensure: [ (self isCurrent and: [ LoomMailboxProcess isSuspended ]) ifTrue: [ LoomMailboxProcess resume ] ].
     (self isCurrent and: [ operation isImageStarting not ]) ifTrue: [
-     LMPlatformTools writeJSON: Dictionary new to: BridgeIPC / ''checkpoint-saved'' / (id, ''.json'') ]
+     LMPlatformTools writeJSON: Dictionary new to: LoomIPC / ''checkpoint-saved'' / (id, ''.json'') ]
    ]
  ] on: Error do: [ :error | control at: ''error'' put: error messageText ] ].
 universe := gui ifTrue: [ BlParallelUniverse forHost: BlWinitHost ] ifFalse: [ nil ].
@@ -153,7 +153,7 @@ host compile: 'pollNativeActions
 (self filesIn: ''native-actions'') do: [ :file |
  | id receipt request |
  id := file basenameWithoutExtension.
- receipt := BridgeIPC / ''native-results'' / file basename.
+ receipt := LoomIPC / ''native-results'' / file basename.
  receipt exists ifFalse: [
   request := [ STONJSON fromString: file contents ] on: Error do: [ :error | Dictionary new ].
   ((request at: ''session'' ifAbsent: [ nil ]) = session and: [ (request at: ''id'' ifAbsent: [ nil ]) = id ])
@@ -169,7 +169,7 @@ host compile: 'scheduleNativeSave: id
   Dictionary new at: ''ok'' put: true; at: ''saved'' put: true; at: ''checkpoint'' put: LMExecution checkpoint;
    at: ''restored'' put: false; yourself
  ] on: Error do: [ :error | self failed: error messageText request: id ].
- LMPlatformTools writeJSON: result to: BridgeIPC / ''native-results'' / (id, ''.json'').
+ LMPlatformTools writeJSON: result to: LoomIPC / ''native-results'' / (id, ''.json'').
  LMExecution completeNativeAction: id result: result
 ] fork'.
 host compile: 'scheduleShutdownSaving: save native: id
@@ -188,10 +188,10 @@ checkpoint := save ifTrue: [ LMExecution checkpoint ] ifFalse: [ nil ].
 self isCurrent ifFalse: [ ^ self ].
 result := Dictionary new at: ''ok'' put: true; at: ''saved'' put: save; at: ''checkpoint'' put: checkpoint; yourself.
 id ifNotNil: [
- LMPlatformTools writeJSON: result to: BridgeIPC / ''native-results'' / (id, ''.json'').
+ LMPlatformTools writeJSON: result to: LoomIPC / ''native-results'' / (id, ''.json'').
  LMExecution completeNativeAction: id result: result ].
 transport stop.
-(BridgeIPC / ''stop.json'') ensureDelete.
+(LoomIPC / ''stop.json'') ensureDelete.
 status at: ''saved'' put: save; at: ''stoppedAt'' put: registry now.
 self publishStatus: ''stopped''.
 Smalltalk exitSuccess'.

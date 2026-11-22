@@ -6,10 +6,12 @@ import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {createInterface} from 'node:readline';
 import {DatabaseSync} from 'node:sqlite';
-import {paths, root} from '../bridge/paths.mjs';
+import {paths, root} from '../tools/paths.mjs';
 
 const source = path.join(root, 'state/codex');
-const receipt = path.join(root, 'state/bridge/codex-home-migrated.json');
+const previousStore = path.join(root, 'state/bridge');
+const sessionStore = fs.existsSync(previousStore) ? previousStore : path.join(root, 'state/sessions');
+const receipt = path.join(sessionStore, 'codex-home-migrated.json');
 const target = path.resolve(process.env.CODEX_HOME?.trim() || path.join(os.homedir(), '.codex'));
 const sourceIndex = path.join(source, 'state_5.sqlite');
 

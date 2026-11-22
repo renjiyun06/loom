@@ -1,12 +1,12 @@
 # One-time migration of the old saved-shutdown backups, after normal shutdown.
 $ErrorActionPreference='Stop'
 $root='D:\Loom'
-$status=Get-Content -LiteralPath (Join-Path $root 'ipc\bridge-ready.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$status=Get-Content -LiteralPath (Join-Path $root 'ipc\runtime-status.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($status.status -ne 'stopped' -or -not $status.saved) { throw 'Require a confirmed saved shutdown before migration' }
 foreach ($runtimePid in @($status.pid,$status.enginePid,$status.codexPid)) {
     if ($runtimePid -and (Get-Process -Id $runtimePid -ErrorAction SilentlyContinue)) { throw "Runtime process still exists: $runtimePid" }
 }
-& (Join-Path $root 'runtime\node\node.exe') --input-type=module -e 'import {CheckpointStorage} from "file:///D:/Loom/src/bridge/checkpoint-storage.mjs"; console.log(JSON.stringify({verified:new CheckpointStorage("D:/Loom").verify().pointer.id}));'
+& (Join-Path $root 'runtime\node\node.exe') --input-type=module -e 'import {CheckpointStorage} from "file:///D:/Loom/src/tools/checkpoint-storage.mjs"; console.log(JSON.stringify({verified:new CheckpointStorage("D:/Loom").verify().pointer.id}));'
 if ($LASTEXITCODE -ne 0) { throw 'Recovery verification failed; no backups removed' }
 $expected=Join-Path $root 'backups\snapshots'
 $base=Get-Item -LiteralPath $expected -Force

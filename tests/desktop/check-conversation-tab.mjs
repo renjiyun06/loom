@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
-import {root} from '../../src/bridge/paths.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
+import {root} from '../../src/tools/paths.mjs';
 
 async function run(code) {
  const reply=await evaluate(code,'conversation-tab-test');

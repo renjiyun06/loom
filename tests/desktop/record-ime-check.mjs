@@ -1,7 +1,7 @@
 // Run after deliberate Sogou UI checks in the diagnostic tab; never sends text.
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
 const reply=await evaluate(`{
  LoomImeCommitValid.
  LoomImeTestEditor text asString = LoomImeBodyBefore.

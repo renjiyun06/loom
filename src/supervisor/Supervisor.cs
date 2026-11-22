@@ -97,9 +97,11 @@ public static class Supervisor {
             Check(CreateProcess(engine,new StringBuilder(arguments),IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,root,ref startup,out child));
             Check(AssignProcessToJobObject(job,child.Process));
             recovery.Write(Path.Combine(ipc,"supervisor.json"),new {pid=Process.GetCurrentProcess().Id,workerPid=child.ProcessId,killOnJobClose=true});
-            string statusFile = Path.Combine(ipc,"bridge-ready.json");
+            string statusFile = Path.Combine(ipc,"runtime-status.json");
             recovery.Write(statusFile,new {status="starting",pid=child.ProcessId,enginePid=child.ProcessId,
                 supervisorPid=Process.GetCurrentProcess().Id,root,gui,image=recovery.CommittedImage});
+            File.Delete(Path.Combine(ipc, "bridge-ready.json"));
+            File.Delete(Path.Combine(ipc, "bridge-heartbeat.txt"));
             string pulse = Path.Combine(ipc,"runtime-heartbeat.txt");
             if(File.Exists(pulse))File.Delete(pulse);
             Check(ResumeThread(child.Thread)!=0xFFFFFFFF);

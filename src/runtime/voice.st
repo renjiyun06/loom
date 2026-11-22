@@ -54,7 +54,7 @@ voice class compile: 'await: id
  request ifNotNil: [
   [ (request at: ''gate'') wait. ^ request at: ''result'' ]
    ensure: [ self requests removeKey: id ifAbsent: [ ] ] ].
- file := BridgeIPC / ''voice'' / ''results'' / (id, ''.json'').
+ file := LoomIPC / ''voice'' / ''results'' / (id, ''.json'').
  ^ file exists ifTrue: [ STONJSON fromString: file contents ] ifFalse: [
   Dictionary new at: ''ok'' put: false; at: ''error'' put: ''音频操作已中断，请核对当前状态。''; yourself ]'.
 voice class compile: 'requests

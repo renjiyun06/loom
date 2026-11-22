@@ -1,6 +1,6 @@
 "Persistent Loom session identities are resolved by the Node session registry."
 | manager |
-manager := (Object << #LoomSessions slots: #(); package: 'Loom-Bridge') install.
+manager := (Object << #LoomSessions slots: #(); package: 'Loom-Codex') install.
 Smalltalk globals at: #LoomSessionClients ifAbsentPut: [ Dictionary new ].
 Smalltalk globals at: #LoomSessionClientsMutex ifAbsentPut: [ Mutex new ].
 manager class compile: 'mainId ^ ''main'''.
@@ -30,13 +30,13 @@ manager class compile: 'rotate: identifier
 manager class compile: 'stop: id ^ self command: ''stop'' for: (self normalizedId: id)'.
 manager class compile: 'command: action for: sessionId
  | state instance name temporary responseFile deadline response |
- state := STONJSON fromString: (BridgeIPC / ''bridge-ready.json'') contents.
+ state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
  instance := state at: ''sessionControl'' ifAbsent: [ nil ].
  ((state at: ''status'') = ''ready'' and: [ instance notNil ])
   ifFalse: [ self error: ''Loom session management is not ready'' ].
  name := UUID new asString.
- temporary := BridgeIPC / ''session-requests'' / (name, ''.tmp'').
- responseFile := BridgeIPC / ''session-responses'' / (name, ''.json'').
+ temporary := LoomIPC / ''session-requests'' / (name, ''.tmp'').
+ responseFile := LoomIPC / ''session-responses'' / (name, ''.json'').
  temporary writeStreamDo: [ :stream |
   stream nextPutAll: (STONJSON toString: (Dictionary new
    at: ''instance'' put: instance; at: ''action'' put: action; at: ''sessionId'' put: sessionId; yourself)) ].

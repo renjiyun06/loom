@@ -1,5 +1,5 @@
 "Start a supervised GT image that owns its Codex connection."
-| root loader usesWorkingChanges reopenChanges host oldHost previous deadline |
+| root loader usesWorkingChanges reopenChanges host oldHost snapshotProcess previous deadline |
 root := FileLocator workingDirectory.
 usesWorkingChanges := [
  | changes writer buffer binary file |
@@ -42,12 +42,15 @@ Smalltalk globals at: #LoomRuntimeSourceLoader put: loader.
 oldHost := Smalltalk globals removeKey: #LoomNativeCodexHost ifAbsent: [ nil ].
 oldHost ifNotNil: #retire.
 [
- previous := Smalltalk globals at: #BridgeInternalSnapshotProcess ifAbsent: [ nil ].
+ snapshotProcess := [ Smalltalk globals at: #LoomInternalSnapshotProcess ifAbsent: [
+  Smalltalk globals at: #BridgeInternalSnapshotProcess ifAbsent: [ nil ] ] ].
+ previous := snapshotProcess value.
  previous ifNotNil: [
   deadline := DateAndTime now + 5 seconds.
-  [ (Smalltalk globals at: #BridgeInternalSnapshotProcess ifAbsent: [ nil ]) == previous
+  [ snapshotProcess value == previous
    and: [ previous isTerminated not and: [ DateAndTime now < deadline ] ] ]
    whileTrue: [ (Delay forMilliseconds: 20) wait ] ].
+ Smalltalk globals removeKey: #BridgeInternalSnapshotProcess ifAbsent: [ nil ].
  (oldHost notNil or: [ previous notNil or: [ Smalltalk globals includesKey: #LMConversation ] ]) ifTrue: [
   "The opener can fall back to the current directory before the old stream closes."
   reopenChanges value ].
@@ -59,7 +62,7 @@ oldHost ifNotNil: #retire.
  host start
 ] on: Error do: [ :error |
  | file status |
- file := root / 'ipc' / 'bridge-ready.json'.
+ file := root / 'ipc' / 'runtime-status.json'.
  status := STONJSON fromString: file contents.
  status at: 'status' put: 'failed'; at: 'error' put: error messageText.
  (Smalltalk globals at: #LMPlatformTools ifAbsent: [ nil ])

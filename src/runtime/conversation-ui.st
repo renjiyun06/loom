@@ -221,7 +221,7 @@ ui compile: 'cancelCurrentTurn
  | id file temporary |
  id := (LoomConversation instVarNamed: ''client'') activeRequestId.
  id ifNil: [ ^ self ].
- file := BridgeIPC / ''codex-cancel'' / (id , ''.json'').
+ file := LoomIPC / ''codex-cancel'' / (id , ''.json'').
  file exists ifFalse: [
   temporary := file parent / (id, ''.tmp'').
   temporary binaryWriteStreamDo: [ :out | out nextPutAll: ''{}'' utf8Encoded; truncate: 2 ].
@@ -439,7 +439,7 @@ ui compile: 'saveRuntime
 ui compile: 'showCodexSettings
  | file options overlay panel close |
  (activityPane userData includesKey: #codexSettings) ifTrue: [ ^ self ].
- file := BridgeIPC / ''codex-options.json''.
+ file := LoomIPC / ''codex-options.json''.
  file exists ifFalse: [
   status text: ''Codex 配置正在加载…''. ^ self ].
  options := STONJSON fromString: file contents.

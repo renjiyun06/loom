@@ -7,7 +7,8 @@ const controlTimeout=10000;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 export async function sessionCommand(directory,action,sessionId) {
-  const status=JSON.parse(fs.readFileSync(path.join(directory,'bridge-ready.json'),'utf8'));
+  const current=path.join(directory,'runtime-status.json');
+  const status=JSON.parse(fs.readFileSync(fs.existsSync(current)?current:path.join(directory,'bridge-ready.json'),'utf8'));
   if(status.status!=='ready'||!status.sessionControl)throw new Error('Loom session management is not ready');
   const name=randomUUID()+'.json';
   const receipt=path.join(directory,'session-responses',name);

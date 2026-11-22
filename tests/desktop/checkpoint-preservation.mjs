@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
-import {root} from '../../src/bridge/paths.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
+import {root} from '../../src/tools/paths.mjs';
 const directory=path.join(root,'tests/results/checkpoint-optimization');
 fs.mkdirSync(directory,{recursive:true});
 const reply=await evaluate(`| classes |

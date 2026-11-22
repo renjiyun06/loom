@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {CheckpointStorage,hashFile} from '../src/bridge/checkpoint-storage.mjs';
-import {root} from '../src/bridge/paths.mjs';
+import {CheckpointStorage,hashFile} from '../src/tools/checkpoint-storage.mjs';
+import {root} from '../src/tools/paths.mjs';
 
 const base=path.join(root,'tests/results/checkpoint-storage-unit');
 fs.mkdirSync(base,{recursive:true});

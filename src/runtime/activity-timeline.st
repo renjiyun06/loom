@@ -1,4 +1,4 @@
-"Loom activity pages are fetched from the bridge's SQLite activity table."
+"Loom activity pages are queried from the Loom session database."
 | cls |
 cls := (Object << #LMActivityReader
  slots: #(#viewId #serial #lastQuery #fileStamp #published #channel);
@@ -20,7 +20,7 @@ cls compile: 'pageOf: limit focus: invocation session: sessionId
  ^ published'.
 cls compile: 'requestPageOf: limit focus: invocation session: sessionId
  | directory name file query |
- directory := BridgeIPC / ''activity-queries''.
+ directory := LoomIPC / ''activity-queries''.
  directory exists ifFalse: [ ^ false ].
  serial := serial + 1.
  name := UUID new asString.
@@ -33,7 +33,7 @@ cls compile: 'requestPageOf: limit focus: invocation session: sessionId
  ^ true'.
 cls compile: 'readPage
  | file stamp page |
- file := BridgeIPC / (channel = ''overview'' ifTrue: [ ''activity-overview.json'' ] ifFalse: [ ''activity-view.json'' ]).
+ file := LoomIPC / (channel = ''overview'' ifTrue: [ ''activity-overview.json'' ] ifFalse: [ ''activity-view.json'' ]).
  file exists ifFalse: [ ^ self ].
  stamp := { file modificationTime. file size }.
  fileStamp = stamp ifTrue: [ ^ self ].

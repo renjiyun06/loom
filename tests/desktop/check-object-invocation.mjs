@@ -4,8 +4,8 @@ import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
-import {root,paths} from '../../src/bridge/paths.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
+import {root,paths} from '../../src/tools/paths.mjs';
 
 const token=randomUUID();
 const filename=`object-invocation-${token}.json`;

@@ -128,6 +128,7 @@ internal sealed class Recovery {
         }
         var resources = Path.Combine(working, "gt-extra");
         if (!Directory.Exists(resources)) Supervisor.MakeJunction(resources, Path.Combine(Path.GetDirectoryName(seed), "gt-extra"));
+        MoveSessionStore();
         ArchiveMailbox();
         foreach (string request in Directory.GetFiles(Path.Combine(ipc, "checkpoint-requests"), "*.json")) {
             string id = Path.GetFileNameWithoutExtension(request);
@@ -139,6 +140,18 @@ internal sealed class Recovery {
                 Write(receipt, result);
             } else Write(receipt, new { ok = false, id, error = "Interrupted before checkpoint commit; request was not replayed" });
         }
+    }
+
+    void MoveSessionStore() {
+        string state = Path.Combine(root, "state");
+        string previous = Path.Combine(state, "bridge");
+        string current = Path.Combine(state, "sessions");
+        if (!Directory.Exists(previous) && !File.Exists(previous)) return;
+        PlainDirectory(state);
+        PlainDirectory(previous);
+        if (Directory.Exists(current) || File.Exists(current))
+            throw new IOException("Both the old and current session stores exist; resolve the conflict before starting Loom");
+        Directory.Move(previous, current);
     }
 
     void ArchiveMailbox() {

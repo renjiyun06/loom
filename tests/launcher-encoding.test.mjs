@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import {once} from 'node:events';
-import {root} from '../src/bridge/paths.mjs';
+import {root} from '../src/tools/paths.mjs';
 
 const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
 test('Windows PowerShell 5.1 launcher reads UTF-8 names without corrupting configuration',async()=>{

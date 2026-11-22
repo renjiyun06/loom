@@ -4,7 +4,7 @@ transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending
 transport compile: 'start: options registry: aRegistry
  | builder cwd temp logs identity |
 registry := aRegistry.
-session := BridgeRuntimeSessionId.
+session := LoomRuntimeSessionId.
 epoch := OSEnvironment current at: ''LOOM_RUNTIME_EPOCH''.
 pending := Dictionary new.
 loaded := Set new.
@@ -27,7 +27,7 @@ child terminateOnShutdown.
 reader := [ self readMessages ] fork.
 reader name: ''Loom Codex JSON-RPC reader''.
 identity := self rpc: ''initialize'' params: (STONJSON fromString:
- ''{"clientInfo":{"name":"loom_bridge","title":"Loom","version":"0.1.0"},"capabilities":{"experimentalApi":true,"requestAttestation":false}}'').
+ ''{"clientInfo":{"name":"loom","title":"Loom","version":"0.1.0"},"capabilities":{"experimentalApi":true,"requestAttestation":false}}'').
 self send: (Dictionary new at: ''method'' put: ''initialized''; yourself).
 ^ identity'.
 transport compile: 'modelCatalog
@@ -49,7 +49,7 @@ transport compile: 'active
 transport compile: 'failure
  ^ failure'.
 transport compile: 'isCurrent
- ^ session = BridgeRuntimeSessionId and: [
+ ^ session = LoomRuntimeSessionId and: [
   epoch = (OSEnvironment current at: ''LOOM_RUNTIME_EPOCH'' ifAbsent: [ nil ]) ]'.
 transport compile: 'isToolProcess
  ^ toolProcesses includes: Processor activeProcess'.

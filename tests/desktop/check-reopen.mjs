@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {root} from '../../src/bridge/paths.mjs';
-import {evaluate} from '../../src/bridge/runtime-client.mjs';
+import {root} from '../../src/tools/paths.mjs';
+import {evaluate} from '../../src/tools/runtime-client.mjs';
 
 const read=relative=>JSON.parse(fs.readFileSync(path.join(root,relative),'utf8'));
-const before=read('ipc/bridge-ready.json');
+const before=read('ipc/runtime-status.json');
 assert.equal(before.status,'ready');
 const errorLog=path.join(root,'logs/launcher-error.log');
 const errorsBefore=fs.existsSync(errorLog)?fs.statSync(errorLog).size:0;
@@ -49,7 +49,7 @@ const reopened=await inspect();
 assert.equal(reopened[0],true);assert.equal(reopened[1],1);
 assert.equal(receipt.enginePid,before.enginePid);assert.equal(receipt.visible,true);
 assert.equal(receipt.minimized,false);
-assert.equal(read('ipc/bridge-ready.json').pid,before.pid);
+assert.equal(read('ipc/runtime-status.json').pid,before.pid);
 assert.equal(fs.existsSync(errorLog)?fs.statSync(errorLog).size:0,errorsBefore);
 await evaluate(`(BlParallelUniverse forHost: BlWinitHost) defer: [
  (GtWorld allOpenWorlds select: [ :world | world host isKindOf: BlWinitHost ])

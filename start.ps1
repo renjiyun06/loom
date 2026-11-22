@@ -5,9 +5,13 @@ $runtimeRoot = $PSScriptRoot
 $settings = Get-Content -LiteralPath (Join-Path $runtimeRoot 'config\runtime.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $ipc = Join-Path $runtimeRoot $settings.paths.ipc
 $logs = Join-Path $runtimeRoot $settings.paths.logs
-$statusFile = Join-Path $ipc 'bridge-ready.json'
-if (Test-Path -LiteralPath $statusFile) {
-    $previous = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$statusFile = Join-Path $ipc 'runtime-status.json'
+$previousStatusFile = $statusFile
+if (-not (Test-Path -LiteralPath $previousStatusFile)) {
+    $previousStatusFile = Join-Path $ipc 'bridge-ready.json'
+}
+if (Test-Path -LiteralPath $previousStatusFile) {
+    $previous = Get-Content -LiteralPath $previousStatusFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($previous.status -in @('ready','starting','stopping')) {
         $running = Get-CimInstance Win32_Process -Filter "ProcessId=$($previous.pid)" -ErrorAction SilentlyContinue
         $legacyHost = $running -and $running.CommandLine -like '*src\bridge\serve-codex.mjs*'
@@ -43,8 +47,11 @@ foreach ($variable in @('CODEX_HOME','CODEX_SQLITE_HOME')) {
         [Environment]::SetEnvironmentVariable($variable, $null, 'Process')
     }
 }
-$migrationReceipt = Join-Path $runtimeRoot 'state\bridge\codex-home-migrated.json'
-if (-not (Test-Path -LiteralPath $migrationReceipt) -and (Test-Path -LiteralPath (Join-Path $legacyCodexHome 'state_5.sqlite'))) {
+$migrationReceipt = Join-Path $runtimeRoot 'state\sessions\codex-home-migrated.json'
+$previousMigrationReceipt = Join-Path $runtimeRoot 'state\bridge\codex-home-migrated.json'
+if (-not (Test-Path -LiteralPath $migrationReceipt) -and
+    -not (Test-Path -LiteralPath $previousMigrationReceipt) -and
+    (Test-Path -LiteralPath (Join-Path $legacyCodexHome 'state_5.sqlite'))) {
     $codexExecutable = Join-Path $runtimeRoot $settings.paths.codexExecutable
     if (Get-CimInstance Win32_Process -Filter "Name='codex.exe'" | Where-Object { $_.ExecutablePath -eq $codexExecutable }) {
         throw 'The previous Loom Codex App Server is still running. Wait for saved shutdown before migrating.'
@@ -65,7 +72,24 @@ $supervisorSources = Get-ChildItem -LiteralPath (Join-Path $runtimeRoot 'src\sup
 if (-not (Test-Path -LiteralPath $supervisorFile) -or ($supervisorSources | Where-Object {
     $_.LastWriteTimeUtc -gt (Get-Item -LiteralPath $supervisorFile).LastWriteTimeUtc
 })) {
-    & (Join-Path $runtimeRoot 'src\supervisor\build.ps1')
+    if ($previous -and $previous.supervisorPid) {
+        $priorSupervisor = Get-Process -Id $previous.supervisorPid -ErrorAction SilentlyContinue
+        if ($priorSupervisor -and $priorSupervisor.Path -eq $supervisorFile -and -not $priorSupervisor.WaitForExit(8000)) {
+            throw 'The previous Loom supervisor has not exited.'
+        }
+    }
+    $stagedSupervisor = Join-Path $runtimeRoot 'runtime\supervisor\pending\LoomSupervisor.exe'
+    if ((Test-Path -LiteralPath $stagedSupervisor) -and -not ($supervisorSources | Where-Object {
+        $_.LastWriteTimeUtc -gt (Get-Item -LiteralPath $stagedSupervisor).LastWriteTimeUtc
+    })) {
+        if (Test-Path -LiteralPath $supervisorFile) {
+            [IO.File]::Replace($stagedSupervisor, $supervisorFile, [NullString]::Value)
+        } else {
+            [IO.File]::Move($stagedSupervisor, $supervisorFile)
+        }
+    } else {
+        & (Join-Path $runtimeRoot 'src\supervisor\build.ps1')
+    }
 }
 $process = Start-Process -FilePath $supervisorFile -ArgumentList $arguments -WorkingDirectory $runtimeRoot -WindowStyle Hidden -PassThru
 $deadline = (Get-Date).AddSeconds(30)

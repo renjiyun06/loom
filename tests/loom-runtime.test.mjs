@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {root,paths} from '../src/bridge/paths.mjs';
-import {evaluate} from '../src/bridge/runtime-client.mjs';
+import {root,paths} from '../src/tools/paths.mjs';
+import {evaluate} from '../src/tools/runtime-client.mjs';
 
 test('portable distribution matches the verified official release',()=>{
  const release=JSON.parse(fs.readFileSync(path.join(root,'config/gtoolkit-release.json'),'utf8'));
@@ -25,7 +25,7 @@ test('live GT matches the durable session binding and local voice configuration'
  const [version,directory,thread,voice,messages]=reply.value;
  assert.match(version,/v1\.1\.699/);
  assert.equal(directory,root);
- const registry=new DatabaseSync(path.join(root,'state/bridge/sessions.sqlite'),{readOnly:true});
+ const registry=new DatabaseSync(path.join(root,'state/sessions/sessions.sqlite'),{readOnly:true});
  try{assert.equal(thread,registry.prepare('SELECT thread_id FROM bindings WHERE client_key=?').get('default').thread_id);}
  finally{registry.close();}
  assert.equal(voice,true);

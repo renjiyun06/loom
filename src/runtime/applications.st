@@ -10,7 +10,7 @@ applications class compile: 'load: name
 applications class compile: 'statuses
  ^ Smalltalk globals at: #LoomApplicationStatuses ifAbsentPut: [ Dictionary new ]'.
 applications class compile: 'statusFor: name
- ((Smalltalk globals at: #LoomApplicationSession ifAbsent: [ nil ]) = BridgeRuntimeSessionId)
+ ((Smalltalk globals at: #LoomApplicationSession ifAbsent: [ nil ]) = LoomRuntimeSessionId)
   ifFalse: [ ^ Dictionary new at: ''phase'' put: ''starting''; yourself ].
  ^ self statuses at: name ifAbsent: [ Dictionary new at: ''phase'' put: ''starting''; yourself ]'.
 applications class compile: 'attempt: name during: operation
@@ -28,12 +28,12 @@ applications class compile: 'resetAfterRuntimeRestart
  Smalltalk globals removeKey: #LoomConversationStore ifAbsent: [ ].
  Smalltalk globals at: #LoomApplicationStatuses put: Dictionary new.
  Smalltalk globals at: #LoomApplicationLoadMutex put: Mutex new.
- Smalltalk globals at: #LoomApplicationSession put: BridgeRuntimeSessionId'.
+ Smalltalk globals at: #LoomApplicationSession put: LoomRuntimeSessionId'.
 applications class compile: 'prepareShutdown
  (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #close'.
 applications class compile: 'start
  | mutex gui |
- ((Smalltalk globals at: #LoomApplicationSession ifAbsent: [ nil ]) = BridgeRuntimeSessionId)
+ ((Smalltalk globals at: #LoomApplicationSession ifAbsent: [ nil ]) = LoomRuntimeSessionId)
   ifFalse: [ self resetAfterRuntimeRestart ].
  mutex := Smalltalk globals at: #LoomApplicationLoadMutex ifAbsentPut: [ Mutex new ].
  gui := Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ].
@@ -61,17 +61,14 @@ applications class compile: 'install
    self attempt: ''conversation'' during: [ self initializeConversationStorage ].
    self attempt: ''voice'' during: [ self initializeVoice ].
    self attempt: ''conversation-view'' during: [
+    self load: ''activity-timeline.st''.
     self load: ''conversation-components.st''.
     self load: ''conversation-ui.st'' ].
    ((self statusFor: ''conversation'') at: ''phase'') = ''ready'' ifTrue: [ LoomConversation start ] ]
   ifFalse: [ self statuses at: ''conversation'' put: (self statusFor: ''conversation-model'') ].
  gui ifTrue: [
-  self attempt: ''session-view'' during: [
-   (Smalltalk globals includesKey: #LMSessionManagerUI)
-    ifFalse: [ self load: ''loom-session-ui.st'' ] ].
-  self attempt: ''activity-view'' during: [
-   (Smalltalk globals includesKey: #LMActivityOverviewUI)
-    ifFalse: [ self load: ''loom-activity-ui.st'' ] ] ].
+  self attempt: ''session-view'' during: [ self load: ''loom-session-ui.st'' ].
+  self attempt: ''activity-view'' during: [ self load: ''loom-activity-ui.st'' ] ].
  ^ self statuses copy'.
 applications class compile: 'initializeConversationStorage
  | store |
@@ -86,7 +83,7 @@ applications class compile: 'initializeVoice
  self load: ''voice-service.st''.
  manager := Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ].
  (manager isNil or: [ manager isClosed ]) ifTrue: [
-  manager := LMGtVoice new initializeAt: ExperimentRoot forSession: BridgeRuntimeSessionId; yourself.
+  manager := LMGtVoice new initializeAt: ExperimentRoot forSession: LoomRuntimeSessionId; yourself.
   Smalltalk globals at: #LoomGtVoice put: manager ].
  manager start'.
 applications class compile: 'restoreIn: world
@@ -101,10 +98,10 @@ applications class compile: 'restoreIn: world
 applications class compile: 'dismissRestoredShutdownPromptIn: world
  | contents |
  contents := world instVarNamed: #worldElement.
- (contents userData at: #loomDesktopSession ifAbsent: [ nil ]) = BridgeRuntimeSessionId ifTrue: [ ^ self ].
+ (contents userData at: #loomDesktopSession ifAbsent: [ nil ]) = LoomRuntimeSessionId ifTrue: [ ^ self ].
  contents childWithId: GtWorldShutdownPromptId
   ifFound: [ :prompt | prompt removeFromParent ] ifNone: [ ].
- contents userData at: #loomDesktopSession put: BridgeRuntimeSessionId'.
+ contents userData at: #loomDesktopSession put: LoomRuntimeSessionId'.
 applications class compile: 'openDesktopRequest: id restore: restore
  | universe request |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''The runtime is not in desktop mode'' ].

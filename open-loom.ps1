@@ -13,11 +13,13 @@ try {
     # It returns at readiness; the supervisor continues independently.
     & (Join-Path $runtimeRoot 'start.ps1') -Gui 1> (Join-Path $logDirectory 'launcher-start.stdout.log') 2> (Join-Path $logDirectory 'launcher-start.stderr.log')
     if ($LASTEXITCODE -ne 0) { throw 'Startup failed. See logs\launcher-start.stderr.log.' }
-    $live = Get-Content -LiteralPath (Join-Path $runtimeRoot 'ipc\bridge-ready.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $statusFile = Join-Path $runtimeRoot 'ipc\runtime-status.json'
+    if (-not (Test-Path -LiteralPath $statusFile)) { $statusFile = Join-Path $runtimeRoot 'ipc\bridge-ready.json' }
+    $live = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
     # A user may already have closed the newly opened window. That is success,
     # not a launcher failure, and must neither show an error nor relaunch it.
     if ($live.status -in @('stopping','stopped')) { exit 0 }
-    if ($live.status -ne 'ready') { throw 'Loom did not become ready. See logs\service.stderr.log.' }
+    if ($live.status -ne 'ready') { throw 'Loom did not become ready. See logs\runtime.stderr.log and logs\codex.stderr.log.' }
     $engineProcess = Get-Process -Id $live.enginePid -ErrorAction SilentlyContinue
     if (-not $engineProcess) { exit 0 }
     $configuration = Get-Content -LiteralPath (Join-Path $runtimeRoot 'config\runtime.json') -Raw -Encoding UTF8 | ConvertFrom-Json

@@ -75,7 +75,7 @@ ui compile: 'defer: action
   self tab ifNotNil: [ action value ] ]; yourself)'.
 ui compile: 'refresh
  [ | updated status |
-  status := STONJSON fromString: (BridgeIPC / ''bridge-ready.json'') contents.
+  status := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
   (status at: ''status'') = ''ready'' ifFalse: [ ^ self ].
   updated := LoomSessions list.
   self defer: [

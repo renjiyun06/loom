@@ -1,9 +1,9 @@
 "Codex transport shared by text and live-object calls."
-| clientClass client existing |
+| clientClass client existing organizer |
 existing := Smalltalk globals at: #LoomCodex ifAbsent: [ nil ].
 clientClass := (Object << #LMCodexClient
  slots: { #threadId. #lastResponse. #timeoutSeconds. #mutex. #clientKey. #activeRequestId. #requiredThreadId };
- package: 'Loom-Bridge') install.
+ package: 'Loom-Codex') install.
 clientClass compile: 'initialize
  super initialize. timeoutSeconds := nil. mutex := Mutex new. clientKey := UUID new asString'.
 clientClass compile: 'clientKey ^ clientKey'.
@@ -39,13 +39,13 @@ clientClass compile: 'performRequest: prompt action: action
 clientClass compile: 'performRequest: prompt action: action invocation: invocation
  | id request outgoing responseFile ready |
  self assertIndependentProcess.
- ready := BridgeIPC / ''bridge-ready.json''.
- ready exists ifFalse: [ self error: ''Codex bridge is not running'' ].
+ ready := LoomIPC / ''runtime-status.json''.
+ ready exists ifFalse: [ self error: ''Loom runtime is not running'' ].
  ready := STONJSON fromString: ready contents.
  (ready at: ''status'') = ''ready''
-  ifFalse: [ self error: ''Codex bridge is not ready'' ].
+  ifFalse: [ self error: ''Loom runtime is not ready'' ].
  (invocation notNil and: [ (ready at: ''objectInvocation'' ifAbsent: [ false ]) not ])
-  ifTrue: [ self error: ''The running bridge does not support Loom object invocation'' ].
+  ifTrue: [ self error: ''The running instance does not support Loom object invocation'' ].
  (action = ''ask'' and: [ (prompt isString and: [ prompt isNotEmpty ]) not ])
   ifTrue: [ self error: ''Prompt must be a nonempty string'' ].
  (clientKey isString and: [ clientKey isNotEmpty ])
@@ -64,11 +64,11 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
   invocation attachTo: id.
   request at: ''objectInvocation'' put: true ].
  LMExecution checkpoint.
- (BridgeIPC / ''codex-requests'' / (id , ''.json'')) exists ifFalse: [
-  outgoing := BridgeIPC / ''codex-requests'' / (id , ''.tmp'').
+ (LoomIPC / ''codex-requests'' / (id , ''.json'')) exists ifFalse: [
+  outgoing := LoomIPC / ''codex-requests'' / (id , ''.tmp'').
   outgoing writeStreamDo: [ :s | s nextPutAll: (STONJSON toString: request) ].
   outgoing renameTo: id , ''.json'' ].
- responseFile := BridgeIPC / ''codex-responses'' / (id , ''.json'').
+ responseFile := LoomIPC / ''codex-responses'' / (id , ''.json'').
  [ responseFile exists ] whileFalse: [
   (Delay forMilliseconds: 30) wait ].
  lastResponse := STONJSON fromString: responseFile contents.
@@ -79,10 +79,13 @@ clientClass compile: 'activeRequestId ^ activeRequestId'.
 clientClass compile: 'assertIndependentProcess
  | host |
  host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
- (Processor activeProcess == BridgeMailboxProcess or: [ host notNil and: [ host isToolProcess ] ]) ifTrue: [
+ (Processor activeProcess == LoomMailboxProcess or: [ host notNil and: [ host isToolProcess ] ]) ifTrue: [
   self error: ''Call LoomCodex from an independent GT Process, not from the runtime tool callback'' ]'.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'object-invocation.st') contents.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'loom-sessions.st') contents.
+organizer := clientClass package organizer.
+organizer packageNamed: #'Loom-Bridge' ifPresent: [ :package |
+ package isEmpty ifTrue: [ organizer unregisterPackage: package ] ].
 client := existing ifNil: [ clientClass new ].
 client timeoutSeconds: nil.
 Smalltalk globals at: #LoomCodex put: client.

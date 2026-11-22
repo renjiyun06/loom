@@ -1,5 +1,5 @@
 "Visual checks for the compact native conversation interface."
-| report checks check ui card body editor text entry row values list bytes before |
+| report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
 [
@@ -16,6 +16,41 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  ui resizeComposer.
  check value: ((ui instVarNamed: 'placeholderLabel') visibility class = BlVisibility visible class)
   value: 'placeholder returns after clearing the input'.
+ attachments := ui instVarNamed: 'attachmentDraftPane'.
+ drafts := ui instVarNamed: 'draftAttachments'.
+ check value: (attachments visibility class = BlVisibility gone class
+  and: [ (ui instVarNamed: 'composerPane') children first == attachments ])
+  value: 'the attachment strip is above the editor and takes no space when empty'.
+ check value: ((ui instVarNamed: 'placeholderLabel') parent == (ui instVarNamed: 'input') parent)
+  value: 'the placeholder moves down with the editor when files are added'.
+ drafts addAll: #('D:\fixture\会议记录和需要补充说明的事项及后续安排.pdf'
+  'D:\fixture\截图.png' 'D:\fixture\提纲.md' 'D:\fixture\附录.docx' 'D:\fixture\图表.xlsx' 'D:\fixture\笔记.txt').
+ ui layoutComposerForWidth: 330.
+ row := attachments children first.
+ label := row children first children first text asString.
+ check value: ((label includesSubstring: '…') and: [ label endsWith: '.pdf' ])
+  value: 'long file names are shortened while keeping the extension'.
+ more := row childNamed: #loomDraftAttachmentMore.
+ check value: (attachments children size = 1 and: [
+  more label asString = ('+', (drafts size - row children size + 1) asString) ])
+  value: 'files that do not fit stay behind the correct plus count'.
+ more viewModel action value.
+ overflow := attachments childNamed: #loomDraftAttachmentList.
+ check value: (overflow viewModel items asArray = (drafts allButFirst: row children size - 1) asArray
+  and: [ overflow constraints vertical resizer size = (4 * 29) ])
+  value: 'expanded overflow lists each hidden file in a bounded scroll area'.
+ (attachments childNamed: #loomDraftAttachmentMore) viewModel action value.
+ check value: attachments children size = 1 value: 'the plus button also collapses the overflow'.
+ ui layoutComposerForWidth: 1120.
+ check value: (attachments children first children size = drafts size)
+  value: 'the attachment row shows more names when space is available'.
+ attachments children first children first children last viewModel action value.
+ check value: (drafts size = 5 and: [ drafts first endsWith: '截图.png' ])
+  value: 'removing a file updates the draft and shifts the row'.
+ drafts removeAll.
+ ui renderDraftAttachments.
+ check value: (attachments visibility class = BlVisibility gone class)
+  value: 'clearing the draft removes the strip from the layout'.
  text := '第一行', String cr, '第二行', String cr, '第三行'.
  editor := LMChatStyle readOnly: text size: 14.
  editor hExact: 400; forceLayout.

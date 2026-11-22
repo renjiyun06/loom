@@ -37,7 +37,7 @@ ui compile: 'activityExpandedFor: id
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
  | messagesChanged activityChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor prefix |
- layoutVersion = 9 ifFalse: [ ^ self ].
+ layoutVersion = 10 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
  lastPayload := payload.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
@@ -70,7 +70,7 @@ ui compile: 'bindActivityRow: row item: value
 ui compile: 'bindMessageRow: row item: value
  ^ [ row descriptor: value ] on: Error do: [ :error | row showRenderingError: error descriptor: value ]'.
 ui compile: 'build
- | body left composer footer draft splitter divider anchor historyFrame inputInset activityLimit |
+ | body left composer footer draft splitter divider anchor historyFrame inputInset editorPane activityLimit |
  voiceComposer ifNotNil: [ voiceComposer close ].
  anchor := self historyAnchor.
  draft := input ifNil: [ '''' ] ifNotNil: [ input text asString ].
@@ -112,22 +112,25 @@ ui compile: 'build
   geometry: (BlRoundedRectangleGeometry cornerRadius: 7); yourself.
  composerPane := composer.
  inputInset := 13.
+ draftAttachments ifNil: [ draftAttachments := OrderedCollection new ].
+ attachmentDraftPane := BrVerticalPane new id: #loomDraftAttachments; hMatchParent; vFitContent;
+  padding: (BlInsets top: 7 right: inputInset bottom: 0 left: inputInset); yourself.
+ attachmentDraftPane layout cellSpacing: 5.
+ composer addChild: attachmentDraftPane.
+ self renderDraftAttachments.
+ editorPane := BrVerticalPane new hMatchParent; vFitContent; yourself.
  input := self editor beEditable; vExact: self composerMinimumHeight; text: draft;
   padding: (BlInsets top: 11 right: inputInset bottom: 5 left: inputInset); yourself.
  self configureInputShortcuts.
  input editor addEventHandlerOn: BrTextEditorModifiedEvent do: [ :event | self resizeComposer ].
- composer addChild: input.
+ editorPane addChild: input.
  placeholderLabel := self label: ''描述你想做的事…'' size: 14.
  placeholderLabel aptitude foreground: (Color gray: 0.6).
  placeholderLabel constraintsDo: [ :c | c ignoreByLayout ].
  placeholderLabel position: inputInset@11.
  placeholderLabel addEventHandlerOn: BlClickEvent do: [ :event | input requestFocus. event consumed: true ].
- composer addChild: placeholderLabel.
- draftAttachments ifNil: [ draftAttachments := OrderedCollection new ].
- attachmentDraftPane := BrVerticalPane new hMatchParent; vFitContent; yourself.
- attachmentDraftPane padding: (BlInsets left: inputInset right: inputInset).
- composer addChild: attachmentDraftPane.
- self renderDraftAttachments.
+ editorPane addChild: placeholderLabel.
+ composer addChild: editorPane.
  footer := BrHorizontalPane new hMatchParent; vExact: 35; alignCenterLeft;
   padding: (BlInsets top: 0 right: 8 bottom: 7 left: inputInset); yourself.
  footer layout cellSpacing: 0.
@@ -166,7 +169,7 @@ ui compile: 'build
  body addChildren: { left. activityPane. splitter }. root addChild: body.
  self updateResponsiveGeometry.
  space root addChild: root.
- lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 9. pendingAnchor := anchor.
+ lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 10. pendingAnchor := anchor.
  self layoutComposerForWidth: left width.
  self refresh.
  ^ self'.
@@ -373,11 +376,17 @@ ui compile: 'hostWorld
 ui compile: 'isOpen ^ self hostWorld notNil'.
 ui compile: 'label: text size: size ^ LMChatStyle label: text size: size'.
 ui compile: 'layoutComposerForWidth: width
- | inset margin |
+ | inset margin attachmentWidth data |
  composerPane ifNil: [ ^ self ].
  inset := LMChatStyle readingInsetFor: width viewport: (self viewportWidth ifNil: [ width ]) padding: 18 medium: 16 narrow: 12.
  margin := BlInsets top: 6 right: inset bottom: 11 left: inset.
  composerPane margin = margin ifFalse: [ composerPane margin: margin ].
+ attachmentWidth := (width - margin left - margin right
+  - attachmentDraftPane padding left - attachmentDraftPane padding right) floor.
+ data := attachmentDraftPane userData.
+ (attachmentWidth > 0 and: [ (data at: #width ifAbsent: [ nil ]) ~= attachmentWidth ]) ifTrue: [
+  data at: #width put: attachmentWidth.
+  draftAttachments ifNotEmpty: [ self renderDraftAttachments ] ].
  self resizeComposer'.
 ui compile: 'messageSource: value for: id
  messageSourceStates ifNil: [ messageSourceStates := Dictionary new ].
@@ -557,17 +566,89 @@ ui compile: 'runCodexSetting: operation notice: notice completed: message transi
     action: [ notice text asString = statusText ifTrue: [ notice text: '''' ] ]; yourself) ] ]
  ] fork'.
 ui compile: 'renderDraftAttachments
+ | data width total gap limit moreWidth visible used chipWidth name row hidden expanded more |
+ data := attachmentDraftPane userData.
  attachmentDraftPane removeChildren.
- draftAttachments do: [ :path |
-  | row name |
-  row := BrHorizontalPane new hMatchParent; vExact: 26; alignCenterLeft; yourself.
-  name := path asFileReference basename.
-  row addChild: ((self label: name size: 12) hMatchParent; yourself).
-  row addChild: (LMChatStyle iconElementButton: (LMIcons iconNamed: ''x'')
+ draftAttachments ifEmpty: [
+  attachmentDraftPane visibility: BlVisibility gone.
+  data removeKey: #expanded ifAbsent: [ ].
+  ^ self ].
+ attachmentDraftPane visibility: BlVisibility visible.
+ width := data at: #width ifAbsent: [ 260 ].
+ total := draftAttachments size.
+ gap := 6.
+ moreWidth := (LMChatStyle measureLabel: ''+'', total asString size: 13) ceiling + 18.
+ limit := 212 min: width.
+ total > 1 ifTrue: [ limit := limit min: (width - moreWidth - gap) ].
+ visible := OrderedCollection new.
+ used := 0.
+ [ visible size < total and: [ limit >= 54 and: [
+   name := (draftAttachments at: visible size + 1) asFileReference basename.
+   chipWidth := ((LMChatStyle measureLabel: name size: 12) ceiling + 34) min: limit.
+   used + chipWidth <= width ] ] ] whileTrue: [
+  visible add: chipWidth.
+  used := used + chipWidth + gap ].
+ visible size < total ifTrue: [
+  [ visible notEmpty and: [ used + moreWidth > width ] ] whileTrue: [
+   used := used - visible removeLast - gap ] ].
+ row := BrHorizontalPane new id: #loomDraftAttachmentRow; hMatchParent; vExact: 26; alignCenterLeft; yourself.
+ row layout cellSpacing: 0.
+ visible withIndexDo: [ :eachWidth :index |
+  | chip |
+  chip := self draftAttachment: (draftAttachments at: index) width: eachWidth.
+  index > 1 ifTrue: [ chip margin: (BlInsets left: gap) ].
+  row addChild: chip ].
+ attachmentDraftPane addChild: row.
+ hidden := total - visible size.
+ hidden = 0 ifTrue: [ data removeKey: #expanded ifAbsent: [ ]. ^ self ].
+ expanded := data at: #expanded ifAbsent: [ false ].
+ more := LMChatStyle button: ''+'', hidden asString action: [
+  data at: #expanded put: expanded not.
+  self renderDraftAttachments.
+  (attachmentDraftPane childNamed: #loomDraftAttachmentMore) requestFocus ]
+  foreground: (Color gray: 0.24) background: (Color gray: 0.95).
+ more id: #loomDraftAttachmentMore; hExact: (moreWidth min: width); vExact: 26;
+  geometry: (BlRoundedRectangleGeometry cornerRadius: 5);
+  addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [
+   self label: (expanded ifTrue: [ ''收起附件'' ] ifFalse: [ ''查看其余附件'' ]) size: 12 ]).
+ visible ifNotEmpty: [ more margin: (BlInsets left: gap) ].
+ row addChild: more.
+ expanded ifTrue: [
+  attachmentDraftPane addChild: (self draftAttachmentList: (draftAttachments allButFirst: visible size) width: width) ]'.
+ui compile: 'draftAttachment: path width: width
+ | chip name caption label remove |
+ name := path asFileReference basename.
+ caption := self draftAttachmentName: name at: width - 34.
+ chip := BrHorizontalPane new hExact: width; vExact: 26; alignCenterLeft;
+  padding: (BlInsets left: 8 right: 3);
+  background: (Color gray: 0.95); geometry: (BlRoundedRectangleGeometry cornerRadius: 5); yourself.
+ label := (self label: caption size: 12) hMatchParent; yourself.
+ caption = name ifFalse: [
+  label addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self label: name size: 12 ]) ].
+ remove := (LMChatStyle iconElementButton: (LMIcons iconNamed: ''x'' size: 12 color: (Color gray: 0.46))
    title: ''移除附件'' action: [
     composerBusy = true ifFalse: [
-     draftAttachments remove: path ifAbsent: [ ]. self renderDraftAttachments ] ]).
-  attachmentDraftPane addChild: row ]'.
+     draftAttachments remove: path ifAbsent: [ ].
+     self renderDraftAttachments.
+     input requestFocus ] ]) hExact: 22; vExact: 22; yourself.
+ chip addChildren: { label. remove }.
+ ^ chip'.
+ui compile: 'draftAttachmentName: name at: width
+ | dot extension extensionWidth |
+ (LMChatStyle measureLabel: name size: 12) <= width ifTrue: [ ^ name ].
+ dot := name lastIndexOf: $..
+ (dot <= 1 or: [ dot = name size ]) ifTrue: [ ^ LMChatStyle ellipsize: name at: width size: 12 ].
+ extension := name allButFirst: dot - 1.
+ extensionWidth := (LMChatStyle measureLabel: extension size: 12) ceiling.
+ ((LMChatStyle measureLabel: ''…'' size: 12) + extensionWidth) > width ifTrue: [
+  ^ LMChatStyle ellipsize: name at: width size: 12 ].
+ ^ (LMChatStyle ellipsize: (name first: dot - 1) at: width - extensionWidth size: 12), extension'.
+ui compile: 'draftAttachmentList: paths width: width
+ ^ BrSimpleList new id: #loomDraftAttachmentList; hMatchParent; vExact: (paths size min: 4) * 29;
+  itemStencil: [ BrHorizontalPane new hMatchParent; vExact: 29; alignCenterLeft; yourself ];
+  itemDataBinder: [ :row :path :index |
+   row removeChildren; addChild: (self draftAttachment: path width: (width - 12 max: 54)) ];
+  items: paths; yourself'.
 ui compile: 'pickAttachments
  composerBusy = true ifTrue: [ ^ self ].
  composerBusy := true.
@@ -617,13 +698,13 @@ ui compile: 'toggleRecordingPlayback: audioId
     notice := error messageText. self defer: [ self voiceNotice: notice ] ]
  ] ensure: [ voicePlaybackPending := false ] ] fork'.
 ui compile: 'shouldRestore
- ^ self isOpen or: [ layoutVersion ~= 9 and: [ space notNil and: [ space isOpened ] ] ]'.
+ ^ self isOpen or: [ layoutVersion ~= 10 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
  | world model |
  self stopRefreshing.
  (space notNil and: [ space isOpened ]) ifTrue: [
   (BlParallelUniverse forHost: space host class) closeSpaceSynchronously: space ].
- (layoutVersion ~= 9 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
+ (layoutVersion ~= 10 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
  world := self hostWorld ifNil: [
   GtWorld allOpenWorlds detect: [ :each | each host isKindOf: BlWinitHost ]
    ifNone: [ self error: ''请先打开 GT 主界面'' ] ].
@@ -770,7 +851,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 25'.
+ui class compile: 'featureVersion ^ 26'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

@@ -11,7 +11,7 @@ controls compile: 'buildFor: conversationView
   margin: (BlInsets left: 5); yourself.
  entry := LMChatStyle replyAction: #recordVoice icon: ''mic'' action: [ self start ].
  entry label: ''开始录音''.
- strip := BrHorizontalPane new id: #recordingStrip; hFitContent; vExact: 28; alignCenter;
+ strip := BrHorizontalPane new id: #recordingStrip; hFitContent; vExact: 28; alignCenterLeft;
   padding: (BlInsets left: 3 right: 3);
   border: (BlBorder paint: (Color gray: 0.86) width: 1);
   geometry: (BlRoundedRectangleGeometry cornerRadius: 5); yourself.
@@ -30,7 +30,7 @@ controls compile: 'buildFor: conversationView
  ^ view'.
 controls compile: 'waveform
  | pane bar |
- pane := BrHorizontalPane new hFitContent; vExact: 22; alignCenter; yourself.
+ pane := BrHorizontalPane new hFitContent; vExact: 22; alignCenterLeft; yourself.
  pane layout cellSpacing: 2.
  12 timesRepeat: [
   bar := BlElement new background: (Color gray: 0.62);

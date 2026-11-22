@@ -1,6 +1,6 @@
 "Visual checks for the compact native conversation interface."
 | report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label
-  file name attachment caption lines longName tooltip draftImage draftFile space |
+  file name attachment caption lines longName tooltip draftImage draftFile space voice voiceView strip leftInset rightInset |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
 [
@@ -9,6 +9,23 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  ui layoutComposerForWidth: 1120.
  check value: ((ui instVarNamed: 'composerPane') margin left - 38) abs < 1
   value: 'composer uses the wider centered reading width'.
+ voice := LMVoiceComposer new.
+ voiceView := voice buildFor: ui.
+ voice instVarNamed: #phase put: #recording.
+ voice refreshControls.
+ voiceView forceLayout; forceLayout.
+ strip := voiceView childNamed: #recordingStrip.
+ leftInset := strip children first boundsInParent left.
+ rightInset := strip width - strip children last boundsInParent right.
+ check value: (leftInset > 0 and: [ (leftInset - rightInset) abs < 0.01 ])
+  value: 'cancel and confirm have equal space to the recording strip border'.
+ check value: (strip children third boundsInParent center x - (strip width / 2)) abs < 0.01
+  value: 'pause is centered in the recording strip'.
+ { strip children second. strip children fourth } do: [ :wave |
+  leftInset := wave children first boundsInParent left.
+  rightInset := wave width - wave children last boundsInParent right.
+  check value: (leftInset >= 0 and: [ (leftInset - rightInset) abs < 0.01 ])
+   value: 'the waveform fits inside its pane with equal padding' ].
  (ui instVarNamed: 'input') text: '输入测试'.
  ui resizeComposer.
  check value: ((ui instVarNamed: 'placeholderLabel') visibility class = BlVisibility gone class)

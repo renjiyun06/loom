@@ -1,5 +1,5 @@
 "Native conversation regression. Never invokes a model or executes Markdown code."
-| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider space footer send attach hovered focus applyStyle |
+| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle |
 report := Dictionary new.
 checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
@@ -91,8 +91,13 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: divider background paint color = (Color gray: 0.66)
   value: 'live splitter handles mouse enter'.
  splitter dispatchEvent: (BlMouseLeaveEvent new target: splitter; yourself).
- check value: divider background paint color = (Color gray: 0.91)
-  value: 'live splitter handles mouse leave'.
+ check value: divider background isTransparent
+  value: 'the divider is hidden after the mouse leaves'.
+ pane := LoomConversationWindow instVarNamed: #activityPane.
+ check value: (pane border isVisible not and: [ (pane childNamed: #loomActivityToolbar) border isVisible not ])
+  value: 'the activity pane and toolbar have no side borders'.
+ check value: (pane childNamed: #loomActivityToolbarRule) height = 1
+  value: 'the toolbar keeps its horizontal rule'.
  model := LMConversationStream new requestId: 'interrupted-test'; yourself.
  model acceptEnvelope: (Dictionary new at: 'direction' put: 'server'; at: 'at' put: DateAndTime now asString;
   at: 'message' put: (Dictionary new at: 'method' put: 'item/started';

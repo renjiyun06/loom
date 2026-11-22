@@ -147,12 +147,12 @@ ui compile: 'build
  activityPane := self buildActivityPane.
  splitter := BlElement new layout: BlFrameLayout new; mouseCursor: BlResizeColumnCursor new;
   constraintsDo: [ :c | c horizontal exact: 12. c vertical matchParent. c frame horizontal alignRight ]; yourself.
- divider := BlElement new background: (Color gray: 0.91);
+ divider := BlElement new background: Color transparent;
   constraintsDo: [ :c | c horizontal exact: 1. c vertical matchParent. c frame horizontal alignCenter ]; yourself.
  splitter addChild: divider.
  splitterElement := splitter.
  splitter addEventHandlerOn: BlMouseEnterEvent do: [ :event | divider background: (Color gray: 0.66) ].
- splitter addEventHandlerOn: BlMouseLeaveEvent do: [ :event | divider background: (Color gray: 0.91) ].
+ splitter addEventHandlerOn: BlMouseLeaveEvent do: [ :event | divider background: Color transparent ].
  splitter addEventHandlerOn: BlDragStartEvent do: [ :event |
   splitter userData at: #resizeAnchor put: { event position x. activityPane width }.
   event consumed: true ].
@@ -196,13 +196,12 @@ ui compile: 'buildActivityPane
  empty margin: (BlInsets top: 49).
  empty constraintsDo: [ :c | c frame horizontal alignCenter ].
  activity userData at: #emptyLabel put: empty.
- pane addChildren: { activity. empty. self activityToolbar }.
+ pane addChildren: { activity. empty. self activityToolbar. self activityToolbarRule }.
  ^ pane'.
 ui compile: 'activityToolbar
  | bar notice rotate settings |
  bar := BrHorizontalPane new id: #loomActivityToolbar; hMatchParent; vExact: 33; alignCenterLeft;
   padding: (BlInsets left: 12 right: 12);
-  border: (BlBorder paint: (Color gray: 0.90) width: 1);
   constraintsDo: [ :c | c frame vertical alignTop ]; yourself.
  bar layout cellSpacing: 4.
  notice := (self label: '''' size: 12) hMatchParent; yourself.
@@ -213,6 +212,11 @@ ui compile: 'activityToolbar
  settings := LMChatStyle replyAction: #loomCodexSettings icon: ''settings'' action: [ self showCodexSettings ].
  bar addChildren: { notice. rotate. settings }.
  ^ bar'.
+ui compile: 'activityToolbarRule
+ ^ BlElement new id: #loomActivityToolbarRule; background: (Color gray: 0.90);
+  margin: (BlInsets top: 32);
+  constraintsDo: [ :c | c horizontal matchParent. c vertical exact: 1. c frame vertical alignTop ];
+  yourself'.
 ui compile: 'button: title action: block ^ LMChatStyle button: title action: block'.
 ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
@@ -846,7 +850,6 @@ ui compile: 'updateResponsiveGeometry
  conversationPane margin = margin ifFalse: [ conversationPane margin: margin ].
  (activityPane width - desired) abs > 0.5 ifTrue: [ activityPane hExact: desired ].
  activityPane visibility: (visible ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
- activityPane border: (BlBorder paint: (Color gray: 0.89) width: (narrow ifTrue: [ 1 ] ifFalse: [ 0 ])).
  splitterElement visibility: ((visible and: [ narrow not ]) ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  margin := BlInsets right: (desired - 4 max: 0).
  splitterElement margin = margin ifFalse: [ splitterElement margin: margin ]'.

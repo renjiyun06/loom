@@ -1,5 +1,6 @@
 "Visual checks for the compact native conversation interface."
-| report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label |
+| report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label
+  file name attachment caption lines longName tooltip |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
 [
@@ -63,6 +64,38 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: body parent width < 120 value: 'short user bubbles hug their content'.
  check value: ((card instVarNamed: 'userMetadataLabel') text asString includes: $:)
   value: 'user metadata shows local message time'.
+ name := '0123456789abcdef0123456789abcdef.jpg'.
+ file := Dictionary new at: 'name' put: name; at: 'relativePath' put: 'conversation.sqlite';
+  at: 'image' put: true; yourself.
+ entry := Dictionary new at: 'id' put: 'attachment-card'; at: 'role' put: 'user'; at: 'text' put: '你好';
+  at: 'attachments' put: { file }; yourself.
+ card descriptor: entry; forceLayout; forceLayout.
+ attachment := card childNamed: #loomAttachmentCard.
+ caption := attachment children second.
+ check value: (caption children size = 1 and: [ caption children first text asString = name ])
+  value: 'the attachment card shows the entire original name at normal width'.
+ check value: ((card instVarNamed: 'body') parent width < 120 and: [ attachment states isEnabled ])
+  value: 'the clickable attachment has its own width beside a compact text bubble'.
+ card hExact: 240; forceLayout; forceLayout.
+ lines := caption children collect: [ :child | child text asString ].
+ check value: (lines size = 2 and: [ ('' join: lines) = name ])
+  value: 'a narrow attachment card wraps an uninterrupted file name across two lines'.
+ longName := (String new: 180 withAll: $a), '.pdf'.
+ lines := card attachmentNameLines: longName at: 132.
+ check value: (lines size = 2 and: [ (lines second beginsWith: '…') and: [ lines second endsWith: '.pdf' ] ])
+  value: 'ellipsized attachment names preserve both the beginning and extension'.
+ tooltip := card attachmentTooltipFor: longName.
+ check value: ('' join: (tooltip children collect: [ :child | child text asString ])) = longName
+  value: 'the attachment tooltip shows the complete original name'.
+ card descriptor: (entry copy at: 'text' put: ''; yourself); forceLayout.
+ check value: ((card instVarNamed: 'body') parent visibility class = BlVisibility gone class)
+  value: 'attachment-only messages omit the empty text bubble'.
+ card descriptor: (entry copy at: 'attachments' put: {
+  file copy at: 'relativePath' put: 'absent-native-attachment-fixture.pdf'; yourself }; yourself); forceLayout.
+ attachment := card childNamed: #loomAttachmentCard.
+ check value: (attachment states isDisabled and: [
+  attachment children second children last text asString = '附件找不到' ])
+  value: 'a missing attachment has a disabled card and visible status'.
  entry := Dictionary new at: 'id' put: 'visual-tool'; at: 'type' put: 'dynamicToolCall';
   at: 'tool' put: 'pharo_eval'; at: 'status' put: 'completed'; at: 'success' put: true;
   at: 'arguments' put: (Dictionary new at: 'code' put: '1 + 1'; yourself); at: 'durationMs' put: 12; yourself.

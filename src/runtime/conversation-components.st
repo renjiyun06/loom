@@ -455,24 +455,23 @@ cls compile: 'text: markdown
  specs := next.
  ^ self'.
 cls := (BrVerticalPane << #LMConversationMessageView slots: #(#controller #descriptor #body #bodyHolder #stateLabel #actions #rawShown #userMetadataLabel #voiceButton #voiceDuration #voiceStatus); package: 'Loom-Interface') install.
+(cls includesSelector: #thumbnailFor:) ifTrue: [ cls removeSelector: #thumbnailFor: ].
 cls compile: 'build
- | bubble row spacer role |
+ | bubble content role |
  role := descriptor at: ''role''.
  role = ''user'' ifTrue: [
-  row := BrHorizontalPane new hMatchParent; vFitContent; yourself.
-  spacer := BrHorizontalPane new hMatchParent; vExact: 1; yourself.
-  spacer constraintsDo: [ :c | c linear weight: 1 ].
-  bubble := BrVerticalPane new hMatchParent; vFitContent;
+  content := BrVerticalPane new hMatchParent; vFitContent; alignTopRight; yourself.
+  bubble := BrVerticalPane new hExact: 200; vFitContent;
   padding: (BlInsets top: 9 right: 13 bottom: 9 left: 13);
    background: (Color gray: 0.965);
    border: (BlBorder paint: (Color gray: 0.9) width: 1);
    geometry: (BlRoundedRectangleGeometry cornerRadius: 8); yourself.
-  bubble hExact: 200.
   (descriptor includesKey: ''audio'') ifTrue: [ self addRecordingPlayerTo: bubble ].
   body := LMChatStyle readOnly: (descriptor at: ''text'') trimBoth size: 14.
   bubble addChild: body.
-  self addAttachmentsTo: bubble.
-  row addChildren: { spacer. bubble }. self addChild: row.
+  content addChild: bubble.
+  self addAttachmentsTo: content.
+  self addChild: content.
   userMetadataLabel := (LMChatStyle label: '''' size: 12) hMatchParent; alignCenterRight; yourself.
   self addChild: userMetadataLabel.
   ^ self ].
@@ -483,32 +482,67 @@ cls compile: 'build
  bodyHolder addChild: body. self addChild: bodyHolder.
  actions := self replyActions.
  self addChild: actions'.
-cls compile: 'addAttachmentsTo: bubble
+cls compile: 'addAttachmentsTo: content
  (descriptor at: ''attachments'' ifAbsent: [ #() ]) do: [ :attachment |
-  | name file thumb |
+  | name file card icon caption available |
   name := attachment at: ''name''.
   file := LoomConversation fileForAttachment: attachment.
-  file exists
-   ifTrue: [
-    (attachment at: ''image'' ifAbsent: [ false ]) ifTrue: [
-     thumb := self thumbnailFor: file.
-     thumb ifNotNil: [ bubble addChild: thumb ] ].
-    bubble addChild: ((LMChatStyle button: name action: [ self openAttachment: file ]
-     foreground: (Color gray: 0.22) background: (Color gray: 0.92))
-     hMatchParent; vExact: 26; margin: (BlInsets top: 4); yourself) ]
-   ifFalse: [ bubble addChild: (LMChatStyle label: name, ''（附件找不到）'' size: 12) ] ]'.
-cls compile: 'thumbnailFor: file
- | form scale extent element |
- [ form := Form fromFileNamed: file.
-   scale := ((210 / form width) min: (140 / form height)) min: 1.
-   extent := (form extent * scale) rounded max: 1@1.
-   element := BlElement new size: extent;
-    margin: (BlInsets top: 5);
-    background: (BlImageBackground image: (form scaledToSize: extent)); yourself.
-   element addEventHandlerOn: BlClickEvent do: [ :event |
-    event consumed: true. self openAttachment: file ].
-   ^ element
- ] on: Error do: [ :error | ^ nil ]'.
+  available := file exists.
+  icon := LMIcons iconNamed: ((attachment at: ''image'' ifAbsent: [ false ])
+    ifTrue: [ ''image'' ] ifFalse: [ ''file'' ]) size: 18 color: (Color gray: 0.40).
+  icon margin: (BlInsets right: 8).
+  caption := BrVerticalPane new hMatchParent; vFitContent; alignTopLeft; yourself.
+  card := BrButton new id: #loomAttachmentCard; aptitude: BrGlamorousButtonLayoutAptitude new;
+   label: name; beFocusable; alignCenterLeft;
+   padding: (BlInsets left: 12 right: 12);
+   margin: (BlInsets top: 4);
+   geometry: (BlRoundedRectangleGeometry cornerRadius: 7);
+   action: [ self openAttachment: file ]; enabled: available; yourself.
+  card addAptitude: (BrStyleCommonAptitude new
+   default: [ :style | style background: (Color gray: 0.965);
+    border: (BlBorder paint: (Color gray: 0.9) width: 1) ];
+   hovered: [ :style | style background: (Color gray: 0.93) ];
+   focused: [ :style | style border: (BlBorder paint: (Color gray: 0.55) width: 1) ]).
+  card addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self attachmentTooltipFor: name ]).
+  card addChildren: { icon. caption }.
+  card userData at: #preferredWidth put: ((LMChatStyle measureLabel: name size: 13) ceiling + 52 max: 112).
+  self sizeAttachmentCard: card within: 380.
+  content addChild: card ]'.
+cls compile: 'sizeAttachmentCard: card within: limit
+ | data width caption lines |
+ data := card userData.
+ width := ((limit min: 380) min: (data at: #preferredWidth ifAbsent: [ ^ self ])) floor.
+ (data at: #width ifAbsent: [ nil ]) = width ifTrue: [ ^ self ].
+ data at: #width put: width.
+ caption := card children second.
+ caption removeChildren.
+ lines := self attachmentNameLines: card label asString at: width - 52.
+ lines do: [ :line | caption addChild: (LMChatStyle label: line size: 13) ].
+ card states isDisabled ifTrue: [ caption addChild: (LMChatStyle label: ''附件找不到'' size: 12) ].
+ card hExact: width; vExact: 18 + (caption children size * 20)'.
+cls compile: 'attachmentNameLines: name at: width
+ | first rest low high middle |
+ first := LMChatStyle ellipsize: name at: width size: 13.
+ first = name ifTrue: [ ^ { name } ].
+ first := first allButLast.
+ rest := name allButFirst: first size.
+ (LMChatStyle measureLabel: rest size: 13) <= width ifTrue: [ ^ { first. rest } ].
+ low := 0. high := rest size.
+ [ low < high ] whileTrue: [
+  middle := (low + high + 1) // 2.
+  (LMChatStyle measureLabel: ''…'', (rest last: middle) size: 13) <= width
+   ifTrue: [ low := middle ] ifFalse: [ high := middle - 1 ] ].
+ ^ { first. ''…'', (rest last: low) }'.
+cls compile: 'attachmentTooltipFor: name
+ | pane remaining line |
+ pane := BrVerticalPane new hFitContent; vFitContent; yourself.
+ remaining := name.
+ [ remaining notEmpty ] whileTrue: [
+  line := LMChatStyle ellipsize: remaining at: 320 size: 12.
+  line = remaining ifFalse: [ line := line allButLast ].
+  pane addChild: (LMChatStyle label: line size: 12).
+  remaining := remaining allButFirst: line size ].
+ ^ pane'.
 cls compile: 'openAttachment: file
  file exists
   ifTrue: [ WebBrowser openOn: file fullName ]
@@ -564,7 +598,7 @@ cls compile: 'flashCopyFeedbackOn: button
  button userData at: #copyFeedback put: timer.
  button enqueueTask: timer'.
 cls compile: 'descriptor: value
- | rebuild role caption |
+ | rebuild role caption text attachmentOnly |
  rebuild := descriptor isNil or: [
   (descriptor at: ''id'') ~= (value at: ''id'') or: [
    (descriptor at: ''role'') ~= (value at: ''role'') or: [
@@ -576,9 +610,11 @@ cls compile: 'descriptor: value
  descriptor := value.
  role = ''user''
   ifTrue: [
-   body text: (LMChatStyle formattedText: (value at: ''text'') trimBoth size: 14).
-   body visibility: (((value includesKey: ''attachments'') and: [ (value at: ''text'') trimBoth isEmpty ])
-    ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
+   text := (value at: ''text'') trimBoth.
+   body text: (LMChatStyle formattedText: text size: 14).
+   attachmentOnly := text isEmpty and: [ (value includesKey: ''audio'') not
+    and: [ (value at: ''attachments'' ifAbsent: [ #() ]) notEmpty ] ].
+   body parent visibility: (attachmentOnly ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
    value at: ''audio'' ifPresent: [ :audio | self renderRecording: audio ].
    caption := self userMetadata.
    userMetadataLabel text: caption;
@@ -638,11 +674,12 @@ cls compile: 'updateGeometry
    largest max: (LMChatStyle measureLabel: line size: 14) ].
   descriptor at: ''audio'' ifPresent: [ :audio |
    ideal := (ideal max: 116) max: (LMChatStyle measureLabel: (audio at: ''status'') size: 12) ].
-  (descriptor includesKey: ''attachments'') ifTrue: [ ideal := ideal max: 210 ].
   limit := (self width - (inset * 2)) * (viewport <= 800 ifTrue: [ 0.94 ] ifFalse: [ 0.88 ]).
   target := ((ideal ceiling + 37) min: limit) max: 54.
   bubble := body parent.
-  (bubble width - target) abs > 0.5 ifTrue: [ bubble hExact: target ] ]'.
+  (bubble width - target) abs > 0.5 ifTrue: [ bubble hExact: target ].
+  bubble parent children do: [ :child |
+   child == bubble ifFalse: [ self sizeAttachmentCard: child within: limit ] ] ]'.
 cls compile: 'userMetadata
  | stamp date hour minute |
  stamp := descriptor at: ''createdAt'' ifAbsent: [ '''' ].

@@ -9,25 +9,22 @@ current := transport active.
  | id request key |
  id := file basenameWithoutExtension.
  ((current isNil or: [ (current at: ''requestId'') ~= id ]) and: [
-  (LoomIPC / ''codex-responses'' / file basename) exists not and: [
-  (LoomIPC / ''codex-cancel'' / file basename) exists not ] ]) ifTrue: [
+  (LoomIPC / ''codex-responses'' / file basename) exists not ]) ifTrue: [
   request := [ STONJSON fromString: file contents ] on: Error do: [ :error | Dictionary new ].
   ((request at: ''id'' ifAbsent: [ nil ]) = id and: [ (request at: ''action'' ifAbsent: [ nil ]) = ''ask'' ]) ifTrue: [
    key := request at: ''clientKey'' ifAbsent: [ nil ].
    key ifNotNil: [ (listing at: key ifAbsentPut: [ OrderedCollection new ]) add: id ] ] ] ].
 ^ listing'.
 host compile: 'runningStateFor: record pending: pending
- | current queued id stoppingCall |
+ | current queued |
 current := transport active.
 (current notNil and: [ (current at: ''clientKey'') ~= (record at: ''clientKey'') ]) ifTrue: [ current := nil ].
 queued := (pending at: (record at: ''clientKey'') ifAbsent: [ #() ]) asArray.
 record at: ''queued'' put: queued.
 current ifNil: [
  ^ record at: ''call'' put: nil; at: ''runState'' put: (queued ifEmpty: [ ''idle'' ] ifNotEmpty: [ ''queued'' ]); yourself ].
-id := current at: ''requestId''.
-stoppingCall := (LoomIPC / ''codex-cancel'' / (id, ''.json'')) exists.
-^ record at: ''runState'' put: (stoppingCall ifTrue: [ ''stopping'' ] ifFalse: [ ''running'' ]);
- at: ''call'' put: (Dictionary new at: ''requestId'' put: id; at: ''threadId'' put: (current at: ''threadId'');
+^ record at: ''runState'' put: ''running'';
+ at: ''call'' put: (Dictionary new at: ''requestId'' put: (current at: ''requestId''); at: ''threadId'' put: (current at: ''threadId'');
   at: ''turnId'' put: (current at: ''turnId''); yourself); yourself'.
 host compile: 'control: request id: id
  | kind sessionId pending record |
@@ -42,16 +39,9 @@ record ifNil: [ self error: ''Loom session does not exist: '', sessionId ].
 record := self runningStateFor: record pending: pending.
 kind = ''show'' ifTrue: [ ^ record ].
 kind = ''rotate'' ifTrue: [
- (record at: ''runState'') = ''idle'' ifFalse: [ self error: ''Finish or stop the pending calls before switching the Codex session'' ].
+ (record at: ''runState'') = ''idle'' ifFalse: [ self error: ''Wait for pending calls to finish before switching the Codex session'' ].
  registry reset: (Dictionary new at: ''id'' put: id; at: ''action'' put: ''newConversation''; at: ''clientKey'' put: (record at: ''clientKey''); yourself).
  ^ self runningStateFor: (registry session: sessionId) pending: pending ].
-kind = ''stop'' ifTrue: [
- | ids call |
- ids := record at: ''queued''.
- call := record at: ''call''.
- call ifNotNil: [ ids := {call at: ''requestId''}, ids ].
- ids do: [ :requestId | LMPlatformTools writeJSON: Dictionary new to: LoomIPC / ''codex-cancel'' / (requestId, ''.json'') ].
- ^ Dictionary new at: ''id'' put: sessionId; at: ''cancelledRequests'' put: ids; yourself ].
 self error: ''Unknown Loom session command'''.
 host compile: 'pollSessions
  (self filesIn: ''session-requests'') do: [ :file |

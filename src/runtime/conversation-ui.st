@@ -16,12 +16,13 @@ textRunRenderer := (SkiaTextPainter >> #fillTextRun:withColor:strokeColor:) sour
  (Smalltalk globals at: #LMConversationMessageView) includesSelector: #addAttachmentsTo: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-components.st') contents ].
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-voice.st') contents.
-slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer #voicePlaybackPending #draftAttachments #attachmentDraftPane #composerBusy).
+slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer #voicePlaybackPending #draftAttachments #attachmentDraftPane #composerBusy).
 oldClass := Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ].
 oldView := Smalltalk globals at: #LoomConversationWindow ifAbsent: [ nil ].
 oldView ifNotNil: [ oldView stopRefreshing ].
 previousSlots := oldClass ifNil: [ #() ] ifNotNil: [ oldClass instVarNames collect: #asSymbol ].
 ui := (Object << #LMConversationUI slots: ((previousSlots reject: [ :each | slots includes: each ]), slots); package: 'Loom-Interface') install.
+(ui includesSelector: #cancelCurrentTurn) ifTrue: [ ui removeSelector: #cancelCurrentTurn ].
 ui compile: 'activityDetailMode: value for: id
  activityDetailModes ifNil: [ activityDetailModes := Dictionary new ].
  activityDetailModes at: id put: value'.
@@ -36,7 +37,7 @@ ui compile: 'activityExpandedFor: id
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
  | messagesChanged activityChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor prefix |
- layoutVersion = 8 ifFalse: [ ^ self ].
+ layoutVersion = 9 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
  lastPayload := payload.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
@@ -52,7 +53,6 @@ ui compile: 'applyUpdate: payload
  status text: (errorText ifNil: [
   (#(''等待消息'' ''已完成'' ''正在处理'') includes: (payload at: ''status''))
    ifTrue: [ ''Enter 发送 · Shift Enter 换行'' ] ifFalse: [ payload at: ''status'' ] ]).
- stopButton visibility: ((payload at: ''processing'') ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  self updateActivityEmpty.
  (messagesChanged and: [ followOutput not and: [ firstUpdate not ] ]) ifTrue: [
   history userData at: #newContent put: true. self updateFollowButton ].
@@ -133,11 +133,6 @@ ui compile: 'build
  footer layout cellSpacing: 0.
  status := (self label: ''Enter 发送 · Shift Enter 换行'' size: 12) hMatchParent; yourself.
  footer addChild: status.
- stopButton := LMChatStyle button: ''停止'' action: [ self cancelCurrentTurn ] foreground: (Color gray: 0.22) background: (Color gray: 0.97).
- stopButton margin: (BlInsets left: 5).
- stopButton border: (BlBorder paint: (Color gray: 0.84) width: 1); geometry: (BlRoundedRectangleGeometry cornerRadius: 4).
- stopButton visibility: BlVisibility gone.
- footer addChild: stopButton.
  voiceComposer := LMVoiceComposer new.
  footer addChild: (voiceComposer buildFor: self).
  footer addChild: (LMChatStyle iconElementButton: (LMIcons iconNamed: ''paperclip'')
@@ -171,7 +166,7 @@ ui compile: 'build
  body addChildren: { left. activityPane. splitter }. root addChild: body.
  self updateResponsiveGeometry.
  space root addChild: root.
- lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 8. pendingAnchor := anchor.
+ lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 9. pendingAnchor := anchor.
  self layoutComposerForWidth: left width.
  self refresh.
  ^ self'.
@@ -217,16 +212,6 @@ ui compile: 'activityToolbar
  bar addChildren: { notice. rotate. settings }.
  ^ bar'.
 ui compile: 'button: title action: block ^ LMChatStyle button: title action: block'.
-ui compile: 'cancelCurrentTurn
- | id file temporary |
- id := (LoomConversation instVarNamed: ''client'') activeRequestId.
- id ifNil: [ ^ self ].
- file := LoomIPC / ''codex-cancel'' / (id , ''.json'').
- file exists ifFalse: [
-  temporary := file parent / (id, ''.tmp'').
-  temporary binaryWriteStreamDo: [ :out | out nextPutAll: ''{}'' utf8Encoded; truncate: 2 ].
-  temporary renameTo: file basename ].
- status text: ''正在停止…'''.
 ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
@@ -632,13 +617,13 @@ ui compile: 'toggleRecordingPlayback: audioId
     notice := error messageText. self defer: [ self voiceNotice: notice ] ]
  ] ensure: [ voicePlaybackPending := false ] ] fork'.
 ui compile: 'shouldRestore
- ^ self isOpen or: [ layoutVersion ~= 8 and: [ space notNil and: [ space isOpened ] ] ]'.
+ ^ self isOpen or: [ layoutVersion ~= 9 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
  | world model |
  self stopRefreshing.
  (space notNil and: [ space isOpened ]) ifTrue: [
   (BlParallelUniverse forHost: space host class) closeSpaceSynchronously: space ].
- (layoutVersion ~= 8 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
+ (layoutVersion ~= 9 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
  world := self hostWorld ifNil: [
   GtWorld allOpenWorlds detect: [ :each | each host isKindOf: BlWinitHost ]
    ifNone: [ self error: ''请先打开 GT 主界面'' ] ].
@@ -785,7 +770,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 24'.
+ui class compile: 'featureVersion ^ 25'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

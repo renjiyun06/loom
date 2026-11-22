@@ -195,7 +195,7 @@ try {
      (page at: 'items') collect: [ :item | item at: 'type' ]
     `, 'direct-codex-activity');
     assert.deepEqual(activity, ['agentMessage', 'dynamicToolCall']);
-    const cancelled = await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'cancelled-call');
+    await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;
     while (!(running?.call?.turnId)) {
@@ -203,9 +203,14 @@ try {
       running = await gt("LoomSessions show: 'isolation-check'", 'model-pending');
       await sleep(200);
     }
-    const stopped = await gt("LoomSessions stop: 'isolation-check'", 'cancel-direct-codex');
-    assert.deepEqual(stopped.cancelledRequests, [running.call.requestId]);
-    assert.match((await cancelled()).error, /interrupted/);
+    assert.equal(running.runState, 'running');
+    assert.equal(await gt('(LoomSessions class includesSelector: #stop:) not', 'no-session-stop-selector'), true);
+    const stopError = await gt("[ LoomSessions command: 'stop' for: 'isolation-check' ] on: Error do: [ :error | error messageText ]",
+      'obsolete-session-command');
+    assert.match(stopError, /Unknown Loom session command/);
+    const stillRunning = await gt("LoomSessions show: 'isolation-check'", 'model-still-running');
+    assert.equal(stillRunning.call.requestId, running.call.requestId);
+    assert.equal(fs.existsSync(path.join(ipc, 'codex-cancel')), false);
     uncertain = randomUUID();
     await gt(`(LoomNativeCodexHost instVarNamed: #registry) beginCall:
      (Dictionary new at: 'id' put: '${uncertain}'; at: 'action' put: 'ask';

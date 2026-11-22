@@ -27,7 +27,7 @@ manager class compile: 'rotate: identifier
   ifFalse: [ LoomSessionClients at: id ifAbsent: [ nil ] ].
  client ifNotNil: [ client synchronizeThreadId: (record at: ''threadId'') ].
  ^ record'.
-manager class compile: 'stop: id ^ self command: ''stop'' for: (self normalizedId: id)'.
+(manager class includesSelector: #stop:) ifTrue: [ manager class removeSelector: #stop: ].
 manager class compile: 'command: action for: sessionId
  | state instance name temporary responseFile deadline response |
  state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.

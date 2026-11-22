@@ -11,7 +11,7 @@ options := Dictionary new.
 pathConfig keysAndValuesDo: [ :key :value | options at: key put: (ExperimentRoot resolve: value) ].
 gui := config at: ''gui'' ifAbsent: [ false ].
 Smalltalk globals at: #LoomGuiEnabled put: gui.
-#(''codex-requests'' ''codex-responses'' ''codex-cancel'' ''activity-queries'' ''session-requests'' ''session-responses'' ''native-actions'' ''native-results'')
+#(''codex-requests'' ''codex-responses'' ''activity-queries'' ''session-requests'' ''session-responses'' ''native-actions'' ''native-results'')
  do: [ :name | (LoomIPC / name) ensureCreateDirectory ].
 views := Dictionary new.
 state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
@@ -103,8 +103,6 @@ action = ''configure'' ifTrue: [
 action = ''newConversation'' ifTrue: [ ^ registry reset: request ].
 action = ''status'' ifTrue: [
  ^ (registry ensureClient: key) at: ''id'' put: id; at: ''ok'' put: true; at: ''text'' put: ''''; yourself ].
-(LoomIPC / ''codex-cancel'' / (id, ''.json'')) exists ifTrue: [
- ^ self failed: ''Request cancelled before execution'' request: id ].
 previous := registry callResult: id.
 previous ifNotNil: [ ^ previous ].
 registry beginCall: request.
@@ -127,7 +125,7 @@ host compile: 'runControls
   (LoomIPC / ''stop.json'') exists ifTrue: [ self scheduleShutdownSaving: true native: nil ].
   active := transport active.
   active ifNotNil: [
-   ((stopping = true or: [ (LoomIPC / ''codex-cancel'' / ((active at: ''requestId''), ''.json'')) exists ])
+   (stopping = true
     and: [ (active at: ''turnId'') notNil and: [ (active at: ''interruptionSent'' ifAbsent: [ false ]) not ] ]) ifTrue: [
      [ [ transport interrupt ] on: Error do: [ :ignored | nil ] ] fork ] ].
   #(pollSessions pollActivity pollNativeActions) do: [ :selector |

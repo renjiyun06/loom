@@ -13,7 +13,7 @@ clientClass compile: 'threadId ^ threadId'.
 clientClass compile: 'lastResponse ^ lastResponse'.
 clientClass compile: 'timeoutSeconds: seconds
  "Compatibility entry point. Model turns have no duration limit."
- seconds ifNotNil: [ self error: ''Model turns have no duration limit; use explicit cancellation'' ].
+ seconds ifNotNil: [ self error: ''Model turns have no duration limit'' ].
  timeoutSeconds := nil'.
 clientClass compile: 'newConversation
  self assertIndependentProcess.

@@ -3,6 +3,7 @@
 ui := (Object << #LMSessionManagerUI
  slots: #(space world list detail notice identifier records selected poller busy);
  package: 'Loom-Interface') install.
+(ui includesSelector: #stop:) ifTrue: [ ui removeSelector: #stop: ].
 ui class compile: 'open
  | view |
  view := Smalltalk globals at: #LoomSessionManagerWindow ifAbsentPut: [ self new ].
@@ -114,15 +115,11 @@ ui compile: 'renderDetail
  queued := record at: ''queued''.
  queued ifNotEmpty: [
   detail addChild: (LMChatStyle label: ''排队调用  '', queued size asString size: 12) ].
- actions := BrHorizontalPane new hMatchParent; vExact: 40; alignCenterLeft; yourself.
- actions layout cellSpacing: 8.
  running = ''idle'' ifTrue: [
+  actions := BrHorizontalPane new hMatchParent; vExact: 40; alignCenterLeft; yourself.
   actions addChild: ((LMChatStyle button: ''切换底层会话'' action: [ self rotate: (record at: ''id'') ])
-   id: #loomRotateSession; yourself) ].
- (#(''queued'' ''running'') includes: running) ifTrue: [
-  actions addChild: ((LMChatStyle button: ''停止'' action: [ self stop: (record at: ''id'') ])
-   id: #loomStopSession; yourself) ].
- actions children ifNotEmpty: [ detail addChild: actions ].
+   id: #loomRotateSession; yourself).
+  detail addChild: actions ].
  detail addChild: (LMChatStyle label: ''底层 Codex 会话'' size: 15).
  (record at: ''threadId'') ifNil: [
   detail addChild: (LMChatStyle label: ((record at: ''state'') = ''creating''
@@ -135,8 +132,8 @@ ui compile: 'renderDetail
   detail addChild: (LMChatStyle label: (entry at: ''startedAt'') size: 12) ]'.
 ui compile: 'labelForState: state
  | index |
- index := #(''idle'' ''queued'' ''running'' ''stopping'') indexOf: state ifAbsent: [ 1 ].
- ^ #(''空闲'' ''排队中'' ''运行中'' ''停止中'') at: index'.
+ index := #(''idle'' ''queued'' ''running'') indexOf: state ifAbsent: [ 1 ].
+ ^ #(''空闲'' ''排队中'' ''运行中'') at: index'.
 ui compile: 'register
  | id |
  id := identifier text asString trimBoth.
@@ -148,8 +145,6 @@ ui compile: 'register
   notice text: ''会话已登记'' ]'.
 ui compile: 'rotate: id
  self run: [ LoomSessions rotate: id ] completed: [ notice text: ''已切换，下一次调用会创建新会话'' ]'.
-ui compile: 'stop: id
- self run: [ LoomSessions stop: id ] completed: [ notice text: ''已发出停止请求'' ]'.
 ui compile: 'run: operation completed: completed
  busy = true ifTrue: [ ^ self ].
  busy := true.

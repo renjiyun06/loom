@@ -41,12 +41,13 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  result := ui syncList: (ui instVarNamed: 'history') collection: (ui instVarNamed: 'historyItems') with: (payload at: 'messages').
  check value: result not value: 'unchanged messages do not rebind list rows'.
  ui applyUpdate: (payload copy at: 'status' put: '正在处理'; at: 'processing' put: true; yourself).
- check value: ((ui instVarNamed: 'status') text asString = 'Enter 发送 · Shift Enter 换行'
-  and: [ (ui instVarNamed: 'stopButton') visibility class = BlVisibility visible class ])
-  value: 'composer keeps shortcuts and Stop while processing'.
+ check value: (ui instVarNamed: 'status') text asString = 'Enter 发送 · Shift Enter 换行'
+  value: 'composer keeps shortcuts while processing'.
+ check value: ((ui instVarNamed: 'status') parent children size = 4
+  and: [ (LMConversationUI includesSelector: #cancelCurrentTurn) not ])
+  value: 'composer has no stop button or action'.
  ui applyUpdate: (payload copy at: 'status' put: '本轮未完成'; at: 'processing' put: false; yourself).
- check value: ((ui instVarNamed: 'status') text asString = '本轮未完成'
-  and: [ (ui instVarNamed: 'stopButton') visibility class = BlVisibility gone class ])
+ check value: (ui instVarNamed: 'status') text asString = '本轮未完成'
   value: 'composer still shows failure status'.
  check value: (LoomConversation orderedInputs size = before) value: 'UI validation submits no model request'.
  check value: ((ui instVarNamed: 'input') editor editorShortcuts

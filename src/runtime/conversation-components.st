@@ -3,6 +3,36 @@
 Smalltalk globals at: #LMIcons ifAbsent: [
  Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'icons.st') contents ].
 cls := (Object << #LMChatStyle slots: #(); package: 'Loom-Interface') install.
+cls class compile: 'syncActivities: list collection: current with: incoming
+ | source index changed previous next |
+ source := (list childNamed: #scrollable) dataSource.
+ index := 1.
+ changed := false.
+ [ index <= current size and: [ index <= incoming size ] ] whileTrue: [
+  previous := current at: index.
+  next := incoming at: index.
+  previous == next ifTrue: [ index := index + 1 ] ifFalse: [
+   (previous at: ''seq'') = (next at: ''seq'') ifTrue: [
+    current at: index put: next.
+    source notifyItemsChanged: (index to: index).
+    index := index + 1 ] ifFalse: [
+    (previous at: ''seq'') < (next at: ''seq'') ifTrue: [
+     current removeAt: index.
+     source notifyItemsRemoved: (index to: index) ] ifFalse: [
+     current add: next beforeIndex: index.
+     source notifyItemsInserted: (index to: index).
+     index := index + 1 ] ].
+   changed := true ] ].
+ index <= incoming size ifTrue: [
+  current addAll: (incoming allButFirst: index - 1).
+  source notifyItemsInserted: (index to: incoming size).
+  ^ true ].
+ index <= current size ifTrue: [
+  previous := current size.
+  [ current size >= index ] whileTrue: [ current removeLast ].
+  source notifyItemsRemoved: (index to: previous).
+  ^ true ].
+ ^ changed'.
 cls class compile: 'attachmentIconForImage: isImage size: size
  | name |
  name := isImage ifTrue: [ ''image'' ] ifFalse: [ ''file'' ].
@@ -697,6 +727,7 @@ cls compile: 'userMetadata
     (minute < 10 ifTrue: [ ''0'' ] ifFalse: [ '''' ]), minute asString
  ] on: Error do: [ :error | ^ '''' ]'.
 cls := (BrVerticalPane << #LMConversationActivityView slots: #(#controller #descriptor #expanded #mode #summary #mark #title #tool #duration #chevron #details #detailCache #preview); package: 'Loom-Interface') install.
+(cls includesSelector: #detailValue) ifTrue: [ cls removeSelector: #detailValue ].
 cls compile: 'actionTitle
  | type code toolName |
  (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption | ^ caption ].
@@ -709,7 +740,7 @@ cls compile: 'actionTitle
  type = ''webSearch'' ifTrue: [ ^ ''搜索资料'' ].
  toolName := descriptor at: ''tool'' ifAbsent: [ ''工具调用'' ].
  (#(''pharo_eval'' ''runtime_eval'') includes: toolName) ifTrue: [
-  code := descriptor at: ''arguments'' ifAbsent: [ Dictionary new ].
+  code := descriptor at: ''codePreview'' ifAbsent: [ descriptor at: ''arguments'' ifAbsent: [ Dictionary new ] ].
   code isDictionary ifTrue: [ code := code at: ''code'' ifAbsent: [ '''' ] ].
   code isString ifFalse: [ code := '''' ].
   (code includesSubstring: ''compile:'') ifTrue: [ ^ ''编译运行方法'' ].
@@ -745,6 +776,8 @@ cls compile: 'descriptor: value
  changedId ifTrue: [
   expanded := controller ifNil: [ false ] ifNotNil: [ controller activityExpandedFor: (value at: ''id'') ].
   mode := controller ifNil: [ #arguments ] ifNotNil: [ controller activityDetailModeFor: (value at: ''id'') ].
+  self userData removeKey: #detailRequest ifAbsent: [ ].
+  self userData removeKey: #detailText ifAbsent: [ ].
   detailCache := nil. self removeChildren. self build ].
  (self isFailed and: [ wasFailed not and: [ changedId not ] ]) ifTrue: [
   expanded := true. mode := #result.
@@ -753,14 +786,38 @@ cls compile: 'descriptor: value
  self updateSummary.
  expanded ifTrue: [ self updateDetails ] ifFalse: [
   details ifNotNil: [ details removeFromParent. details := nil ] ]'.
-cls compile: 'detailValue
- self isTool ifFalse: [ ^ descriptor at: ''text'' ].
- mode = #arguments ifTrue: [
-  ^ descriptor at: ''arguments'' ifAbsent: [ descriptor at: ''command'' ifAbsent: [ '''' ] ] ].
- ^ descriptor at: ''contentItems'' ifAbsent: [
-  descriptor at: ''result'' ifAbsent: [
-   descriptor at: ''aggregatedOutput'' ifAbsent: [
-    descriptor at: ''error'' ifAbsent: [ descriptor at: ''changes'' ifAbsent: [ '''' ] ] ] ] ]'.
+cls compile: 'detailTextFrom: row mode: tab
+ | value |
+ value := tab = #text ifTrue: [ row at: ''text'' ifAbsent: [ '''' ] ] ifFalse: [
+  tab = #arguments
+   ifTrue: [ row at: ''arguments'' ifAbsent: [ row at: ''command'' ifAbsent: [ '''' ] ] ]
+   ifFalse: [ row at: ''contentItems'' ifAbsent: [ row at: ''result'' ifAbsent: [
+    row at: ''aggregatedOutput'' ifAbsent: [ row at: ''error'' ifAbsent: [ row at: ''changes'' ifAbsent: [ '''' ] ] ] ] ] ] ].
+ ^ value ifNil: [ '''' ] ifNotNil: [ LMConversationStream new displayValue: value ]'.
+cls compile: 'activityDetailText
+ | seq tab version cached token |
+ tab := self isTool ifTrue: [ mode ] ifFalse: [ #text ].
+ controller ifNil: [ ^ self detailTextFrom: descriptor mode: tab ].
+ seq := descriptor at: ''seq'' ifAbsent: [ ^ self detailTextFrom: descriptor mode: tab ].
+ version := descriptor at: ''revision''.
+ cached := self userData at: #detailText ifAbsent: [ nil ].
+ (cached notNil and: [ cached first = tab and: [ cached second >= version ] ]) ifTrue: [ ^ cached third ].
+ (self userData includesKey: #detailRequest) ifFalse: [
+  token := Object new.
+  self userData at: #detailRequest put: token.
+  [ | result |
+   result := [
+    (LoomNativeCodexHost registry activityDetailAt: seq) ifNil: [
+     { tab. version. ''这条活动已不可用'' } ] ifNotNil: [ :entry |
+     { tab. entry at: ''revision''. self detailTextFrom: (entry at: ''data'') mode: tab } ]
+   ] on: Error do: [ :error | { tab. version. ''读取详情失败：'', error messageText } ].
+   controller defer: [
+    (self userData at: #detailRequest ifAbsent: [ nil ]) == token ifTrue: [
+     self userData removeKey: #detailRequest.
+     self userData at: #detailText put: result.
+     expanded ifTrue: [ self updateDetails ] ] ]
+  ] fork ].
+ ^ cached ifNotNil: [ cached first = tab ifTrue: [ cached third ] ifFalse: [ nil ] ]'.
 cls compile: 'initialize
  super initialize.
  self hMatchParent; vFitContent; padding: (BlInsets top: 0 right: 12 bottom: 4 left: 12).
@@ -824,9 +881,9 @@ cls compile: 'toggle
 cls compile: 'hasDetails
  ^ (descriptor at: ''type'') ~= ''loomActivity'' or: [ (descriptor at: ''text'' ifAbsent: [ '''' ]) notEmpty ]'.
 cls compile: 'updateDetails
- | value text pane tabs editor height |
- value := self detailValue.
- text := value ifNil: [ '''' ] ifNotNil: [ LMConversationStream new displayValue: value ].
+ | value text pane tabs editor height copy |
+ value := self activityDetailText.
+ text := value ifNil: [ ''正在读取详情…'' ].
  (details notNil and: [ detailCache = { mode. text } ]) ifTrue: [ ^ self ].
  detailCache := { mode. text }.
  details ifNotNil: [ details removeFromParent ].
@@ -841,8 +898,10 @@ cls compile: 'updateDetails
   tabs addChild: (self detailTab: ''参数'' mode: #arguments).
   tabs addChild: (self detailTab: ''结果'' mode: #result).
   tabs addChild: (BrHorizontalPane new hMatchParent; vExact: 1; yourself).
-  tabs addChild: (LMChatStyle replyAction: #copyActivityDetail icon: ''copy''
-   action: [ GtClipboard clipboardText: (LMConversationStream new displayValue: self detailValue) ]).
+  copy := LMChatStyle replyAction: #copyActivityDetail icon: ''copy''
+   action: [ GtClipboard clipboardText: value ].
+  copy enabled: value notNil.
+  tabs addChild: copy.
   pane addChild: tabs ].
  text ifEmpty: [ text := self isInterrupted ifTrue: [ ''本轮已中断，执行结果未确认。'' ] ifFalse: [
  self isRunning ifTrue: [ ''等待执行结果…'' ] ifFalse: [ ''无附加内容'' ] ] ].

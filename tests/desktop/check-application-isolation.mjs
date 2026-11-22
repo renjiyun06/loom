@@ -191,7 +191,7 @@ try {
     assert.equal(bound.threads.length, 1);
     const activity = await gt(`| page |
      page := (LoomNativeCodexHost instVarNamed: #registry)
-      activityPageFrom: nil limit: 30 previous: 30 focus: nil session: 'isolation-check' managedOnly: true.
+      activitySummariesBefore: nil limit: 30 session: 'isolation-check' managedOnly: true.
      (page at: 'items') collect: [ :item | item at: 'type' ]
     `, 'direct-codex-activity');
     assert.deepEqual(activity, ['agentMessage', 'dynamicToolCall']);

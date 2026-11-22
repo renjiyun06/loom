@@ -1,5 +1,6 @@
 "Native session registry, activity, and settings checks. The test root is disposable."
-| base registry request receipt binding file settings verify page older protected requestId data roster |
+| base registry request receipt binding file settings verify page older protected requestId data roster
+  reader previous change sequence detail savedText progress |
 base := ExperimentRoot / 'codex-contract'.
 verify := [ :condition :message | condition ifFalse: [ self error: message ] ].
 registry := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
@@ -25,12 +26,47 @@ verify value: (registry callResult: requestId) = receipt value: 'completed recei
 data := STONJSON fromString: '{"method":"item/completed","params":{"item":{"id":"progress","type":"agentMessage","phase":"commentary","text":"Live activity"}}}'.
 registry acceptActivity: data call: requestId.
 registry acceptActivity: data call: requestId.
-page := registry activityPageFrom: nil limit: 1 previous: 1 focus: nil session: 'Fixture-1' managedOnly: true.
+reader := LMActivityReader new registry: registry; channel: 'overview'; yourself.
+page := reader pageOf: 1 session: 'Fixture-1'.
 verify value: (((page at: 'items') first at: 'text') = 'Live activity' and: [ page at: 'older' ])
  value: 'latest activity page retains older history'.
-older := registry activityPageFrom: (page at: 'first') limit: 2 previous: 1 focus: nil session: 'Fixture-1' managedOnly: true.
+older := reader pageOf: 2 session: 'Fixture-1'.
 verify value: ((older at: 'items') size = 2 and: [ (older at: 'older') not ])
  value: 'duplicate events update one activity and paginate by session'.
+progress := (older at: 'items') last.
+previous := registry revision.
+data := STONJSON fromString: '{"method":"item/tool/call","params":{"callId":"tool-1","tool":"runtime_eval","arguments":{"code":"1+1"}}}'.
+registry acceptActivity: data call: requestId.
+page := reader pageOf: 2 session: 'Fixture-1'.
+verify value: (((page at: 'items') at: 2) == progress and: [ (page at: 'items') size = 3 ])
+ value: 'appending a tool reuses the earlier published entries'.
+sequence := (page at: 'items') last at: 'seq'.
+savedText := String new: 30000 withAll: $x.
+registry completeToolActivity: 'tool-1' call: requestId
+ result: (Dictionary new at: 'ok' put: true; at: 'value' put: savedText; yourself).
+change := (registry activityChangesAfter: previous from: nil session: 'Fixture-1' managedOnly: true) second.
+verify value: (change size = 1 and: [ (change first at: 'seq') = sequence
+ and: [ (change first at: 'status') = 'completed' ] ])
+ value: 'a tool completion replaces the pending update at the same sequence'.
+verify value: ((change first keys includesAny: #('arguments' 'result' 'contentItems' 'aggregatedOutput')) not)
+ value: 'the summary does not carry full tool data'.
+detail := (registry activityDetailAt: sequence) at: 'data'.
+verify value: ((detail at: 'result') at: 'value') = savedText value: 'selected detail includes the full saved result'.
+older := reader pageOf: 2 session: 'Fixture-1'.
+verify value: (((older at: 'items') at: 2) == progress and: [ ((older at: 'items') last at: 'status') = 'completed' ])
+ value: 'an incremental update keeps the order and identity of unchanged entries'.
+data := STONJSON fromString: '{"method":"item/started","params":{"item":{"id":"answer","type":"agentMessage","phase":"final_answer"}}}'.
+registry acceptActivity: data call: requestId.
+data := STONJSON fromString: '{"method":"item/agentMessage/delta","params":{"itemId":"answer","delta":"原样流式正文"}}'.
+registry acceptActivity: data call: requestId.
+verify value: (reader streamedReplyFor: requestId) = '原样流式正文' value: 'the active reply streams separately from the activity rows'.
+verify value: (reader pageOf: 2 session: 'Fixture-1') == older
+ value: 'a change to the reply does not republish the visible activity list'.
+data := STONJSON fromString: '{"method":"item/completed","params":{"item":{"id":"progress","type":"agentMessage","phase":"final_answer","text":"reclassified"}}}'.
+registry acceptActivity: data call: requestId.
+page := reader pageOf: 2 session: 'Fixture-1'.
+verify value: ((page at: 'items') noneSatisfy: [ :entry | (entry at: 'seq') = (progress at: 'seq') ])
+ value: 'a row that becomes hidden is removed incrementally'.
 request := Dictionary new at: 'id' put: UUID new asString; at: 'action' put: 'newConversation'; at: 'clientKey' put: 'default'; yourself.
 receipt := registry reset: request.
 verify value: (registry reset: request) = receipt value: 'replaying a completed reset is idempotent'.

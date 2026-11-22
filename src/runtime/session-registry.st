@@ -13,6 +13,7 @@ exists := (directory / ''sessions.sqlite'') exists.
 self database: [ :db |
  db execute: ''PRAGMA journal_mode=WAL''.
  db transaction: [ self upgrade: db create: exists not ].
+ revision := (db execute: ''SELECT COALESCE(MAX(change_revision),0) FROM loom_activities'') first asInteger.
  id := (db execute: ''SELECT value FROM meta WHERE key=''''installation_id'''''') first.
  db execute: ''SELECT client_key FROM bindings LIMIT 1'' ].
 marker exists ifTrue: [
@@ -32,7 +33,7 @@ create ifTrue: [
    ''PRAGMA user_version=1'') do: [ :sql | db execute: sql ].
  db execute: ''INSERT INTO meta VALUES (?,?)'' values: {''installation_id''. UUID new asString} ].
 version := (db execute: ''PRAGMA user_version'') first asNumber.
-(#(1 2 3 4) includes: version) ifFalse: [ self error: ''Invalid session registry schema; recovery is required'' ].
+(#(1 2 3 4 5) includes: version) ifFalse: [ self error: ''Invalid session registry schema; recovery is required'' ].
 version < 2 ifTrue: [
  db execute: ''CREATE TABLE calls(request_id TEXT PRIMARY KEY,state TEXT NOT NULL,request_json TEXT NOT NULL,result_json TEXT)'' ].
 version < 3 ifTrue: [
@@ -42,7 +43,15 @@ version < 4 ifTrue: [
  db execute: ''UPDATE loom_sessions SET id=''''main'''' WHERE id=''''conversation'''' AND client_key=''''default''''''.
  db execute: ''PRAGMA user_version=4'' ].
 db execute: ''CREATE TABLE IF NOT EXISTS loom_activities(seq INTEGER PRIMARY KEY,call_id TEXT NOT NULL,item_id TEXT NOT NULL,visible INTEGER NOT NULL CHECK(visible IN (0,1)),data TEXT NOT NULL,UNIQUE(call_id,item_id))''.
-db execute: ''CREATE INDEX IF NOT EXISTS loom_activity_visible ON loom_activities(seq) WHERE visible=1'''.
+db execute: ''CREATE INDEX IF NOT EXISTS loom_activity_visible ON loom_activities(seq) WHERE visible=1''.
+version < 5 ifTrue: [
+ db execute: ''ALTER TABLE loom_activities ADD COLUMN change_revision INTEGER NOT NULL DEFAULT 0''.
+ db execute: ''CREATE INDEX loom_activity_revision ON loom_activities(change_revision)''.
+ db execute: ''PRAGMA user_version=5'' ]'.
+registry compile: 'upgradeActivityTracking
+ self database: [ :db |
+  db transaction: [ self upgrade: db create: false ].
+  revision := revision max: (db execute: ''SELECT COALESCE(MAX(change_revision),0) FROM loom_activities'') first asInteger ]'.
 registry compile: 'now
  ^ DateAndTime now asUTC asString'.
 registry compile: 'revision

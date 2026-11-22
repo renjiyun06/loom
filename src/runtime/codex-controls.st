@@ -53,47 +53,6 @@ host compile: 'pollSessions
  ] on: Error do: [ :error | self failed: error messageText request: id ].
  LMPlatformTools writeJSON: answer to: LoomIPC / ''session-responses'' / file basename.
  file ensureDelete ]'.
-host compile: 'pollActivity
- (self filesIn: ''activity-queries'') do: [ :file |
- | query |
- query := [ STONJSON fromString: file contents ] on: Error do: [ :error | nil ].
- file ensureDelete.
- query ifNotNil: [ self acceptView: query ] ].
-views keysAndValuesDo: [ :channel :view | self publishView: view channel: channel ]'.
-host compile: 'acceptView: query
- | channel current previous serial limit focus viewId selected |
-channel := query at: ''channel'' ifAbsent: [ ''conversation'' ].
-serial := query at: ''serial'' ifAbsent: [ nil ].
-limit := query at: ''limit'' ifAbsent: [ nil ].
-viewId := query at: ''view'' ifAbsent: [ nil ].
-focus := query at: ''focus'' ifAbsent: [ nil ].
-selected := query at: ''session'' ifAbsent: [ nil ].
-((#(''conversation'' ''overview'') includes: channel) and: [ (self uuid: viewId) and: [
- serial isInteger and: [ limit isInteger and: [ limit > 0 and: [ focus isNil or: [ self uuid: focus ] ] ] ] ] ]) ifFalse: [ ^ self ].
-selected ifNotNil: [ registry validateSession: selected ].
-current := views at: channel ifAbsentPut: [ Dictionary new ].
-previous := current at: ''query'' ifAbsent: [ nil ].
-(previous isNil or: [ (previous at: ''view'') ~= viewId or: [ (previous at: ''serial'') < serial ] ])
- ifTrue: [ current at: ''query'' put: (query at: ''session'' put: selected; at: ''focus'' put: focus; yourself) ]'.
-host compile: 'publishView: state channel: channel
- | query previous same revision page limit from selection viewId serial output |
-query := state at: ''query''.
-previous := state at: ''published'' ifAbsent: [ nil ].
-viewId := query at: ''view''.
-serial := query at: ''serial''.
-selection := query at: ''session''.
-limit := query at: ''limit''.
-revision := registry revision.
-same := previous notNil and: [ (previous at: ''view'') = viewId and: [ (previous at: ''session'') = selection ] ].
-(same and: [ (previous at: ''serial'') = serial and: [ (previous at: ''revision'') = revision ] ]) ifTrue: [ ^ self ].
-from := same ifTrue: [ state at: ''first'' ifAbsent: [ nil ] ] ifFalse: [ nil ].
-page := registry activityPageFrom: from limit: limit previous: (same ifTrue: [ previous at: ''limit'' ] ifFalse: [ limit ])
- focus: (query at: ''focus'') session: selection managedOnly: channel = ''overview''.
-state at: ''first'' put: (page removeKey: ''first'').
-#(''view'' ''serial'' ''limit'' ''focus'' ''session'') do: [ :key | page at: key put: (query at: key) ].
-output := channel = ''overview'' ifTrue: [ ''activity-overview.json'' ] ifFalse: [ ''activity-view.json'' ].
-LMPlatformTools writeJSON: page to: LoomIPC / output.
-state at: ''published'' put: (query copy at: ''revision'' put: revision; yourself)'.
 host compile: 'runCheckpoints
  [ self isCurrent ] whileTrue: [
  (Smalltalk globals at: #LoomExecutionCheckpoint ifAbsent: [ nil ]) ifNotNil: [ :current |

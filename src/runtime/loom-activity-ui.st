@@ -21,7 +21,7 @@ row compile: 'descriptor: record
  [ entry descriptor: record ] on: Error do: [ :error | entry showRenderingError: error descriptor: record ]'.
 
 ui := (Object << #LMActivityOverviewUI
- slots: #(space world filters list older status reader poller sessionIds selected limit currentPage follow expansions detailModes);
+ slots: #(space world filters list activityItems older status reader poller sessionIds selected limit currentPage follow expansions detailModes);
  package: 'Loom-Interface') install.
 ui class compile: 'open
  | view |
@@ -51,6 +51,7 @@ ui compile: 'build
  detailModes ifNil: [ detailModes := Dictionary new ].
  limit ifNil: [ limit := 100 ].
  currentPage := nil.
+ activityItems := OrderedCollection new.
  follow := true.
  root := BrHorizontalPane new id: #loomActivityOverview; matchParent; background: Color white; yourself.
  filters := BrVerticalPane new hMatchParent; vFitContent; padding: (BlInsets all: 12); yourself.
@@ -70,7 +71,7 @@ ui compile: 'build
   itemType: [ :factory :item :index | LMActivityOverviewRow ];
   itemStencil: [ LMActivityOverviewRow new controller: self; yourself ];
   itemDataBinder: [ :row :item :index | row descriptor: item ];
-  items: #(); yourself.
+  items: activityItems; yourself.
  viewport := list childNamed: #scrollable.
  viewport addEventHandlerOn: BlElementScrolledEvent do: [ :event |
   (event target == viewport eventDispatcher and: [ event delta y isZero not ])
@@ -94,7 +95,8 @@ ui compile: 'selectSession: id
  currentPage := nil.
  limit := 100.
  follow := true.
- list items: #().
+ activityItems removeAll.
+ list items: activityItems.
  status text: ''正在读取活动…''.
  older enabled: false.
  self renderFilters'.
@@ -124,7 +126,7 @@ ui compile: 'refreshActivities
  [ | page selectedId readerAtRequest |
   selectedId := selected.
   readerAtRequest := reader.
-  page := readerAtRequest pageOf: limit focus: nil session: selectedId.
+  page := readerAtRequest pageOf: limit session: selectedId.
   (page notNil and: [ page ~~ currentPage ]) ifTrue: [
    self defer: [
     (reader == readerAtRequest and: [ selected = selectedId and: [ (page at: ''session'') = selectedId ] ])
@@ -136,24 +138,28 @@ ui compile: 'loadOlder
   limit := limit + 100.
   older enabled: false ]'.
 ui compile: 'apply: page
- | incoming anchor index widget |
+ | incoming anchor index widget previousCount brief |
  page == currentPage ifTrue: [ ^ self ].
  incoming := page at: ''items''.
- anchor := follow ifFalse: [ self visibleAnchor ].
+ previousCount := activityItems size.
+ (follow not and: [ activityItems notEmpty and: [ incoming notEmpty and: [
+  (activityItems first at: ''id'') ~= (incoming first at: ''id'') ] ] ]) ifTrue: [
+   anchor := self visibleAnchor ].
+ LMChatStyle syncActivities: list collection: activityItems with: incoming.
  currentPage := page.
- list items: incoming.
  older enabled: (page at: ''older'').
- status text: (incoming
+ brief := incoming
   ifEmpty: [ ''这个会话范围暂无活动'' ]
-  ifNotEmpty: [ incoming size asString, '' 条已加载活动'' ]).
+  ifNotEmpty: [ incoming size asString, '' 条已加载活动'' ].
+ status text asString = brief ifFalse: [ status text: brief ].
  incoming ifEmpty: [ ^ self ].
- index := follow ifTrue: [ incoming size ] ifFalse: [
+ index := follow ifTrue: [ incoming size > previousCount ifTrue: [ incoming size ] ifFalse: [ 0 ] ] ifFalse: [
   anchor ifNil: [ 0 ] ifNotNil: [ incoming findFirst: [ :item | (item at: ''id'') = anchor first ] ] ].
  index > 0 ifTrue: [
   widget := list.
   (widget childNamed: #scrollable) enqueueTask: (BlDelayedTaskAction new delay: 40 milliSeconds; action: [
    (currentPage == page and: [ list == widget ]) ifTrue: [
-    anchor ifNil: [ widget scrollToIndex: index ]
+    anchor ifNil: [ follow ifTrue: [ widget scrollToIndex: index ] ]
      ifNotNil: [ widget scrollToIndex: index offset: anchor second ] ] ]; yourself) ]'.
 ui compile: 'visibleAnchor
  | viewport child holder index values |

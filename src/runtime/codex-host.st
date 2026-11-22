@@ -1,6 +1,10 @@
 "The GT runtime owns Codex ingress, durable results, and generic lifecycle."
-| host |
-host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping #views); package: 'Loom-Codex') install.
+| host previous |
+previous := Smalltalk globals at: #LMNativeCodexHost ifAbsent: [ nil ].
+(previous notNil and: [ previous instVarNames includes: 'views' ]) ifTrue: [
+ #(start pollActivity acceptView: publishView:channel:) do: [ :selector |
+  (previous includesSelector: selector) ifTrue: [ previous removeSelector: selector ] ] ].
+host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping); package: 'Loom-Codex') install.
 host compile: 'start
  | config pathConfig default identity state |
 session := LoomRuntimeSessionId.
@@ -11,9 +15,8 @@ options := Dictionary new.
 pathConfig keysAndValuesDo: [ :key :value | options at: key put: (ExperimentRoot resolve: value) ].
 gui := config at: ''gui'' ifAbsent: [ false ].
 Smalltalk globals at: #LoomGuiEnabled put: gui.
-#(''codex-requests'' ''codex-responses'' ''activity-queries'' ''session-requests'' ''session-responses'' ''native-actions'' ''native-results'')
+#(''codex-requests'' ''codex-responses'' ''session-requests'' ''session-responses'' ''native-actions'' ''native-results'')
  do: [ :name | (LoomIPC / name) ensureCreateDirectory ].
-views := Dictionary new.
 state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
 status := state copy at: ''objectInvocation'' put: true; at: ''sessionControl'' put: session;
  at: ''runtimeDirectory'' put: LoomIPC fullName; at: ''cwd'' put: (options at: ''workspace'') fullName;
@@ -55,6 +58,7 @@ host compile: 'isCurrent
   epoch = (OSEnvironment current at: ''LOOM_RUNTIME_EPOCH'' ifAbsent: [ nil ]) ]'.
 host compile: 'isToolProcess
  ^ transport notNil and: [ transport isToolProcess ]'.
+host compile: 'registry ^ registry'.
 host compile: 'uuid: value
  ^ value isString and: [ value matchesRegex: ''[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}'' ]'.
 host compile: 'filesIn: name
@@ -128,7 +132,7 @@ host compile: 'runControls
    (stopping = true
     and: [ (active at: ''turnId'') notNil and: [ (active at: ''interruptionSent'' ifAbsent: [ false ]) not ] ]) ifTrue: [
      [ [ transport interrupt ] on: Error do: [ :ignored | nil ] ] fork ] ].
-  #(pollSessions pollActivity pollNativeActions) do: [ :selector |
+  #(pollSessions pollNativeActions) do: [ :selector |
    [ self perform: selector ] on: Error do: [ :error |
     Smalltalk globals at: #LoomNativeControlError put: error messageText ] ].
   (Delay forMilliseconds: 80) wait ]

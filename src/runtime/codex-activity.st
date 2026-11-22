@@ -31,9 +31,12 @@ registry compile: 'entryFor: item call: call type: type at: at on: db
  ^ (self record: ''SELECT data FROM loom_activities WHERE call_id=? AND item_id=?'' values: {call. item} on: db)
  ifNil: [ Dictionary new at: ''type'' put: type; at: ''text'' put: ''''; at: ''status'' put: ''inProgress''; at: ''at'' put: at; yourself ]'.
 registry compile: 'putActivity: row call: call item: item on: db
- db execute: ''INSERT INTO loom_activities(call_id,item_id,visible,data) VALUES (?,?,?,?) ON CONFLICT(call_id,item_id) DO UPDATE SET visible=excluded.visible,data=excluded.data''
- values: {call. item. (self visibleActivity: row) ifTrue: [ 1 ] ifFalse: [ 0 ]. STONJSON toString: row}.
-revision := revision + 1'.
+ | next |
+ next := revision + 1.
+ db execute: ''INSERT INTO loom_activities(call_id,item_id,visible,data,change_revision) VALUES (?,?,?,?,?)
+  ON CONFLICT(call_id,item_id) DO UPDATE SET visible=excluded.visible,data=excluded.data,change_revision=excluded.change_revision''
+ values: {call. item. (self visibleActivity: row) ifTrue: [ 1 ] ifFalse: [ 0 ]. STONJSON toString: row. next}.
+ revision := next'.
 registry compile: 'recordActivity: call title: title on: db
  self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''title'' put: title;
  at: ''text'' put: ''''; at: ''status'' put: ''completed''; at: ''at'' put: self now; yourself)
@@ -102,40 +105,58 @@ registry compile: 'completeToolActivity: id call: call result: result
  row at: ''status'' put: ''completed''; at: ''success'' put: (result at: ''ok'');
   at: ''result'' put: (self masked: result).
  self putActivity: row call: call item: id on: db ]'.
-registry compile: 'activityPageFrom: first limit: limit previous: previous focus: focus session: session managedOnly: managed
+registry compile: 'activityScopeFor: session managedOnly: managed
+ session ifNotNil: [ ^ { '' AND s.id=?''. { session } } ].
+ ^ { managed ifTrue: [ '' AND s.id IS NOT NULL'' ] ifFalse: [ '''' ]. #() }'.
+registry compile: 'activitySummariesWhere: where values: args on: db
+ | sql |
+ sql := ''SELECT json_object(
+  ''''seq'''',a.seq,''''revision'''',a.change_revision,''''visible'''',a.visible,
+  ''''id'''',a.call_id||''''/''''||a.item_id,''''sessionId'''',s.id,
+  ''''type'''',json_extract(a.data,''''$.type''''),
+  ''''status'''',json_extract(a.data,''''$.status''''),
+  ''''at'''',json_extract(a.data,''''$.at''''),
+  ''''title'''',substr(json_extract(a.data,''''$.title''''),1,160),
+  ''''tool'''',COALESCE(json_extract(a.data,''''$.tool''''),''''''''),
+  ''''durationMs'''',json_extract(a.data,''''$.durationMs''''),
+  ''''success'''',json_extract(a.data,''''$.success''''),
+  ''''text'''',COALESCE(substr(json_extract(a.data,''''$.text''''),1,360),''''''''),
+  ''''codePreview'''',CASE WHEN json_extract(a.data,''''$.tool'''') IN (''''runtime_eval'''',''''pharo_eval'''')
+   THEN substr(json_extract(a.data,''''$.arguments.code''''),1,320) END)''.
+ ^ (db execute: sql, self activitySource, '' WHERE '', where values: args) collect: [ :line |
+  | item |
+  item := STONJSON fromString: line.
+  (item at: ''success'') ifNotNil: [ :value | item at: ''success'' put: value ~= 0 ].
+  item ]'.
+registry compile: 'activitySummariesBefore: sequence limit: limit session: session managedOnly: managed
  ^ self database: [ :db |
- | selection args start items answer older recent |
- selection := self activitySource, '' WHERE a.visible=1''.
- args := #().
- session ifNil: [ managed ifTrue: [ selection := selection, '' AND s.id IS NOT NULL'' ] ]
-  ifNotNil: [ selection := selection, '' AND s.id=?''. args := {session} ].
- recent := ''SELECT min(seq) FROM (SELECT a.seq'', selection.
- start := first.
- start ifNil: [
-  start := self one: recent, '' ORDER BY a.seq DESC LIMIT ?)'' values: args, {limit} on: db
- ] ifNotNil: [
-  limit > previous ifTrue: [
-   start := (self one: recent, '' AND a.seq < ? ORDER BY a.seq DESC LIMIT ?)''
-    values: args, {start. limit - previous} on: db) ifNil: [ start ] ] ].
- items := (db execute: ''SELECT json_object(''''call'''',a.call_id,''''item'''',a.item_id,''''data'''',a.data,''''session'''',s.id)'',
-  selection, '' AND a.seq >= ? ORDER BY a.seq'' values: args, {start ifNil: [0]}) collect: [ :line |
-  | row data |
-  row := STONJSON fromString: line.
-  data := STONJSON fromString: (row at: ''data'').
-  data at: ''id'' put: (row at: ''call''), ''/'', (row at: ''item''); at: ''sessionId'' put: (row at: ''session''); yourself ].
- older := start notNil and: [
-  (self one: ''SELECT 1'', selection, '' AND a.seq < ? LIMIT 1'' values: args, {start} on: db) notNil ].
- answer := focus ifNil: [''''] ifNotNil: [
-  | filter focusArgs |
-  filter := ''SELECT a.data'', self activitySource, '' WHERE a.call_id=?''.
-  focusArgs := {focus}.
-  session ifNotNil: [ filter := filter, '' AND s.id=?''. focusArgs := {focus. session} ].
-  String lf join: (((db execute: filter, '' ORDER BY a.seq'' values: focusArgs)
-   collect: [ :line | STONJSON fromString: line ])
-   select: [ :row | (row at: ''type'') = ''agentMessage'' and: [
-    (row at: ''phase'' ifAbsent: [nil]) = ''final_answer'' and: [ (row at: ''text'') isNotEmpty ] ] ]
-   thenCollect: [ :row | row at: ''text'' ]) ].
- Dictionary new at: ''first'' put: start; at: ''items'' put: items; at: ''older'' put: older; at: ''answer'' put: answer; yourself ]'.
-#(migrateActivityLogs:codexHome: importSwitch:at:on: parseLinesOf:do: archivedItemsFor:in:) do: [ :selector |
+  | scope predicate args rows |
+  scope := self activityScopeFor: session managedOnly: managed.
+  predicate := ''a.visible=1'', scope first.
+  args := scope second.
+  sequence ifNotNil: [ predicate := predicate, '' AND a.seq < ?''. args := args, { sequence } ].
+  rows := self activitySummariesWhere: predicate, '' ORDER BY a.seq DESC LIMIT ?''
+   values: args, { limit + 1 } on: db.
+  Dictionary new at: ''items'' put: (rows first: (rows size min: limit)) reversed;
+   at: ''older'' put: rows size > limit; at: ''revision'' put: revision; yourself ]'.
+registry compile: 'activityChangesAfter: previous from: first session: session managedOnly: managed
+ previous = revision ifTrue: [ ^ { previous. #() } ].
+ ^ self database: [ :db |
+  | scope rows |
+  scope := self activityScopeFor: session managedOnly: managed.
+  rows := self activitySummariesWhere: ''a.change_revision > ? AND a.seq >= ?'', scope first, '' ORDER BY a.seq''
+   values: { previous. first ifNil: [ 0 ] }, scope second on: db.
+  { revision. rows } ]'.
+registry compile: 'activityDetailAt: sequence
+ ^ self database: [ :db |
+  self record: ''SELECT json_object(''''revision'''',change_revision,''''data'''',json(data)) FROM loom_activities WHERE seq=?''
+   values: { sequence } on: db ]'.
+registry compile: 'activityAnswerFor: call
+ ^ self database: [ :db |
+  String lf join: (db execute: ''SELECT json_extract(data,''''$.text'''') FROM loom_activities WHERE call_id=? AND visible=0
+   AND json_extract(data,''''$.type'''')=''''agentMessage'''' AND json_extract(data,''''$.phase'''')=''''final_answer''''
+   AND length(json_extract(data,''''$.text'''')) > 0 ORDER BY seq''
+   values: { call }) ]'.
+#(activityPageFrom:limit:previous:focus:session:managedOnly: migrateActivityLogs:codexHome: importSwitch:at:on: parseLinesOf:do: archivedItemsFor:in:) do: [ :selector |
  (registry includesSelector: selector) ifTrue: [ registry removeSelector: selector ] ].
 'GT Codex activity storage installed'

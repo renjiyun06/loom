@@ -10,7 +10,7 @@ textRunRenderer := (SkiaTextPainter >> #fillTextRun:withColor:strokeColor:) sour
  (Smalltalk globals at: #LMConversationStream) includesSelector: #visibleActivities ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-stream.st') contents ].
 ((Smalltalk globals includesKey: #LMActivityReader) and: [
- (Smalltalk globals at: #LMActivityReader) includesSelector: #pageOf:focus:session: ])
+ (Smalltalk globals at: #LMActivityReader) includesSelector: #pageOf:session: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'activity-timeline.st') contents ].
 ((Smalltalk globals includesKey: #LMConversationMessageView) and: [
  (Smalltalk globals at: #LMConversationMessageView) includesSelector: #addAttachmentsTo: ])
@@ -36,23 +36,22 @@ ui compile: 'activityExpandedFor: id
  activityExpansionStates ifNil: [ activityExpansionStates := Dictionary new ].
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
- | messagesChanged activityChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor prefix |
+ | messagesChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor activityCount statusText |
  layoutVersion = 10 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
+ incomingActivities := payload at: ''activities''.
+ activityCount := activityItems size.
+ (firstUpdate or: [ incomingActivities ~~ (lastPayload at: ''activities'') ]) ifTrue: [
+  (activityFollow not and: [ activityItems notEmpty and: [ incomingActivities notEmpty and: [
+   (activityItems first at: ''id'') ~= (incomingActivities first at: ''id'') ] ] ]) ifTrue: [
+    activityAnchor := self listAnchor: activity with: activityItems ].
+  LMChatStyle syncActivities: activity collection: activityItems with: incomingActivities ].
  lastPayload := payload.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
- incomingActivities := payload at: ''activities''.
- (activityFollow not and: [ activityItems notEmpty and: [ incomingActivities notEmpty and: [
-  (activityItems first at: ''id'') ~= (incomingActivities first at: ''id'') ] ] ]) ifTrue: [
-   activityAnchor := self listAnchor: activity with: activityItems.
-   prefix := incomingActivities findFirst: [ :entry | (entry at: ''id'') = (activityItems first at: ''id'') ].
-   prefix > 1 ifTrue: [
-    activityItems addAllFirst: (incomingActivities first: prefix - 1).
-    (activity childNamed: #scrollable) dataSource notifyItemsInserted: (1 to: prefix - 1) ] ].
- activityChanged := self syncList: activity collection: activityItems with: incomingActivities.
- status text: (errorText ifNil: [
+ statusText := errorText ifNil: [
   (#(''等待消息'' ''已完成'' ''正在处理'') includes: (payload at: ''status''))
-   ifTrue: [ ''Enter 发送 · Shift Enter 换行'' ] ifFalse: [ payload at: ''status'' ] ]).
+   ifTrue: [ ''Enter 发送 · Shift Enter 换行'' ] ifFalse: [ payload at: ''status'' ] ].
+ status text asString = statusText ifFalse: [ status text: statusText ].
  self updateActivityEmpty.
  (messagesChanged and: [ followOutput not and: [ firstUpdate not ] ]) ifTrue: [
   history userData at: #newContent put: true. self updateFollowButton ].
@@ -64,7 +63,7 @@ ui compile: 'applyUpdate: payload
   ifNil: [ (messagesChanged and: [ followOutput ]) ifTrue: [ self defer: [ self followLatest ] ] ].
  activityAnchor ifNotNil: [
   self restoreActivityAnchor: activityAnchor ].
- (activityChanged and: [ activityFollow ]) ifTrue: [ self defer: [ self followActivities ] ]'.
+ (activityItems size > activityCount and: [ activityFollow ]) ifTrue: [ self defer: [ self followActivities ] ]'.
 ui compile: 'bindActivityRow: row item: value
  ^ [ row descriptor: value ] on: Error do: [ :error | row showRenderingError: error descriptor: value ]'.
 ui compile: 'bindMessageRow: row item: value
@@ -219,7 +218,7 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient storage phase |
+ | key current records invocation messages statusText reply reader page limit partial audioIndex jobs activeClient storage phase |
  storage := LoomConversation storageStatus.
  phase := storage at: ''phase''.
  phase = ''ready'' ifTrue: [
@@ -231,11 +230,10 @@ ui compile: 'collectUpdate
  activeClient := LoomConversation instVarNamed: ''client''.
  invocation := current ifNotNil: [ activeClient activeRequestId ].
  limit := bodyPane userData at: #activityHistoryLimit ifAbsent: [ self activityPageSize ].
- page := (bodyPane userData at: #activityTimeline ifAbsentPut: [ LMActivityReader new ])
-  pageOf: limit focus: invocation session: LoomSessions mainId.
- partial := (page notNil and: [ invocation notNil and: [
-  (page at: ''focus'') = invocation and: [ activeClient activeRequestId = invocation ] ] ])
-  ifTrue: [ page at: ''answer'' ] ifFalse: [ '''' ].
+ reader := bodyPane userData at: #activityTimeline ifAbsentPut: [ LMActivityReader new ].
+ page := reader pageOf: limit session: LoomSessions mainId.
+ partial := reader streamedReplyFor: invocation.
+ activeClient activeRequestId ~= invocation ifTrue: [ partial := '''' ].
  messages := OrderedCollection new.
  records do: [ :record | | response content entry id audioId showReply audio |
   id := record at: ''id''.
@@ -810,11 +808,12 @@ ui compile: 'updateEditor: editor previous: previous text: text
    editor scrollToPosition: ((firstIndex min: editor editor text lineCount) max: 1) ] ].
  ^ text'.
 ui compile: 'updateActivityEmpty
- | empty message |
+ | empty message visibility |
  empty := activity userData at: #emptyLabel.
  message := (lastPayload at: ''processing'') ifTrue: [ ''等待活动…'' ] ifFalse: [ ''暂无活动'' ].
  empty text asString = message ifFalse: [ empty text: message ].
- empty visibility: (activityItems isEmpty ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ])'.
+ visibility := activityItems isEmpty ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ].
+ empty visibility class = visibility class ifFalse: [ empty visibility: visibility ]'.
 ui compile: 'updateFollowAfterScroll: delta
  | viewport |
  delta y isZero ifTrue: [ ^ self ].

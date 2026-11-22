@@ -137,8 +137,7 @@ ui compile: 'build
  footer addChild: status.
  voiceComposer := LMVoiceComposer new.
  footer addChild: (voiceComposer buildFor: self).
- footer addChild: (LMChatStyle iconElementButton: (LMIcons iconNamed: ''paperclip'')
-  title: ''添加附件'' action: [ self pickAttachments ]).
+ footer addChild: self attachmentPickerButton.
  footer addChild: ((LMChatStyle button: ''发送'' action: [ self sendMessage ]
   foreground: Color white background: (Color gray: 0.2)) hExact: 50; vExact: 28; margin: (BlInsets left: 5); yourself).
  composer addChild: footer. left addChild: composer.
@@ -217,6 +216,9 @@ ui compile: 'activityToolbarRule
   margin: (BlInsets top: 32);
   constraintsDo: [ :c | c horizontal matchParent. c vertical exact: 1. c frame vertical alignTop ];
   yourself'.
+ui compile: 'attachmentPickerButton
+ ^ (LMChatStyle replyAction: #loomPickAttachments icon: ''paperclip'' action: [ self pickAttachments ])
+  label: ''添加附件''; hExact: 27; yourself'.
 ui compile: 'button: title action: block ^ LMChatStyle button: title action: block'.
 ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].

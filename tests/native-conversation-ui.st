@@ -1,5 +1,5 @@
 "Native conversation regression. Never invokes a model or executes Markdown code."
-| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle |
+| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle offset |
 report := Dictionary new.
 checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
@@ -28,7 +28,7 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  space := ui presentationSpace.
  footer := (ui instVarNamed: 'status') parent.
  send := footer children last.
- attach := footer children at: 3.
+ attach := footer childNamed: #loomPickAttachments.
  hovered := BlElementState hovered.
  focus := BlElementState focused.
  applyStyle := [ :button | space doStyle: button; doComputePropertiesFromRoot: button ].
@@ -47,11 +47,17 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   value: 'send button restores its default background after a hover'.
  attach states addState: hovered.
  applyStyle value: attach.
- check value: attach background paint color = (Color gray: 0.955)
+ check value: attach background paint color = (Color gray: 0.95)
   value: 'attachment button uses its light hover background'.
+ attach forceLayout.
+ offset := attach children first bounds center - (attach extent / 2).
+ check value: (offset x abs < 0.01 and: [ offset y abs < 0.01 ])
+  value: 'the paperclip is centered horizontally and vertically in the hover background'.
+ check value: (attach aptitude hasActorOfKind: BrGlamorousWithExplicitTooltipAptitude) not
+  value: 'the attachment picker has no hover tooltip'.
  attach states removeState: hovered.
  applyStyle value: attach.
- check value: attach background paint color alpha = 0
+ check value: attach background isTransparent
   value: 'attachment button restores its transparent background'.
  row := LMConversationActivityView new controller: ui; yourself.
  one := Dictionary new at: 'id' put: 'activity-one'; at: 'type' put: 'dynamicToolCall';

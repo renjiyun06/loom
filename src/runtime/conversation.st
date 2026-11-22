@@ -2,12 +2,12 @@
 | conversation existing |
 existing := Smalltalk globals at: #LoomConversation ifAbsent: [ nil ].
 conversation := (Object << #LMConversation
- slots: { #client. #gate. #worker. #currentId. #mutex };
+ slots: { #client. #gate. #worker. #currentId. #mutex. #pendingReply };
  package: 'Loom-Conversation') install.
 conversation comment: 'A persistent conversation program living in the GT image. SQLite stores messages and replies. The worker waits on a semaphore between messages. Inspect the LoomConversation global for live state.'.
 conversation compile: 'initialize
  super initialize. client := LoomCodex session: #main. gate := Semaphore new. mutex := Mutex new'.
-conversation class compile: 'bootstrapVersion ^ 2'.
+conversation class compile: 'bootstrapVersion ^ 3'.
 conversation compile: 'directory
  ^ ExperimentRoot / ''state'' / ''conversation'''.
 conversation compile: 'write: object to: file
@@ -21,6 +21,7 @@ conversation compile: 'write: object to: file
  temporary renameTo: file basename'.
 conversation compile: 'storage: action options: options
  | id ipc request receipt deadline result bridgeStatus |
+ self waitForStorage.
  id := UUID new asString.
  ipc := ExperimentRoot / ''ipc'' / ''conversation''.
  request := ipc / ''requests'' / (id, ''.json'').
@@ -29,6 +30,7 @@ conversation compile: 'storage: action options: options
  deadline := DateAndTime now + (Duration seconds: (action = ''pick'' ifTrue: [ 605 ] ifFalse: [ 30 ])).
  bridgeStatus := ExperimentRoot / ''ipc'' / ''bridge-ready.json''.
  [ receipt exists ] whileFalse: [
+  self checkStorageFailure.
   DateAndTime now >= deadline ifTrue: [
    | phase |
    phase := [ (STONJSON fromString: bridgeStatus contents) at: ''status'' ]
@@ -41,6 +43,19 @@ conversation compile: 'storage: action options: options
   ensure: [ request ensureDelete. receipt ensureDelete ].
  (result at: ''ok'') ifFalse: [ self error: (result at: ''error'') ].
  ^ result at: ''value'''.
+conversation compile: 'storageStatus ^ LoomApplications statusFor: ''conversation'''.
+conversation compile: 'checkStorageFailure
+ | status |
+ status := self storageStatus.
+ (status at: ''phase'') = ''failed'' ifTrue: [
+  self error: ''对话存储不可用：'', (status at: ''error'') ].
+ ^ status at: ''phase'''.
+conversation compile: 'waitForStorage
+ | deadline |
+ deadline := DateAndTime now + (Duration seconds: 30).
+ [ self checkStorageFailure = ''ready'' ] whileFalse: [
+  DateAndTime now >= deadline ifTrue: [ self error: ''对话存储尚未就绪'' ].
+  (Delay forMilliseconds: 50) wait ]'.
 conversation compile: 'storage: action
  ^ self storage: action options: Dictionary new'.
 conversation compile: 'storageRevision
@@ -88,13 +103,22 @@ conversation compile: 'process: message
     at: ''text'' put: error messageText;
     at: ''invocation'' put: client lastResponse; yourself ].
   reply at: ''id'' put: id; at: ''completedAt'' put: DateAndTime now asUTC asString.
-  self storage: ''reply'' options: (Dictionary new at: ''reply'' put: reply; yourself)
+  pendingReply := reply.
+  self flushReply
  ] ensure: [ currentId := nil ]'.
+conversation compile: 'flushReply
+ pendingReply ifNotNil: [
+  self storage: ''reply'' options: (Dictionary new at: ''reply'' put: pendingReply; yourself).
+  pendingReply := nil ]'.
 conversation compile: 'run
  | message |
  [ true ] whileTrue: [
-  message := self nextInput.
-  message ifNil: [ gate wait ] ifNotNil: [ self process: message ] ]'.
+  [ self flushReply.
+   message := self nextInput.
+   message ifNil: [ gate wait ] ifNotNil: [ self process: message ]
+  ] on: Error do: [ :error |
+   ((self storageStatus at: ''phase'') = ''ready'')
+    ifTrue: [ error pass ] ifFalse: [ gate wait ] ] ]'.
 conversation compile: 'start
  self directory.
  (worker isNil or: [ worker isTerminated ]) ifTrue: [

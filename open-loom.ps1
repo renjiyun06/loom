@@ -25,7 +25,7 @@ try {
     # The runtime may have no windows and no UI loop after its last window closes.
     # Reopen the environment and wait for its real HWND instead of trusting a
     # cached Process.MainWindowHandle (which may be zero or a helper window).
-    $desktopText = & (Join-Path $runtimeRoot $configuration.paths.nodeExecutable) (Join-Path $runtimeRoot 'src\bridge\open-environment.mjs') 2> (Join-Path $logDirectory 'launcher-desktop.stderr.log')
+    $desktopText = & (Join-Path $runtimeRoot $configuration.paths.nodeExecutable) (Join-Path $runtimeRoot 'src\runtime\open-desktop.mjs') 2> (Join-Path $logDirectory 'launcher-desktop.stderr.log')
     if ($LASTEXITCODE -ne 0) { throw 'Cannot open the desktop. See logs\launcher-desktop.stderr.log.' }
     $desktop = ($desktopText -join [Environment]::NewLine) | ConvertFrom-Json
     if (-not $desktop.ok -or -not $desktop.hwnd) { throw 'No native desktop window was confirmed.' }

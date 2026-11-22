@@ -1,7 +1,7 @@
 "Add audio behavior without reinstalling or replacing the text program."
 | voice |
 voice := (Object << #LMVoice package: 'Loom-Voice') install.
-voice class compile: 'featureVersion ^ 4'.
+voice class compile: 'featureVersion ^ 5'.
 voice class compile: 'directory ^ ExperimentRoot / ''state'' / ''audio'''.
 voice class compile: 'index
  | file previous index |
@@ -33,7 +33,10 @@ voice class compile: 'transcriptionStatus: job
  state = ''unknown'' ifTrue: [ ^ ''转录结果待核对'' ].
  ^ ''正在转录…'''.
 voice class compile: 'request: action options: options
- | id request directory |
+ | id request directory status |
+ status := LoomApplications statusFor: ''voice''.
+ (status at: ''phase'') = ''failed'' ifTrue: [
+  self error: ''录音服务不可用：'', (status at: ''error'') ].
  id := UUID new asString.
  request := options copy at: ''action'' put: action; yourself.
  directory := ExperimentRoot / ''ipc'' / ''voice'' / ''requests''.

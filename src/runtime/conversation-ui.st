@@ -231,11 +231,14 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient |
- key := LoomConversation storageRevision.
- (recordCache isNil or: [ recordKey ~= key ]) ifTrue: [
-  recordCache := LoomConversation records asArray. recordKey := key ].
- records := recordCache.
+ | key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient storage phase |
+ storage := LoomConversation storageStatus.
+ phase := storage at: ''phase''.
+ phase = ''ready'' ifTrue: [
+  key := LoomConversation storageRevision.
+  (recordCache isNil or: [ recordKey ~= key ]) ifTrue: [
+   recordCache := LoomConversation records asArray. recordKey := key ] ].
+ records := recordCache ifNil: [ #() ].
  current := LoomConversation instVarNamed: ''currentId''.
  activeClient := LoomConversation instVarNamed: ''client''.
  invocation := current ifNotNil: [ activeClient activeRequestId ].
@@ -276,6 +279,8 @@ ui compile: 'collectUpdate
  current ifNil: [
   records ifNotEmpty: [ reply := records last at: ''reply'' ifAbsent: [ nil ].
    (reply notNil and: [ (reply at: ''ok'') not ]) ifTrue: [ statusText := ''本轮未完成'' ] ] ].
+ phase = ''starting'' ifTrue: [ statusText := ''正在打开对话存储…'' ].
+ phase = ''failed'' ifTrue: [ statusText := ''对话存储不可用：'', (storage at: ''error'') ].
  ^ Dictionary new at: ''messages'' put: messages asArray;
   at: ''activities'' put: (page ifNil: [ #() ] ifNotNil: [ page at: ''items'' ]);
   at: ''activityLimit'' put: (page ifNil: [ 0 ] ifNotNil: [ page at: ''limit'' ]);
@@ -780,7 +785,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 23'.
+ui class compile: 'featureVersion ^ 24'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

@@ -1,10 +1,8 @@
 "Upgrade the built-in session without reinstalling the saved conversation or its UI."
 | source |
-(LoomSessions respondsTo: #mainId) ifFalse: [
- Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'loom-sessions.st') contents.
- #(LoomSessionManagerWindow LoomActivityOverviewWindow) do: [ :key |
-  (Smalltalk globals at: key ifAbsent: [ nil ]) ifNotNil: [ :view |
-   (view instVarNamed: #selected) = 'conversation' ifTrue: [ view instVarNamed: #selected put: LoomSessions mainId ] ] ] ].
+#(LoomSessionManagerWindow LoomActivityOverviewWindow) do: [ :key |
+ (Smalltalk globals at: key ifAbsent: [ nil ]) ifNotNil: [ :view |
+  (view instVarNamed: #selected) = 'conversation' ifTrue: [ view instVarNamed: #selected put: LoomSessions mainId ] ] ].
 source := (LMConversation >> #initialize) sourceCode.
 (source includesSubstring: 'client := LoomCodex.') ifTrue: [
  LMConversation compile: (source copyReplaceAll: 'client := LoomCodex.' with: 'client := LoomCodex session: #main.') ].

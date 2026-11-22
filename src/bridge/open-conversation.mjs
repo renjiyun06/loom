@@ -1,7 +1,14 @@
 import {randomUUID} from 'node:crypto';
 import {evaluate} from './runtime-client.mjs';
-import {openEnvironment} from './open-environment.mjs';
+import {openEnvironment} from '../runtime/open-desktop.mjs';
 await openEnvironment();
+const startupDeadline=Date.now()+20000;
+for (;;) {
+ const available=await evaluate("(Smalltalk globals includesKey: #LoomConversation) and: [ Smalltalk globals includesKey: #LMConversationUI ]",'conversation-available');
+ if(available.ok && available.value)break;
+ if(Date.now()>=startupDeadline)throw Error('The Loom conversation application did not load');
+ await new Promise(resolve=>setTimeout(resolve,100));
+}
 const id=randomUUID();
 const requested=await evaluate(`BlHost pickHost universe defer: [
  [ | presenter |

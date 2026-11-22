@@ -28,7 +28,7 @@ export class ConversationService {
     this.results = path.join(ipc, 'conversation', 'results');
     this.revision = path.join(ipc, 'conversation', 'revision.json');
     for (const directory of [this.requests, this.results]) fs.mkdirSync(directory, {recursive: true});
-    this.active = new Set();
+    this.active = new Map();
     this.abort = new AbortController();
     this.publish();
   }
@@ -70,8 +70,7 @@ export class ConversationService {
     for (const name of fs.readdirSync(this.requests).filter(file => /^[a-f0-9-]{36}\.json$/i.test(file))) {
       const receipt = path.join(this.results, name);
       if (this.active.has(name) || fs.existsSync(receipt)) continue;
-      this.active.add(name);
-      void (async () => {
+      const operation = (async () => {
         let result;
         try {
           const request = JSON.parse(fs.readFileSync(path.join(this.requests, name), 'utf8'));
@@ -79,13 +78,15 @@ export class ConversationService {
         } catch (error) {
           result = {ok: false, error: error.message};
         }
-        if (!this.abort.signal.aborted) atomicJSON(receipt, result);
+        atomicJSON(receipt, result);
       })().catch(onError).finally(() => this.active.delete(name));
+      this.active.set(name, operation);
     }
   }
 
-  close() {
+  async close() {
     this.abort.abort();
+    await Promise.allSettled(this.active.values());
     this.store.close();
   }
 }

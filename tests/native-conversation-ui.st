@@ -71,6 +71,17 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  row := LMConversationMessageView new controller: ui; yourself.
  descriptor := Dictionary new at: 'id' put: 'source-message'; at: 'role' put: 'assistant';
   at: 'text' put: '## 原始 Markdown'; at: 'pending' put: false; yourself.
+ row descriptor: (descriptor copy at: 'pending' put: true; yourself).
+ check value: ((row instVarNamed: 'stateLabel') visibility class = BlVisibility gone class
+  and: [ (row instVarNamed: 'body') source = (descriptor at: 'text') ])
+  value: 'streamed text appears without a processing label in the reply'.
+ row descriptor: (descriptor copy at: 'ok' put: false; yourself).
+ check value: ((row instVarNamed: 'stateLabel') text asString = '未完成'
+  and: [ (row instVarNamed: 'stateLabel') visibility class = BlVisibility visible class ])
+  value: 'an unsuccessful reply still displays its completion state'.
+ check value: ((payload at: 'messages') noneSatisfy: [ :entry | (entry at: 'role') = 'assistant'
+  and: [ (entry at: 'pending' ifAbsent: [ false ]) and: [ (entry at: 'text') isEmpty ] ] ])
+  value: 'the conversation omits empty pending replies'.
  row descriptor: descriptor; toggleSource;
   descriptor: (descriptor copy at: 'id' put: 'another-message'; yourself); descriptor: descriptor.
  check value: ((row instVarNamed: 'rawShown') and: [

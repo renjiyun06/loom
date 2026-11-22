@@ -257,7 +257,7 @@ ui compile: 'collectUpdate
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
    at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
   record at: ''attachments'' ifPresent: [ :attachments | entry at: ''attachments'' put: attachments ].
-  showReply := response notNil or: [ audioId isNil or: [ current = id ] ].
+  showReply := response notNil or: [ current = id and: [ partial isNotEmpty ] ].
   audioId ifNotNil: [
    jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
    self addRecording: (jobs at: audioId ifAbsent: [ nil ]) id: audioId

@@ -133,6 +133,9 @@ export class CodexAppServer extends EventEmitter {
     try {
       const binding=this.sessionRegistry.ensureClient(request.clientKey);
       active.threadId=binding.threadId;
+      if(request.requiredThreadId && request.requiredThreadId!==active.threadId) {
+        throw new Error('底层 Codex 会话已切换，无法在原上下文中继续处理这条录音。');
+      }
       if(binding.state==='creating')throw new Error('Previous conversation creation has an uncertain outcome; refusing to create another conversation');
       let thread;
       if(active.threadId) {

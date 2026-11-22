@@ -224,33 +224,39 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | directory key current records invocation messages statusText reply page limit partial audioIndex jobs |
+ | directory key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient |
  directory := LoomConversation directory.
  key := { (directory / ''inputs'') modificationTime. (directory / ''replies'') modificationTime }.
  (recordCache isNil or: [ recordKey ~= key ]) ifTrue: [
   recordCache := LoomConversation records asArray. recordKey := key ].
  records := recordCache.
  current := LoomConversation instVarNamed: ''currentId''.
- invocation := current ifNotNil: [ (LoomConversation instVarNamed: ''client'') activeRequestId ].
+ activeClient := LoomConversation instVarNamed: ''client''.
+ invocation := current ifNotNil: [ activeClient activeRequestId ].
  limit := bodyPane userData at: #activityHistoryLimit ifAbsent: [ self activityPageSize ].
  page := (bodyPane userData at: #activityTimeline ifAbsentPut: [ LMActivityReader new ])
   pageOf: limit focus: invocation session: LoomSessions mainId.
- partial := (page notNil and: [ invocation notNil and: [ (page at: ''focus'') = invocation ] ])
+ partial := (page notNil and: [ invocation notNil and: [
+  (page at: ''focus'') = invocation and: [ activeClient activeRequestId = invocation ] ] ])
   ifTrue: [ page at: ''answer'' ] ifFalse: [ '''' ].
  messages := OrderedCollection new.
- records do: [ :record | | response content entry id audioId |
+ records do: [ :record | | response content entry id audioId showReply audio |
   id := record at: ''id''.
+  response := record at: ''reply'' ifAbsent: [ nil ].
   audioId := record at: ''audioId'' ifAbsent: [ nil ].
   entry := Dictionary new at: ''id'' put: id, ''-user'';
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
    at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
+  showReply := response notNil or: [ audioId isNil or: [ current = id ] ].
   audioId ifNotNil: [
    jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
    self addRecording: (jobs at: audioId ifAbsent: [ nil ]) id: audioId
-    playing: (audioIndex at: ''playingId'' ifAbsent: [ nil ]) = audioId to: entry ].
+    playing: (audioIndex at: ''playingId'' ifAbsent: [ nil ]) = audioId
+    correction: (LoomConversation speechCorrectionAt: id) awaitingReply: response isNil to: entry.
+   audio := entry at: ''audio''.
+   (#(correcting correctionFailed) includes: (audio at: ''stage'')) ifTrue: [ showReply := false ] ].
   messages add: entry.
-  response := record at: ''reply'' ifAbsent: [ nil ].
-  (response notNil or: [ audioId isNil or: [ current = id ] ]) ifTrue: [
+  showReply ifTrue: [
    content := response ifNil: [ current = id ifTrue: [ partial ] ifFalse: [ '''' ] ]
     ifNotNil: [ response at: ''text'' ].
    messages add: (Dictionary new at: ''id'' put: id, ''-assistant'';
@@ -268,9 +274,17 @@ ui compile: 'collectUpdate
   at: ''activityLimit'' put: (page ifNil: [ 0 ] ifNotNil: [ page at: ''limit'' ]);
   at: ''hasOlderActivities'' put: (page notNil and: [ page at: ''older'' ]);
   at: ''status'' put: statusText; at: ''processing'' put: current notNil; yourself'.
-ui compile: 'addRecording: job id: id playing: playing to: entry
- | transcript caption original |
+ui compile: 'addRecording: job id: id playing: playing correction: correction awaitingReply: awaitingReply to: entry
+ | transcript caption original stage state |
  transcript := LMVoice transcribedText: job.
+ state := LMVoice transcriptionStatus: job.
+ stage := #transcription.
+ correction ifNotNil: [
+  (correction at: ''ok'') ifTrue: [ transcript := correction at: ''text''. stage := #corrected. state := '''' ]
+   ifFalse: [ stage := #correctionFailed. state := ''纠正失败'' ]
+ ] ifNil: [
+  (awaitingReply and: [ transcript isNotEmpty ]) ifTrue: [
+   stage := #correcting. state := ''正在纠正…''. transcript := '''' ] ].
  caption := entry at: ''text''.
  transcript ifNotEmpty: [ entry at: ''text'' put: (caption
   ifEmpty: [ transcript ] ifNotEmpty: [ caption, String cr, transcript ]) ].
@@ -280,7 +294,7 @@ ui compile: 'addRecording: job id: id playing: playing to: entry
   at: ''duration'' put: (job ifNil: [ 0 ] ifNotNil: [ job at: ''duration'' ifAbsent: [ 0 ] ]);
   at: ''playing'' put: playing;
   at: ''playable'' put: (original notNil and: [ (LMVoice directory / id / original) exists ]);
-  at: ''status'' put: (LMVoice transcriptionStatus: job); yourself)'.
+  at: ''status'' put: state; at: ''stage'' put: stage; yourself)'.
 ui compile: 'configureInputShortcuts
  input addEditorShortcut: (BrEditorShortcut new
   name: ''Send Loom message'';
@@ -722,7 +736,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 21'.
+ui class compile: 'featureVersion ^ 22'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

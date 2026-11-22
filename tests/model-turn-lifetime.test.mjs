@@ -124,6 +124,14 @@ test('a resumed thread takes the selected model, effort, and tier on the next tu
   await pending;
 });
 
+test('a corrected recording cannot start a turn in a different Codex thread', async () => {
+  const server=serverFixture();
+  const result=await server.call({...request,objectInvocation:true,requiredThreadId:'thread-before-switch'});
+  assert.equal(result.ok,false);
+  assert.match(result.error,/底层 Codex 会话已切换/);
+  assert.deepEqual(server.calls,[]);
+});
+
 test('transport failure settles immediately without retrying or starting a new thread', async () => {
   const server = serverFixture();
   const pending = server.call({...request, timeoutSeconds:undefined});

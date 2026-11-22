@@ -59,6 +59,41 @@ test('GT sends one tagged transcript message with its original ID and keeps audi
  assert.deepEqual(result,{ok:true,value:[true,true,true,'recognizer error','message-1','audio','synthetic result',true,true]});
 });
 
+test('GT stores a speech correction once and carries the same thread into its reply',async()=>{
+ const directory=path.join(root,'tests/results','speech-correction-'+randomUUID());
+ fs.mkdirSync(directory,{recursive:true});
+ const literal="'"+directory.replaceAll("'","''")+"'";
+ const source=String.raw`| conversationClass sessionClass conversation result input session |
+  conversationClass := LMConversation newAnonymousSubclass.
+  conversationClass compile: 'directory ^ ', ${literal} storeString, ' asFileReference'.
+  conversationClass compile: ((LMConversation >> #answer:) sourceCode
+   copyReplaceAll: 'session := LoomCodex session: #main.' with: 'session := self probeSession.').
+  sessionClass := Object newAnonymousSubclass.
+  sessionClass compile: 'requireThread: expected during: operation
+   expected ifNotNil: [ expected = ''same-thread'' ifFalse: [ self error: ''Thread mismatch'' ] ].
+   ^ operation value'.
+  sessionClass compile: 'correctSpeechTranscript: text
+   text = ''ROM'' ifFalse: [ self error: ''Expected original transcript'' ].
+   ^ ''Loom'''.
+  sessionClass compile: 'lastResponse ^ Dictionary new at: ''threadId'' put: ''same-thread''; yourself'.
+  sessionClass compile: 'replyTo: message usingContext: context
+   ((message at: ''kind'') = ''audio'' and: [ (message at: ''text'') = ''Loom'' and: [ context = ''Loom'' ] ])
+    ifFalse: [ self error: ''Corrected audio message was not delivered'' ].
+   ^ ''done'''.
+  session := sessionClass new.
+  conversationClass compile: 'probeSession ^ Smalltalk globals at: #LoomSpeechTestSession'.
+  Smalltalk globals at: #LoomSpeechTestSession put: session.
+  [ conversation := conversationClass new.
+   input := Dictionary new at: 'id' put: 'fixture'; at: 'kind' put: 'audio'; at: 'text' put: 'ROM'; yourself.
+   result := conversation answer: input.
+   sessionClass compile: 'correctSpeechTranscript: text self error: ''Correction was called twice'''.
+   { result. (conversation speechCorrectionAt: 'fixture') at: 'text'.
+     conversation answer: input. input at: 'text' }
+  ] ensure: [ Smalltalk globals removeKey: #LoomSpeechTestSession ]`;
+ const result=await evaluate(source,'speech-correction-chain');
+ assert.deepEqual(result,{ok:true,value:['done','Loom','done','ROM']});
+});
+
 test('runtime_eval exposes the native invocation roots and returns the very same GT object',async()=>{
  const requestId=randomUUID();
  const pending=`(LMInvocation pendingAt: '${requestId}')`;

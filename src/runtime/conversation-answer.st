@@ -1,8 +1,13 @@
 answer: message
- "The first argument is the user message and the second is its prepared context. A message with kind audio has the transcript in text. Return the full user-facing reply as a GT String. Keep the Loom invocation protocol out of the user-facing reply."
- | context reply |
- context := self preparePrompt: message.
- reply := (LoomCodex session: #main)
-  replyTo: message usingContext: context.
+ "The first argument to replyTo:usingContext: is the user message. For audio, text contains the corrected transcript. Respond to this message and return the full user-facing reply as a GT String."
+ | session input context correction send reply |
+ session := LoomCodex session: #main.
+ input := message.
+ (message at: 'kind' ifAbsent: [ nil ]) = 'audio' ifTrue: [
+  correction := self correctRecording: message using: session.
+  input := message copy at: 'text' put: (correction at: 'text'); yourself ].
+ context := self preparePrompt: input.
+ send := [ session replyTo: input usingContext: context ].
+ reply := correction ifNil: [ send value ] ifNotNil: [ session requireThread: (correction at: 'threadId') during: send ].
  reply isString ifFalse: [ self error: 'The Loom conversation expects a text reply' ].
  ^ reply

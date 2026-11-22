@@ -2,7 +2,7 @@
 | clientClass client existing |
 existing := Smalltalk globals at: #LoomCodex ifAbsent: [ nil ].
 clientClass := (Object << #LMCodexClient
- slots: { #threadId. #lastResponse. #timeoutSeconds. #mutex. #clientKey. #activeRequestId };
+ slots: { #threadId. #lastResponse. #timeoutSeconds. #mutex. #clientKey. #activeRequestId. #requiredThreadId };
  package: 'Loom-Bridge') install.
 clientClass compile: 'initialize
  super initialize. timeoutSeconds := nil. mutex := Mutex new. clientKey := UUID new asString'.
@@ -24,6 +24,12 @@ clientClass compile: 'configure: settings
    ensure: [ lastResponse := previous. activeRequestId := nil ] ]'.
 clientClass compile: 'ask: prompt
  ^ mutex critical: [ [ self performRequest: prompt action: ''ask'' ] ensure: [ activeRequestId := nil ] ]'.
+clientClass compile: 'requireThread: expected during: operation
+ ^ mutex critical: [
+  | previous |
+  previous := requiredThreadId.
+  requiredThreadId := expected.
+  operation ensure: [ requiredThreadId := previous ] ]'.
 clientClass compile: 'performRequest: prompt action: action
  ^ self performRequest: prompt action: action invocation: nil'.
 clientClass compile: 'performRequest: prompt action: action invocation: invocation
@@ -48,6 +54,7 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
   at: ''action'' put: action;
   at: ''threadId'' put: threadId;
   yourself.
+ requiredThreadId ifNotNil: [ request at: ''requiredThreadId'' put: requiredThreadId ].
  invocation ifNotNil: [
   invocation attachTo: id.
   request at: ''objectInvocation'' put: true ].

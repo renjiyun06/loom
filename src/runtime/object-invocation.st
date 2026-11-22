@@ -46,5 +46,5 @@ LMCodexClient compile: 'doesNotUnderstand: message
   [ self performRequest: ''Loom 调用了你。'' action: ''ask'' invocation: invocation.
     invocation result ]
    ensure: [ invocation detach. activeRequestId := nil ] ]'.
-LMCodexClient class compile: 'bridgeVersion ^ 12'.
+LMCodexClient class compile: 'bridgeVersion ^ 13'.
 'Loom object invocation installed'

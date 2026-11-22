@@ -108,11 +108,8 @@ try {
   const installed=await evaluate('Smalltalk globals includesKey: #LMCodexClient','check-client');
   if(!installed.ok)throw new Error(JSON.stringify(installed));
   const version=installed.value?await evaluate('(LMCodexClient class canUnderstand: #bridgeVersion) ifTrue: [ LMCodexClient bridgeVersion ] ifFalse: [ 0 ]','client-version'):{value:0};
-  if(version.value<11) {
+  if(version.value<13) {
     const result=await evaluate(fs.readFileSync(path.join(root,'src/runtime/codex-client.st'),'utf8'),'install-codex-client');
-    if(!result.ok)throw new Error(JSON.stringify(result));
-  } else if(version.value<12) {
-    const result=await evaluate(fs.readFileSync(path.join(root,'src/runtime/object-invocation.st'),'utf8'),'upgrade-object-invocation');
     if(!result.ok)throw new Error(JSON.stringify(result));
   }
   const conversationInstalled=await evaluate('Smalltalk globals includesKey: #LoomConversation','check-conversation');
@@ -125,7 +122,7 @@ try {
   if(!mainSession.ok)throw new Error(JSON.stringify(mainSession));
   const voiceVersion=await evaluate('(Smalltalk globals includesKey: #LMVoice) ifTrue: [ (Smalltalk globals at: #LMVoice) featureVersion ] ifFalse: [ 0 ]','check-voice');
   if(!voiceVersion.ok)throw new Error(JSON.stringify(voiceVersion));
-  if(voiceVersion.value<2){
+  if(voiceVersion.value<3){
     const installedVoice=await evaluate(fs.readFileSync(path.join(root,'src/runtime/voice.st'),'utf8').replace(/\r?\n/g,'\r'),'install-voice');
     if(!installedVoice.ok)throw new Error(JSON.stringify(installedVoice));
   }
@@ -173,7 +170,7 @@ try {
   nativeWatcher=setInterval(()=>{void nativeLifecycle.poll().catch(fail);},100);
   const uiVersion=await evaluate('(Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ]) ifNil: [ 0 ] ifNotNil: [ :ui | ui featureVersion ]','check-ui');
   if(!uiVersion.ok)throw new Error(JSON.stringify(uiVersion));
-  if(uiVersion.value<21){
+  if(uiVersion.value<22){
     const ui=await evaluate(fs.readFileSync(path.join(root,'src/runtime/conversation-ui.st'),'utf8').replace(/\r?\n/g,'\r'),'install-ui');
     if(!ui.ok)throw new Error(JSON.stringify(ui));
   }
@@ -207,6 +204,7 @@ try {
         typeof request.clientKey!=='string'||!/^[a-zA-Z0-9._-]{1,128}$/.test(request.clientKey)||
         typeof request.prompt!=='string'||(request.action==='ask'&&!request.prompt.trim())||
         (request.objectInvocation!==undefined && !(request.objectInvocation===true && request.action==='ask'))||
+        (request.requiredThreadId!==undefined && !(request.action==='ask' && typeof request.requiredThreadId==='string' && request.requiredThreadId.length>0))||
         !(request.threadId===null||typeof request.threadId==='string')) {
         atomicJSON(responseFile,{ok:false,id,error:'Invalid Codex request'});continue;
       }

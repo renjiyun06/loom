@@ -90,6 +90,7 @@ applications class compile: 'initializeVoice
   Smalltalk globals at: #LoomGtVoice put: manager ].
  manager start'.
 applications class compile: 'restoreIn: world
+ self dismissRestoredShutdownPromptIn: world.
  self attempt: ''desktop-toolbar'' during: [ (world instVarNamed: #worldElement) updateToolbarActions ].
  self attempt: ''conversation-window'' during: [
   (Smalltalk globals at: #LoomConversationWindow ifAbsent: [ nil ]) ifNotNil: [ :view | view restore ] ].
@@ -97,6 +98,13 @@ applications class compile: 'restoreIn: world
   (Smalltalk globals at: #LoomSessionManagerWindow ifAbsent: [ nil ]) ifNotNil: [ :view | view restoreIn: world ] ].
  self attempt: ''activity-window'' during: [
   (Smalltalk globals at: #LoomActivityOverviewWindow ifAbsent: [ nil ]) ifNotNil: [ :view | view restoreIn: world ] ]'.
+applications class compile: 'dismissRestoredShutdownPromptIn: world
+ | contents |
+ contents := world instVarNamed: #worldElement.
+ (contents userData at: #loomDesktopSession ifAbsent: [ nil ]) = BridgeRuntimeSessionId ifTrue: [ ^ self ].
+ contents childWithId: GtWorldShutdownPromptId
+  ifFound: [ :prompt | prompt removeFromParent ] ifNone: [ ].
+ contents userData at: #loomDesktopSession put: BridgeRuntimeSessionId'.
 applications class compile: 'openDesktopRequest: id restore: restore
  | universe request |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''The runtime is not in desktop mode'' ].

@@ -63,7 +63,7 @@ public static class FakeCodexAppServer {
                     if(text=="mock-active") break;
                     if(text=="Loom \u8c03\u7528\u4e86\u4f60\u3002") {
                         Send(new {id="tool-"+turnId,method="item/tool/call",@params=new {threadId,turnId,callId="tool-"+turnId,
-                            tool="runtime_eval",arguments=new {code="loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: loomMessage arguments first; yourself). true"}}});
+                            tool="runtime_eval",arguments=new {code="loomReturn value: (loomMessage selector = #replyTo:usingContext: ifTrue: [ (loomMessage arguments first at: 'text'), ' reply' ] ifFalse: [ Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: loomMessage arguments first; yourself ]). true"}}});
                     } else Finish(text+" \u56de\u6267","completed");
                     break;
                 case "turn/interrupt":

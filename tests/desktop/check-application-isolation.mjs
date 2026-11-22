@@ -218,15 +218,21 @@ try {
    LMConversation comment includesSubstring: 'conversation program'
   }`, 'restored-applications');
   assert.deepEqual(restored, [2, true, 'isolation-check', true]);
-  const tabsBehindPrompt = await gt(`| world contents tabs prompt |
+  const recoveredTabs = await gt(`| world contents tabs before after freshPrompt |
    world := GtWorld new.
    contents := world instVarNamed: #worldElement.
    tabs := contents childNamed: #'gt-world--tabs'.
+   contents userData at: #loomDesktopSession put: 'previous-runtime'.
    contents showShutdownPrompt.
-   prompt := contents childNamed: #'gt-world--shutdown-prompt'.
-   { contents children first == prompt. world tabGroup == tabs }
+   before := world tabGroup == tabs.
+   LoomApplications restoreIn: world.
+   after := contents childWithId: GtWorldShutdownPromptId ifFound: [ :prompt | false ] ifNone: [ true ].
+   contents showShutdownPrompt.
+   LoomApplications restoreIn: world.
+   freshPrompt := contents childWithId: GtWorldShutdownPromptId ifFound: [ :prompt | true ] ifNone: [ false ].
+   { before. after. world tabGroup == tabs. freshPrompt }
   `, 'tabs-behind-restored-shutdown-prompt');
-  assert.deepEqual(tabsBehindPrompt, [true, true]);
+  assert.deepEqual(recoveredTabs, [true, true, true, true]);
   fs.appendFileSync(path.join(fixture, 'src/runtime/conversation-db.st'), ".\nLMConversationStore compile: 'reloadFixtureMarker ^ 7'.\n");
   await gt('Smalltalk globals at: #LoomTestReload put: LoomApplications reload. true', 'reload-after-restart');
   const markerDeadline = Date.now() + 30000;
@@ -242,6 +248,24 @@ try {
     const resumed = await submitModel("(LoomSessions session: 'isolation-check') ask: '会话续接'", 'resumed-model-call');
     assert.deepEqual(await resumed(), {ok: true, value: '会话续接 回执'});
     assert.equal((await gt("LoomSessions show: 'isolation-check'", 'resumed-binding')).threadId, thread);
+    await gt(`| view |
+     view := LMConversationUI new build.
+     Smalltalk globals at: #LoomTestEchoView put: view.
+     (view instVarNamed: #input) text: 'fixture echo after restart'.
+     view sendMessage.
+     true`, 'send-from-restored-runtime');
+    const echoDeadline = Date.now() + 30000;
+    for (;;) {
+      const messages = await gt(`| messages |
+       messages := LoomTestEchoView collectUpdate at: 'messages'.
+       (messages last: 2) collect: [ :item | { item at: 'role'. item at: 'text' } ]`, 'read-echo-and-reply');
+      if (messages[1][1] === 'fixture echo after restart reply') {
+        assert.deepEqual(messages, [['user', 'fixture echo after restart'], ['assistant', 'fixture echo after restart reply']]);
+        break;
+      }
+      if (Date.now() >= echoDeadline) throw Error('The restored conversation did not echo the message and reply: ' + JSON.stringify(messages));
+      await sleep(200);
+    }
   }
   await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
   await stoppedAfter(false);

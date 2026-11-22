@@ -40,6 +40,14 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (ui instVarNamed: 'historyItems') size = (payload at: 'messages') size value: 'message list loads real persisted conversation'.
  result := ui syncList: (ui instVarNamed: 'history') collection: (ui instVarNamed: 'historyItems') with: (payload at: 'messages').
  check value: result not value: 'unchanged messages do not rebind list rows'.
+ ui applyUpdate: (payload copy at: 'status' put: '正在处理'; at: 'processing' put: true; yourself).
+ check value: ((ui instVarNamed: 'status') text asString = 'Enter 发送 · Shift Enter 换行'
+  and: [ (ui instVarNamed: 'stopButton') visibility class = BlVisibility visible class ])
+  value: 'composer keeps shortcuts and Stop while processing'.
+ ui applyUpdate: (payload copy at: 'status' put: '本轮未完成'; at: 'processing' put: false; yourself).
+ check value: ((ui instVarNamed: 'status') text asString = '本轮未完成'
+  and: [ (ui instVarNamed: 'stopButton') visibility class = BlVisibility gone class ])
+  value: 'composer still shows failure status'.
  check value: (LoomConversation orderedInputs size = before) value: 'UI validation submits no model request'.
  check value: ((ui instVarNamed: 'input') editor editorShortcuts
   detectShortcutLike: (BrEditorShortcut new combination: BlKeyCombination return; yourself)
@@ -71,17 +79,18 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  row := LMConversationMessageView new controller: ui; yourself.
  descriptor := Dictionary new at: 'id' put: 'source-message'; at: 'role' put: 'assistant';
   at: 'text' put: '## 原始 Markdown'; at: 'pending' put: false; yourself.
+ row descriptor: (descriptor copy at: 'pending' put: true; at: 'text' put: ''; yourself).
+ check value: ((row instVarNamed: 'stateLabel') text asString = '正在处理…'
+  and: [ (row instVarNamed: 'stateLabel') visibility class = BlVisibility visible class ])
+  value: 'reply shows processing before text arrives'.
  row descriptor: (descriptor copy at: 'pending' put: true; yourself).
- check value: ((row instVarNamed: 'stateLabel') visibility class = BlVisibility gone class
+ check value: ((row instVarNamed: 'stateLabel') text asString = '正在回复…'
   and: [ (row instVarNamed: 'body') source = (descriptor at: 'text') ])
-  value: 'streamed text appears without a processing label in the reply'.
+  value: 'reply shows streamed text and its progress label'.
  row descriptor: (descriptor copy at: 'ok' put: false; yourself).
  check value: ((row instVarNamed: 'stateLabel') text asString = '未完成'
   and: [ (row instVarNamed: 'stateLabel') visibility class = BlVisibility visible class ])
   value: 'an unsuccessful reply still displays its completion state'.
- check value: ((payload at: 'messages') noneSatisfy: [ :entry | (entry at: 'role') = 'assistant'
-  and: [ (entry at: 'pending' ifAbsent: [ false ]) and: [ (entry at: 'text') isEmpty ] ] ])
-  value: 'the conversation omits empty pending replies'.
  row descriptor: descriptor; toggleSource;
   descriptor: (descriptor copy at: 'id' put: 'another-message'; yourself); descriptor: descriptor.
  check value: ((row instVarNamed: 'rawShown') and: [

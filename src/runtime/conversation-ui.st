@@ -50,7 +50,7 @@ ui compile: 'applyUpdate: payload
     (activity childNamed: #scrollable) dataSource notifyItemsInserted: (1 to: prefix - 1) ] ].
  activityChanged := self syncList: activity collection: activityItems with: incomingActivities.
  status text: (errorText ifNil: [
-  (#(''等待消息'' ''已完成'') includes: (payload at: ''status''))
+  (#(''等待消息'' ''已完成'' ''正在处理'') includes: (payload at: ''status''))
    ifTrue: [ ''Enter 发送 · Shift Enter 换行'' ] ifFalse: [ payload at: ''status'' ] ]).
  stopButton visibility: ((payload at: ''processing'') ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  self updateActivityEmpty.
@@ -257,7 +257,7 @@ ui compile: 'collectUpdate
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
    at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
   record at: ''attachments'' ifPresent: [ :attachments | entry at: ''attachments'' put: attachments ].
-  showReply := response notNil or: [ current = id and: [ partial isNotEmpty ] ].
+  showReply := response notNil or: [ audioId isNil or: [ current = id ] ].
   audioId ifNotNil: [
    jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
    self addRecording: (jobs at: audioId ifAbsent: [ nil ]) id: audioId

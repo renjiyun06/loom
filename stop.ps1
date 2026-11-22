@@ -4,7 +4,7 @@ if (-not (Test-Path -LiteralPath $statusFile)) { 'Runtime is not running'; exit 
 $current = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($current.status -notin @('ready','starting','stopping')) { $current | ConvertTo-Json; exit 0 }
 [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'ipc\stop.json'), '{}')
-$deadline = (Get-Date).AddSeconds(40)
+$deadline = (Get-Date).AddSeconds(100)
 do {
     Start-Sleep -Milliseconds 150
     $current = Get-Content -LiteralPath $statusFile -Raw -Encoding UTF8 | ConvertFrom-Json

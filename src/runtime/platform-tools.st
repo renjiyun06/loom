@@ -58,6 +58,9 @@ cls class compile: 'writeJSON: value to: file
 file parent ensureCreateDirectory.
 temporary := file parent / (UUID new asString, ''.tmp'').
 [ temporary writeStreamDo: [ :stream | stream nextPutAll: (STONJSON toString: value) ].
- (self move: temporary to: file) = 0 ifTrue: [ self error: ''无法保存 '', file basename ]
+ 21 timesRepeat: [
+  (self move: temporary to: file) ~= 0 ifTrue: [ ^ value ].
+  (Delay forMilliseconds: 25) wait ].
+ self error: ''无法保存 '', file basename
 ] ensure: [ temporary ensureDelete ]'.
 'Loom platform tools installed'

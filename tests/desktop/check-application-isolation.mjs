@@ -3,16 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {root} from '../../src/bridge/paths.mjs';
 import {evaluate} from '../../src/bridge/runtime-client.mjs';
+import {CheckpointStorage} from '../../src/bridge/checkpoint-storage.mjs';
 
 const temporary = path.resolve(os.tmpdir());
 const fixture = fs.mkdtempSync(path.join(temporary, 'loom-application-isolation-'));
 const ipc = path.join(fixture, 'ipc');
 const sessionFile = path.join(ipc, 'bridge-ready.json');
 const runtimeLinks = ['node', 'codex', 'gtoolkit', 'audio', 'media'];
+const mockCodex = process.argv.includes('--mock-codex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let child;
 
@@ -43,15 +45,18 @@ async function waitForApplication(name, phase) {
     const status = await gt(`(Smalltalk globals at: #LoomApplications ifAbsent: [ nil ])
       ifNotNil: [ :apps | (apps respondsTo: #statusFor:) ifTrue: [ apps statusFor: '${name}' ] ]`, 'application-status');
     if (status?.phase === phase) return status;
-    if (status?.phase === 'failed' && phase !== 'failed') throw Error(status.error);
+    if (status?.phase === 'failed' && phase !== 'failed') throw Error(`${status.error} (${status.errorAt ?? name})`);
     await sleep(200);
   }
-  throw Error(`Application ${name} did not report ${phase}`);
+  const trace = await gt("| frames | frames := Smalltalk globals at: #LoomApplicationLoadTrace ifAbsent: [ #() ]. String lf join: (frames first: (frames size min: 16))",
+    'application-load-trace');
+  throw Error(`Application ${name} did not report ${phase}: ${trace}`);
 }
 
 async function start(previousPid) {
-  child = spawn(path.join(root, 'runtime/supervisor/supervisor.exe'), [fixture], {cwd: fixture, windowsHide: true});
+  child = spawn(path.join(fixture, 'runtime/LoomSupervisor.exe'), [fixture], {cwd: fixture, windowsHide: true});
   return until('bridge readiness', () => {
+    if (child.exitCode !== null || child.signalCode !== null) throw Error('Supervisor quit before readiness: ' + JSON.stringify(read(sessionFile)));
     const state = read(sessionFile);
     if (!state || state.pid === previousPid) return false;
     if (state.status === 'failed') throw Error(state.error);
@@ -70,13 +75,33 @@ async function stoppedAfter(save) {
   assert.equal(child.exitCode, 0);
 }
 
+async function submitModel(source, label) {
+  const output = path.join(fixture, label + '.json');
+  await gt(`[ | result |
+   result := [ Dictionary new at: 'ok' put: true; at: 'value' put: [
+    ${source}
+   ] value; yourself ] on: Error do: [ :error |
+    Dictionary new at: 'ok' put: false; at: 'error' put: error messageText; yourself ].
+   LMPlatformTools writeJSON: result to: ExperimentRoot / '${label}.json'
+  ] fork. true`, label);
+  return () => until(label, () => read(output), 150000);
+}
+
 try {
   fs.cpSync(path.join(root, 'src'), path.join(fixture, 'src'), {recursive: true});
   fs.mkdirSync(path.join(fixture, 'tests'));
   fs.copyFileSync(path.join(root, 'tests/gt-voice-recovery.st'), path.join(fixture, 'tests/gt-voice-recovery.st'));
+  fs.copyFileSync(path.join(root, 'tests/gt-codex-contract.st'), path.join(fixture, 'tests/gt-codex-contract.st'));
   fs.mkdirSync(path.join(fixture, 'config'));
   fs.mkdirSync(path.join(fixture, 'runtime'));
+  fs.copyFileSync(path.join(root, 'runtime/supervisor/LoomSupervisor.exe'), path.join(fixture, 'runtime/LoomSupervisor.exe'));
   const config = read(path.join(root, 'config/runtime.json'));
+  if (mockCodex) {
+    config.paths.codexExecutable = 'runtime/fake-codex.exe';
+    execFileSync(path.join(process.env.SystemRoot, 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'),
+      ['/nologo', '/target:exe', '/r:System.Web.Extensions.dll', '/out:' + path.join(fixture, config.paths.codexExecutable),
+        path.join(root, 'tests/desktop/FakeCodexAppServer.cs')], {windowsHide: true});
+  }
   fs.writeFileSync(path.join(fixture, 'config/runtime.json'), JSON.stringify({...config, gui: false}));
   fs.copyFileSync(path.join(root, 'config/codex.json'), path.join(fixture, 'config/codex.json'));
   fs.symlinkSync(path.join(root, 'assets'), path.join(fixture, 'assets'), 'junction');
@@ -89,6 +114,8 @@ try {
   fs.writeFileSync(input, '{invalid fixture');
 
   const core = await start();
+  assert.equal(core.pid, core.enginePid);
+  assert.equal(core.transport, 'GT / Codex App Server stdio');
   await waitForApplication('conversation', 'failed');
   await waitForApplication('voice', 'ready');
   await waitForApplication('conversation-view', 'ready');
@@ -140,9 +167,46 @@ try {
   const audio = await gt("Smalltalk compiler evaluate: (ExperimentRoot / 'tests' / 'gt-voice-recovery.st') contents",
     'native-voice-recovery', 60000);
   assert.equal(audio, 'GT voice recovery passed');
+  let thread, uncertain;
+  if (mockCodex) {
+    const nativeContract = await gt("Smalltalk compiler evaluate: (ExperimentRoot / 'tests' / 'gt-codex-contract.st') contents",
+      'native-codex-contract');
+    assert.equal(nativeContract, 'GT Codex contract passed');
+    const objectCall = await submitModel("(LoomSessions session: 'isolation-check') fixtureCall: '活对象'", 'object-call');
+    assert.deepEqual(await objectCall(), {ok: true, value: {session: 'isolation-check', argument: '活对象'}});
+    const bound = await gt("LoomSessions show: 'isolation-check'", 'durable-binding');
+    thread = bound.threadId;
+    assert.match(thread, /^fixture-/);
+    assert.equal(bound.threads.length, 1);
+    const activity = await gt(`| page |
+     page := (LoomNativeCodexHost instVarNamed: #registry)
+      activityPageFrom: nil limit: 30 previous: 30 focus: nil session: 'isolation-check' managedOnly: true.
+     (page at: 'items') collect: [ :item | item at: 'type' ]
+    `, 'direct-codex-activity');
+    assert.deepEqual(activity, ['agentMessage', 'dynamicToolCall']);
+    const cancelled = await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'cancelled-call');
+    const deadline = Date.now() + 90000;
+    let running;
+    while (!(running?.call?.turnId)) {
+      if (Date.now() >= deadline) throw Error('The test turn did not start');
+      running = await gt("LoomSessions show: 'isolation-check'", 'model-pending');
+      await sleep(200);
+    }
+    const stopped = await gt("LoomSessions stop: 'isolation-check'", 'cancel-direct-codex');
+    assert.deepEqual(stopped.cancelledRequests, [running.call.requestId]);
+    assert.match((await cancelled()).error, /interrupted/);
+    uncertain = randomUUID();
+    await gt(`(LoomNativeCodexHost instVarNamed: #registry) beginCall:
+     (Dictionary new at: 'id' put: '${uncertain}'; at: 'action' put: 'ask';
+      at: 'prompt' put: 'uncertain fixture'; at: 'clientKey' put: 'loom.isolation-check'; yourself).
+      true`, 'uncertain-durable-call');
+  }
 
   fs.writeFileSync(path.join(ipc, 'stop.json'), '{}');
   await stoppedAfter(true);
+  const sealed = new CheckpointStorage(fixture).verify();
+  assert.equal(fs.readdirSync(path.join(fixture, 'state/runtime/checkpoints')).length, 1);
+  assert.equal(path.resolve(read(sessionFile).image), sealed.image);
   await start(core.pid);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
@@ -152,11 +216,27 @@ try {
    (LoomSessions show: 'isolation-check') at: 'id'
   }`, 'restored-applications');
   assert.deepEqual(restored, [2, true, 'isolation-check']);
+  fs.appendFileSync(path.join(fixture, 'src/runtime/conversation-db.st'), ".\nLMConversationStore compile: 'reloadFixtureMarker ^ 7'.\n");
+  await gt('Smalltalk globals at: #LoomTestReload put: LoomApplications reload. true', 'reload-after-restart');
+  const markerDeadline = Date.now() + 30000;
+  while (!(await gt('LMConversationStore includesSelector: #reloadFixtureMarker', 'reloaded-marker'))) {
+    if (Date.now() >= markerDeadline) throw Error('Source changed on disk, but the restored GT did not compile it');
+    await sleep(150);
+  }
+  if (mockCodex) {
+    const interrupted = read(path.join(ipc, 'codex-responses', uncertain + '.json'));
+    assert.equal(interrupted.ok, false);
+    assert.match(interrupted.error, /uncertain outcome/);
+    const resumed = await submitModel("(LoomSessions session: 'isolation-check') ask: '会话续接'", 'resumed-model-call');
+    assert.deepEqual(await resumed(), {ok: true, value: '会话续接 回执'});
+    assert.equal((await gt("LoomSessions show: 'isolation-check'", 'resumed-binding')).threadId, thread);
+  }
   await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
   await stoppedAfter(false);
   console.log('GT hot reload, fault isolation, attachments, native audio and checkpoint restart passed.');
 } catch (error) {
-  for (const name of ['voice-test/test-progress.json', 'logs/service.stderr.log', 'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
+  for (const name of ['voice-test/test-progress.json', 'logs/supervisor.log', 'logs/codex.stderr.log',
+    'logs/service.stderr.log', 'logs/runtime.stderr.log', 'logs/runtime.stdout.log', 'PharoDebug.log']) {
     const file = path.join(fixture, name);
     if (fs.existsSync(file)) console.error(fs.readFileSync(file, 'utf8').split(/\r?\n/).slice(-14).join('\n'));
   }

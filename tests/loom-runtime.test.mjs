@@ -6,7 +6,6 @@ import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {root,paths} from '../src/bridge/paths.mjs';
 import {evaluate} from '../src/bridge/runtime-client.mjs';
-import {CodexAppServer} from '../src/bridge/codex-app-server.mjs';
 
 test('portable distribution matches the verified official release',()=>{
  const release=JSON.parse(fs.readFileSync(path.join(root,'config/gtoolkit-release.json'),'utf8'));
@@ -106,26 +105,19 @@ test('runtime_eval exposes the native invocation roots and returns the very same
    LMInvocation new message: message caller: thisContext; attachTo: id'.
   origin new createProbe: '${requestId}'. true`,'setup-runtime-return');
  assert.equal(setup.ok,true,JSON.stringify(setup));
- let checkpoints=0;
- const server=Object.assign(Object.create(CodexAppServer.prototype),{
-  nextId:1,runtimeDirectory:paths.ipc,
-  sessionRegistry:{loomSessionIdForClient:key=>key==='default'?'main':null},
-  saveObjectResult:async()=>{checkpoints++;},
- });
- const active={objectInvocation:true,requestId,clientKey:'default'};
+ const tool=code=>evaluate(`${pending} evaluate: [ :loomCaller :loomMessage :loomSessionId :loomReturn |
+  ${code} ] sessionId: 'main'`,'gt-invocation-fixture');
  try {
-  const inspected=await server.evaluateTool(`{
+  const inspected=await tool(`{
    loomSessionId. loomMessage class name. loomMessage selector asString.
    loomMessage arguments second asString.
    loomCaller method sourceCode includesSubstring: 'createProbe: id'
-  }`,active);
-  assert.deepEqual(inspected,{ok:true,value:['main','Message','choose:under:','rule',true]});
-  assert.equal(checkpoints,0);
-  const returned=await server.evaluateTool(`
+  }`);
+  assert.deepEqual(inspected,{ok:true,value:[false,['main','Message','choose:under:','rule',true]]});
+  const returned=await tool(`
    loomReturn value: loomMessage arguments first.
-   loomReturn value: loomMessage arguments first`,active);
-  assert.deepEqual(returned,{ok:true,value:true});
-  assert.equal(checkpoints,1);
+   loomReturn value: loomMessage arguments first`);
+  assert.deepEqual(returned,{ok:true,value:[true,true]});
   const identity=await evaluate(`${pending} result == (${pending} instVarNamed: #message) arguments first`,'verify-runtime-return');
   assert.deepEqual(identity,{ok:true,value:true});
  } finally {

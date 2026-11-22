@@ -2,7 +2,9 @@
 | applications |
 applications := (Object << #LoomApplications slots: #(); package: 'Loom-Application') install.
 applications class compile: 'load: name
- | file |
+ | file loader |
+ loader := Smalltalk globals at: #LoomRuntimeSourceLoader ifAbsent: [ nil ].
+ loader ifNotNil: [ ^ loader value: name ].
  file := ExperimentRoot / ''src'' / ''runtime'' / name.
  ^ Smalltalk compiler evaluate: (String cr join: file contents lines)'.
 applications class compile: 'statuses
@@ -16,7 +18,8 @@ applications class compile: 'attempt: name during: operation
      self statuses at: name put: (Dictionary new at: ''phase'' put: ''ready''; yourself).
      true
    ] on: Error do: [ :error |
-    self statuses at: name put: (Dictionary new at: ''phase'' put: ''failed''; at: ''error'' put: error messageText; yourself).
+    self statuses at: name put: (Dictionary new at: ''phase'' put: ''failed''; at: ''error'' put: error messageText;
+     at: ''errorAt'' put: error signalerContext printString; yourself).
     false ]'.
 applications class compile: 'resetAfterRuntimeRestart
  (Smalltalk globals removeKey: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #retire.

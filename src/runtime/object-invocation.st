@@ -36,8 +36,7 @@ invocation compile: 'result
  (invocation includesSelector: selector) ifTrue: [ invocation removeSelector: selector ] ].
 LMCodexClient compile: 'doesNotUnderstand: message
  | invocation |
- Processor activeProcess == BridgeMailboxProcess ifTrue: [
-  self error: ''Call LoomCodex from an independent GT Process, not from the runtime tool callback'' ].
+ self assertIndependentProcess.
  BlWinitHost uiProcessDo: [ :process |
   process == Processor activeProcess ifTrue: [
    self error: ''Call LoomCodex from an independent GT Process to keep the desktop responsive'' ] ].

@@ -16,15 +16,19 @@ clientClass compile: 'timeoutSeconds: seconds
  seconds ifNotNil: [ self error: ''Model turns have no duration limit; use explicit cancellation'' ].
  timeoutSeconds := nil'.
 clientClass compile: 'newConversation
+ self assertIndependentProcess.
  ^ mutex critical: [ [ self performRequest: '''' action: ''newConversation'' ] ensure: [ activeRequestId := nil ] ]'.
 clientClass compile: 'configure: settings
+ self assertIndependentProcess.
  ^ mutex critical: [ | previous |
   previous := lastResponse.
   [ self performRequest: (STONJSON toString: settings) action: ''configure'' ]
    ensure: [ lastResponse := previous. activeRequestId := nil ] ]'.
 clientClass compile: 'ask: prompt
+ self assertIndependentProcess.
  ^ mutex critical: [ [ self performRequest: prompt action: ''ask'' ] ensure: [ activeRequestId := nil ] ]'.
 clientClass compile: 'requireThread: expected during: operation
+ self assertIndependentProcess.
  ^ mutex critical: [
   | previous |
   previous := requiredThreadId.
@@ -34,6 +38,7 @@ clientClass compile: 'performRequest: prompt action: action
  ^ self performRequest: prompt action: action invocation: nil'.
 clientClass compile: 'performRequest: prompt action: action invocation: invocation
  | id request outgoing responseFile ready |
+ self assertIndependentProcess.
  ready := BridgeIPC / ''bridge-ready.json''.
  ready exists ifFalse: [ self error: ''Codex bridge is not running'' ].
  ready := STONJSON fromString: ready contents.
@@ -71,6 +76,11 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
  (lastResponse at: ''ok'') ifFalse: [ self error: (lastResponse at: ''error'') ].
  ^ lastResponse at: ''text'''.
 clientClass compile: 'activeRequestId ^ activeRequestId'.
+clientClass compile: 'assertIndependentProcess
+ | host |
+ host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
+ (Processor activeProcess == BridgeMailboxProcess or: [ host notNil and: [ host isToolProcess ] ]) ifTrue: [
+  self error: ''Call LoomCodex from an independent GT Process, not from the runtime tool callback'' ]'.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'object-invocation.st') contents.
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'loom-sessions.st') contents.
 client := existing ifNil: [ clientClass new ].

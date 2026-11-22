@@ -5,7 +5,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 // Owns the only Job handle. Closing or killing this process terminates its job.
 public static class Supervisor {
@@ -36,23 +36,35 @@ public static class Supervisor {
     [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr process,uint code);
     [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr process,out uint code);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] static extern IntPtr CreateFile(string file,uint access,uint share,ref SecurityAttributes sa,uint creation,uint flags,IntPtr template);
+    [DllImport("kernel32.dll",SetLastError=true)] static extern bool DeviceIoControl(IntPtr file,uint code,byte[] input,uint length,IntPtr output,uint outputSize,out uint returned,IntPtr overlapped);
     static void Check(bool value) { if(!value)throw new Win32Exception(Marshal.GetLastWin32Error()); }
     static string Quote(string value) { return "\""+value.Replace("\"","\\\"")+"\""; }
-    static void WriteState(string file,string text) {
-        string temp=file+".tmp";
-        using(var stream=new FileStream(temp,FileMode.Create,FileAccess.Write,FileShare.None)) {
-            byte[] bytes=Encoding.UTF8.GetBytes(text); stream.Write(bytes,0,bytes.Length);stream.Flush(true);
-        }
-        if(File.Exists(file))File.Replace(temp,file,null);else File.Move(temp,file);
+    internal static void Log(string root, string message) {
+        File.AppendAllText(Path.Combine(root, "logs", "supervisor.log"), DateTime.UtcNow.ToString("o")+" "+message+Environment.NewLine);
     }
-    static int Field(string json,string name) {
-        var match=Regex.Match(json,"\""+name+"\"\\s*:\\s*(\\d+)");
-        return match.Success?Int32.Parse(match.Groups[1].Value):0;
-    }
-    static string ReadShared(string file) {
-        // Observing status must not prevent the bridge from atomically replacing it.
-        using(var stream=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete))
-        using(var reader=new StreamReader(stream))return reader.ReadToEnd();
+    internal static void MakeJunction(string name, string target) {
+        Directory.CreateDirectory(name);
+        byte[] substitute = Encoding.Unicode.GetBytes(@"\??\" + Path.GetFullPath(target));
+        byte[] display = Encoding.Unicode.GetBytes(Path.GetFullPath(target));
+        var attributes = new SecurityAttributes();
+        attributes.Length = Marshal.SizeOf(typeof(SecurityAttributes));
+        IntPtr handle = CreateFile(name, 0x40000000, 7, ref attributes, 3, 0x02200000, IntPtr.Zero);
+        Check(handle != new IntPtr(-1));
+        try {
+            using (var data = new MemoryStream())
+            using (var writer = new BinaryWriter(data)) {
+                writer.Write(0xa0000003u);
+                writer.Write((ushort)(substitute.Length + display.Length + 12));
+                writer.Write((ushort)0);
+                writer.Write((ushort)0); writer.Write((ushort)substitute.Length);
+                writer.Write((ushort)(substitute.Length + 2)); writer.Write((ushort)display.Length);
+                writer.Write(substitute); writer.Write((ushort)0);
+                writer.Write(display); writer.Write((ushort)0);
+                byte[] buffer = data.ToArray();
+                uint returned;
+                Check(DeviceIoControl(handle, 0x000900a4, buffer, (uint)buffer.Length, IntPtr.Zero, 0, out returned, IntPtr.Zero));
+            }
+        } finally { CloseHandle(handle); }
     }
     [STAThread] public static int Main(string[] args) {
         if(args.Length!=1)return 2;
@@ -64,48 +76,55 @@ public static class Supervisor {
           try {
             try {acquired=mutex.WaitOne(5000);}catch(AbandonedMutexException){acquired=true;}
             if(!acquired)throw new Exception("Another supervisor owns this environment");
-            Directory.CreateDirectory(Path.Combine(root,"logs"));Directory.CreateDirectory(Path.Combine(root,"ipc"));
+            var recovery = new Recovery(root);
+            recovery.Prepare();
+            string ipc = recovery.Setting("ipc"), logs = recovery.Setting("logs");
             job=CreateJobObject(IntPtr.Zero,null);Check(job!=IntPtr.Zero);
             var limits=new ExtendedLimit();limits.Basic.Flags=0x2000; // KILL_ON_JOB_CLOSE; no breakaway flags.
             Check(SetInformationJobObject(job,9,ref limits,(uint)Marshal.SizeOf(limits)));
             var sa=new SecurityAttributes();sa.Length=Marshal.SizeOf(sa);sa.Inherit=true;
-            output=CreateFile(Path.Combine(root,"logs\\service.stdout.log"),0x40000000,3,ref sa,2,0x80,IntPtr.Zero);
-            error=CreateFile(Path.Combine(root,"logs\\service.stderr.log"),0x40000000,3,ref sa,2,0x80,IntPtr.Zero);
+            output=CreateFile(Path.Combine(logs,"runtime.stdout.log"),0x40000000,3,ref sa,2,0x80,IntPtr.Zero);
+            error=CreateFile(Path.Combine(logs,"runtime.stderr.log"),0x40000000,3,ref sa,2,0x80,IntPtr.Zero);
             Check(output!=new IntPtr(-1)&&error!=new IntPtr(-1));
             var startup=new StartupInfo();startup.Size=Marshal.SizeOf(startup);startup.Flags=0x101;startup.ShowWindow=0;
             startup.Output=output;startup.Error=error;
             Environment.SetEnvironmentVariable("LOOM_JOB_SUPERVISOR_PID",Process.GetCurrentProcess().Id.ToString());
-            string node=Path.Combine(root,"runtime\\node\\node.exe");
-            string script=Path.Combine(root,"src\\bridge\\serve-codex.mjs");
-            Check(CreateProcess(node,new StringBuilder(Quote(node)+" "+Quote(script)),IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,root,ref startup,out child));
-            // Assignment happens before any Node or model code is allowed to execute.
+            Environment.SetEnvironmentVariable("LOOM_RUNTIME_EPOCH",Guid.NewGuid().ToString("D"));
+            bool gui = Object.Equals(recovery.Config["gui"], true);
+            string engine = recovery.Setting("engineExecutable");
+            string script = Path.Combine(root,"src","runtime","direct-bootstrap.st");
+            string arguments = Quote(engine)+(gui?" --interactive ":" ")+Quote(recovery.WorkingImage)+" st "+Quote(script);
+            Check(CreateProcess(engine,new StringBuilder(arguments),IntPtr.Zero,IntPtr.Zero,true,0x08000004,IntPtr.Zero,root,ref startup,out child));
             Check(AssignProcessToJobObject(job,child.Process));
-            WriteState(Path.Combine(root,"ipc\\supervisor.json"),"{\"pid\":"+Process.GetCurrentProcess().Id+",\"workerPid\":"+child.ProcessId+",\"killOnJobClose\":true}");
+            recovery.Write(Path.Combine(ipc,"supervisor.json"),new {pid=Process.GetCurrentProcess().Id,workerPid=child.ProcessId,killOnJobClose=true});
+            string statusFile = Path.Combine(ipc,"bridge-ready.json");
+            recovery.Write(statusFile,new {status="starting",pid=child.ProcessId,enginePid=child.ProcessId,
+                supervisorPid=Process.GetCurrentProcess().Id,root,gui,image=recovery.CommittedImage});
+            string pulse = Path.Combine(ipc,"runtime-heartbeat.txt");
+            if(File.Exists(pulse))File.Delete(pulse);
             Check(ResumeThread(child.Thread)!=0xFFFFFFFF);
-            Process engine=null,codex=null;
-            string statusFile=Path.Combine(root,"ipc\\bridge-ready.json");
+            DateTime started = DateTime.UtcNow;
             while(WaitForSingleObject(child.Process,50)==258) {
                 try {
-                    if(!File.Exists(statusFile))continue;
-                    string status=ReadShared(statusFile);
-                    if(Field(status,"pid")!=(int)child.ProcessId)continue;
-                    bool ready=Regex.IsMatch(status,"\"status\"\\s*:\\s*\"ready\"");
-                    if(!ready)continue;
-                    if(engine==null&&Field(status,"enginePid")>0)engine=Process.GetProcessById(Field(status,"enginePid"));
-                    if(codex==null&&Field(status,"codexPid")>0)codex=Process.GetProcessById(Field(status,"codexPid"));
-                    bool stopped=(engine!=null&&engine.HasExited)||(codex!=null&&codex.HasExited);
-                    string pulse=Path.Combine(root,"ipc\\bridge-heartbeat.txt");
-                    bool unresponsive=File.Exists(pulse)&&(DateTime.UtcNow-File.GetLastWriteTimeUtc(pulse)).TotalSeconds>15;
-                    if(stopped||unresponsive) {
-                        string failed=Regex.Replace(status,"\"status\"\\s*:\\s*\"ready\"","\"status\":\"failed\"");
-                        WriteState(statusFile,failed);
-                        File.AppendAllText(Path.Combine(root,"logs\\supervisor.log"),DateTime.UtcNow.ToString("o")+" Critical peer exited or bridge heartbeat stopped; closing job."+Environment.NewLine);
+                    recovery.SealReadyCheckpoints();
+                    DateTime lastPulse = File.Exists(pulse) ? File.GetLastWriteTimeUtc(pulse) : started;
+                    if(!recovery.HasPendingCheckpoint() && (DateTime.UtcNow-lastPulse).TotalSeconds > (File.Exists(pulse) ? 15 : 45)) {
+                        var status = recovery.Read(statusFile);
+                        status["status"]="failed"; status["error"]="GT heartbeat stopped; closing its supervised job";
+                        recovery.Write(statusFile,status);
+                        Log(root,(string)status["error"]);
                         return 1;
                     }
-                } catch(ArgumentException) { return 1; }
-                  catch(IOException) { }
+                } catch(IOException) { }
             }
-            uint exit;GetExitCodeProcess(child.Process,out exit);return (int)exit;
+            uint exit;GetExitCodeProcess(child.Process,out exit);
+            var stopped = recovery.Read(statusFile);
+            if (!Object.Equals(stopped["status"], "stopped") && !Object.Equals(stopped["status"], "failed")) {
+                stopped["status"] = "failed"; stopped["error"] = "GT exited unexpectedly (" + exit + ")";
+                recovery.Write(statusFile, stopped);
+                return 1;
+            }
+            return (int)exit;
           } catch(Exception ex) {
             try {File.AppendAllText(Path.Combine(root,"logs\\supervisor.log"),DateTime.UtcNow.ToString("o")+" "+ex+Environment.NewLine);}catch{}
             if(child.Process!=IntPtr.Zero)TerminateProcess(child.Process,1);return 1;

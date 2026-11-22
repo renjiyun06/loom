@@ -1,6 +1,27 @@
 "Start a supervised GT image that owns its Codex connection."
-| root loader host oldHost previous deadline |
+| root loader usesWorkingChanges reopenChanges host oldHost previous deadline |
 root := FileLocator workingDirectory.
+usesWorkingChanges := [
+ | changes writer buffer binary file |
+ changes := SourceFiles changesFileStream.
+ (changes notNil and: [ changes isReadOnly not ]) and: [
+  "SourceFile path reports the requested path, even when the opener used its fallback."
+  writer := (changes instVarNamed: #stream) instVarNamed: #writeStream.
+  buffer := writer instVarNamed: #stream.
+  binary := buffer instVarNamed: #innerStream.
+  file := binary instVarNamed: #file.
+  file name asFileReference = Smalltalk changesFile asFileReference ] ].
+reopenChanges := [
+ | matches reopenDeadline |
+ reopenDeadline := DateAndTime now + 5 seconds.
+ [
+  matches := [
+   Smalltalk openSourceFiles.
+   usesWorkingChanges value
+  ] on: Error do: [ :error | false ].
+  matches or: [ DateAndTime now >= reopenDeadline ]
+ ] whileFalse: [ (Delay forMilliseconds: 50) wait ].
+ matches ifFalse: [ Error signal: 'Could not reopen the working image changes file' ] ].
 loader := [ :name |
  | source digest fingerprints evaluate |
  source := String cr join: (root / 'src' / 'runtime' / name) contents lines.
@@ -8,11 +29,12 @@ loader := [ :name |
  digest := SHA256 new hashMessage: source utf8Encoded.
  ((name = 'bootstrap.st') or: [
   (fingerprints at: name ifAbsent: [ nil ]) ~= digest ]) ifTrue: [
+  (name = 'bootstrap.st' or: [ usesWorkingChanges value ]) ifFalse: [ reopenChanges value ].
   evaluate := [ Smalltalk compiler evaluate: source ].
   [ evaluate value ] on: Error do: [ :error |
    (error signalerContext stack anySatisfy: [ :frame | frame receiver == File and: [ frame selector = #sizeOf: ] ])
     ifFalse: [ error pass ].
-   [ Smalltalk openSourceFiles ] on: Error do: [ :opening | Smalltalk openSourceFiles ].
+   reopenChanges value.
    evaluate value ].
   fingerprints at: name put: digest ] ].
 loader value: 'bootstrap.st'.
@@ -26,9 +48,9 @@ oldHost ifNotNil: #retire.
   [ (Smalltalk globals at: #BridgeInternalSnapshotProcess ifAbsent: [ nil ]) == previous
    and: [ previous isTerminated not and: [ DateAndTime now < deadline ] ] ]
    whileTrue: [ (Delay forMilliseconds: 20) wait ] ].
- (oldHost notNil or: [ previous notNil ]) ifTrue: [
-  "Close the old buffered streams before reopening the live changes file."
-  [ Smalltalk openSourceFiles ] on: Error do: [ :error | Smalltalk openSourceFiles ] ].
+ (oldHost notNil or: [ previous notNil or: [ Smalltalk globals includesKey: #LMConversation ] ]) ifTrue: [
+  "The opener can fall back to the current directory before the old stream closes."
+  reopenChanges value ].
  #('execution.st' 'native-lifecycle.st' 'platform-tools.st' 'sqlite.st' 'codex-client.st'
    'session-registry.st' 'codex-activity.st' 'codex-settings.st' 'codex-stdio.st'
    'codex-host.st' 'codex-controls.st' 'applications.st') do: loader.

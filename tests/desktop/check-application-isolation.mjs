@@ -207,15 +207,26 @@ try {
   const sealed = new CheckpointStorage(fixture).verify();
   assert.equal(fs.readdirSync(path.join(fixture, 'state/runtime/checkpoints')).length, 1);
   assert.equal(path.resolve(read(sessionFile).image), sealed.image);
+  fs.writeFileSync(path.join(fixture, 'main.changes'), '\n');
   await start(core.pid);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
   const restored = await gt(`{
    LoomConversation records size.
    ((LMVoice index at: 'jobs') anySatisfy: [ :job | (job at: 'title') = 'offline.wav' ]).
-   (LoomSessions show: 'isolation-check') at: 'id'
+   (LoomSessions show: 'isolation-check') at: 'id'.
+   LMConversation comment includesSubstring: 'conversation program'
   }`, 'restored-applications');
-  assert.deepEqual(restored, [2, true, 'isolation-check']);
+  assert.deepEqual(restored, [2, true, 'isolation-check', true]);
+  const tabsBehindPrompt = await gt(`| world contents tabs prompt |
+   world := GtWorld new.
+   contents := world instVarNamed: #worldElement.
+   tabs := contents childNamed: #'gt-world--tabs'.
+   contents showShutdownPrompt.
+   prompt := contents childNamed: #'gt-world--shutdown-prompt'.
+   { contents children first == prompt. world tabGroup == tabs }
+  `, 'tabs-behind-restored-shutdown-prompt');
+  assert.deepEqual(tabsBehindPrompt, [true, true]);
   fs.appendFileSync(path.join(fixture, 'src/runtime/conversation-db.st'), ".\nLMConversationStore compile: 'reloadFixtureMarker ^ 7'.\n");
   await gt('Smalltalk globals at: #LoomTestReload put: LoomApplications reload. true', 'reload-after-restart');
   const markerDeadline = Date.now() + 30000;
@@ -223,6 +234,7 @@ try {
     if (Date.now() >= markerDeadline) throw Error('Source changed on disk, but the restored GT did not compile it');
     await sleep(150);
   }
+  assert.equal(fs.readFileSync(path.join(fixture, 'main.changes'), 'utf8'), '\n');
   if (mockCodex) {
     const interrupted = read(path.join(ipc, 'codex-responses', uncertain + '.json'));
     assert.equal(interrupted.ok, false);

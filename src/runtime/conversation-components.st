@@ -3,6 +3,16 @@
 Smalltalk globals at: #LMIcons ifAbsent: [
  Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'icons.st') contents ].
 cls := (Object << #LMChatStyle slots: #(); package: 'Loom-Interface') install.
+cls class compile: 'attachmentIconForImage: isImage size: size
+ | name |
+ name := isImage ifTrue: [ ''image'' ] ifFalse: [ ''file'' ].
+ ^ (LMIcons iconNamed: name size: size color: (Color gray: 0.40))
+  id: (isImage ifTrue: [ #loomImageAttachmentIcon ] ifFalse: [ #loomFileAttachmentIcon ]); yourself'.
+cls class compile: 'attachmentSurfaceAptitude
+ ^ BrStyleCommonAptitude new default: [ :style |
+  style background: (Color gray: 0.965);
+   border: (BlBorder paint: (Color gray: 0.9) width: 1);
+   geometry: (BlRoundedRectangleGeometry cornerRadius: 7) ]; yourself'.
 cls class compile: 'button: title action: block
  ^ self button: title action: block foreground: (Color gray: 0.3) background: Color white'.
 cls class compile: 'button: title action: block foreground: foreground background: background
@@ -488,19 +498,16 @@ cls compile: 'addAttachmentsTo: content
   name := attachment at: ''name''.
   file := LoomConversation fileForAttachment: attachment.
   available := file exists.
-  icon := LMIcons iconNamed: ((attachment at: ''image'' ifAbsent: [ false ])
-    ifTrue: [ ''image'' ] ifFalse: [ ''file'' ]) size: 18 color: (Color gray: 0.40).
+  icon := LMChatStyle attachmentIconForImage: (attachment at: ''image'' ifAbsent: [
+   LMConversationStore isImageExtension: name asFileReference extension ]) size: 18.
   icon margin: (BlInsets right: 8).
   caption := BrVerticalPane new hMatchParent; vFitContent; alignTopLeft; yourself.
   card := BrButton new id: #loomAttachmentCard; aptitude: BrGlamorousButtonLayoutAptitude new;
    label: name; beFocusable; alignCenterLeft;
    padding: (BlInsets left: 12 right: 12);
    margin: (BlInsets top: 4);
-   geometry: (BlRoundedRectangleGeometry cornerRadius: 7);
    action: [ self openAttachment: file ]; enabled: available; yourself.
-  card addAptitude: (BrStyleCommonAptitude new
-   default: [ :style | style background: (Color gray: 0.965);
-    border: (BlBorder paint: (Color gray: 0.9) width: 1) ];
+  card addAptitude: (LMChatStyle attachmentSurfaceAptitude
    hovered: [ :style | style background: (Color gray: 0.93) ];
    focused: [ :style | style border: (BlBorder paint: (Color gray: 0.55) width: 1) ]).
   card addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self attachmentTooltipFor: name ]).

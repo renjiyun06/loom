@@ -578,13 +578,13 @@ ui compile: 'renderDraftAttachments
  total := draftAttachments size.
  gap := 6.
  moreWidth := (LMChatStyle measureLabel: ''+'', total asString size: 13) ceiling + 18.
- limit := 212 min: width.
+ limit := 232 min: width.
  total > 1 ifTrue: [ limit := limit min: (width - moreWidth - gap) ].
  visible := OrderedCollection new.
  used := 0.
- [ visible size < total and: [ limit >= 54 and: [
+ [ visible size < total and: [ limit >= 74 and: [
    name := (draftAttachments at: visible size + 1) asFileReference basename.
-   chipWidth := ((LMChatStyle measureLabel: name size: 12) ceiling + 34) min: limit.
+   chipWidth := ((LMChatStyle measureLabel: name size: 13) ceiling + 54) min: limit.
    used + chipWidth <= width ] ] ] whileTrue: [
   visible add: chipWidth.
   used := used + chipWidth + gap ].
@@ -616,13 +616,16 @@ ui compile: 'renderDraftAttachments
  expanded ifTrue: [
   attachmentDraftPane addChild: (self draftAttachmentList: (draftAttachments allButFirst: visible size) width: width) ]'.
 ui compile: 'draftAttachment: path width: width
- | chip name caption label remove |
- name := path asFileReference basename.
- caption := self draftAttachmentName: name at: width - 34.
+ | chip file name caption icon label remove |
+ file := path asFileReference.
+ name := file basename.
+ caption := self draftAttachmentName: name at: width - 54.
  chip := BrHorizontalPane new hExact: width; vExact: 26; alignCenterLeft;
-  padding: (BlInsets left: 8 right: 3);
-  background: (Color gray: 0.95); geometry: (BlRoundedRectangleGeometry cornerRadius: 5); yourself.
- label := (self label: caption size: 12) hMatchParent; yourself.
+  padding: (BlInsets left: 8 right: 3); yourself.
+ chip addAptitude: LMChatStyle attachmentSurfaceAptitude.
+ icon := LMChatStyle attachmentIconForImage: (LMConversationStore isImageExtension: file extension) size: 14.
+ icon margin: (BlInsets right: 6).
+ label := (self label: caption size: 13) hMatchParent; yourself.
  caption = name ifFalse: [
   label addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self label: name size: 12 ]) ].
  remove := (LMChatStyle iconElementButton: (LMIcons iconNamed: ''x'' size: 12 color: (Color gray: 0.46))
@@ -631,23 +634,23 @@ ui compile: 'draftAttachment: path width: width
      draftAttachments remove: path ifAbsent: [ ].
      self renderDraftAttachments.
      input requestFocus ] ]) hExact: 22; vExact: 22; yourself.
- chip addChildren: { label. remove }.
+ chip addChildren: { icon. label. remove }.
  ^ chip'.
 ui compile: 'draftAttachmentName: name at: width
  | dot extension extensionWidth |
- (LMChatStyle measureLabel: name size: 12) <= width ifTrue: [ ^ name ].
+ (LMChatStyle measureLabel: name size: 13) <= width ifTrue: [ ^ name ].
  dot := name lastIndexOf: $..
- (dot <= 1 or: [ dot = name size ]) ifTrue: [ ^ LMChatStyle ellipsize: name at: width size: 12 ].
+ (dot <= 1 or: [ dot = name size ]) ifTrue: [ ^ LMChatStyle ellipsize: name at: width size: 13 ].
  extension := name allButFirst: dot - 1.
- extensionWidth := (LMChatStyle measureLabel: extension size: 12) ceiling.
- ((LMChatStyle measureLabel: ''…'' size: 12) + extensionWidth) > width ifTrue: [
-  ^ LMChatStyle ellipsize: name at: width size: 12 ].
- ^ (LMChatStyle ellipsize: (name first: dot - 1) at: width - extensionWidth size: 12), extension'.
+ extensionWidth := (LMChatStyle measureLabel: extension size: 13) ceiling.
+ ((LMChatStyle measureLabel: ''…'' size: 13) + extensionWidth) > width ifTrue: [
+  ^ LMChatStyle ellipsize: name at: width size: 13 ].
+ ^ (LMChatStyle ellipsize: (name first: dot - 1) at: width - extensionWidth size: 13), extension'.
 ui compile: 'draftAttachmentList: paths width: width
  ^ BrSimpleList new id: #loomDraftAttachmentList; hMatchParent; vExact: (paths size min: 4) * 29;
   itemStencil: [ BrHorizontalPane new hMatchParent; vExact: 29; alignCenterLeft; yourself ];
   itemDataBinder: [ :row :path :index |
-   row removeChildren; addChild: (self draftAttachment: path width: (width - 12 max: 54)) ];
+   row removeChildren; addChild: (self draftAttachment: path width: (width - 12 max: 74)) ];
   items: paths; yourself'.
 ui compile: 'pickAttachments
  composerBusy = true ifTrue: [ ^ self ].

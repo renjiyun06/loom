@@ -1,6 +1,6 @@
 "Visual checks for the compact native conversation interface."
 | report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label
-  file name attachment caption lines longName tooltip |
+  file name attachment caption lines longName tooltip draftImage draftFile space |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
 [
@@ -25,10 +25,10 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: ((ui instVarNamed: 'placeholderLabel') parent == (ui instVarNamed: 'input') parent)
   value: 'the placeholder moves down with the editor when files are added'.
  drafts addAll: #('D:\fixture\会议记录和需要补充说明的事项及后续安排.pdf'
-  'D:\fixture\截图.png' 'D:\fixture\提纲.md' 'D:\fixture\附录.docx' 'D:\fixture\图表.xlsx' 'D:\fixture\笔记.txt').
+  'D:\fixture\截图.PNG' 'D:\fixture\提纲.md' 'D:\fixture\附录.docx' 'D:\fixture\图表.xlsx' 'D:\fixture\笔记.txt').
  ui layoutComposerForWidth: 330.
  row := attachments children first.
- label := row children first children first text asString.
+ label := row children first children second text asString.
  check value: ((label includesSubstring: '…') and: [ label endsWith: '.pdf' ])
   value: 'long file names are shortened while keeping the extension'.
  more := row childNamed: #loomDraftAttachmentMore.
@@ -45,8 +45,10 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  ui layoutComposerForWidth: 1120.
  check value: (attachments children first children size = drafts size)
   value: 'the attachment row shows more names when space is available'.
+ draftFile := attachments children first children first.
+ draftImage := attachments children first children second.
  attachments children first children first children last viewModel action value.
- check value: (drafts size = 5 and: [ drafts first endsWith: '截图.png' ])
+ check value: (drafts size = 5 and: [ drafts first endsWith: '截图.PNG' ])
   value: 'removing a file updates the draft and shifts the row'.
  drafts removeAll.
  ui renderDraftAttachments.
@@ -76,6 +78,15 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   value: 'the attachment card shows the entire original name at normal width'.
  check value: ((card instVarNamed: 'body') parent width < 120 and: [ attachment states isEnabled ])
   value: 'the clickable attachment has its own width beside a compact text bubble'.
+ check value: (draftImage children first id asSymbol = #loomImageAttachmentIcon
+  and: [ draftImage children first id = attachment children first id ])
+  value: 'a draft image with an uppercase extension and a sent image use the same icon'.
+ space := ui presentationSpace.
+ { draftImage. attachment } do: [ :each | space doStyle: each; doComputePropertiesFromRoot: each ].
+ check value: (draftImage background paint color = attachment background paint color
+  and: [ draftImage border paint color = attachment border paint color
+   and: [ draftImage geometry cornerRadii = attachment geometry cornerRadii ] ])
+  value: 'draft and sent attachments share the surface and corners'.
  card hExact: 240; forceLayout; forceLayout.
  lines := caption children collect: [ :child | child text asString ].
  check value: (lines size = 2 and: [ ('' join: lines) = name ])
@@ -96,6 +107,12 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (attachment states isDisabled and: [
   attachment children second children last text asString = '附件找不到' ])
   value: 'a missing attachment has a disabled card and visible status'.
+ file := file copy removeKey: 'image'; at: 'name' put: '项目提纲.pdf'; yourself.
+ card descriptor: (entry copy at: 'attachments' put: { file }; yourself).
+ attachment := card childNamed: #loomAttachmentCard.
+ check value: (draftFile children first id asSymbol = #loomFileAttachmentIcon
+  and: [ draftFile children first id = attachment children first id ])
+  value: 'draft and older sent documents use the same file icon'.
  entry := Dictionary new at: 'id' put: 'visual-tool'; at: 'type' put: 'dynamicToolCall';
   at: 'tool' put: 'pharo_eval'; at: 'status' put: 'completed'; at: 'success' put: true;
   at: 'arguments' put: (Dictionary new at: 'code' put: '1 + 1'; yourself); at: 'durationMs' put: 12; yourself.

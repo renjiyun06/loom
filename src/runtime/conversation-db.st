@@ -1,6 +1,8 @@
 "Conversation SQLite schema and attachment files."
 | store |
 store := (Object << #LMConversationStore slots: #(#directory #mutex #revision); package: 'Loom-Conversation') install.
+store class compile: 'isImageExtension: extension
+ ^ #(''png'' ''jpg'' ''jpeg'' ''gif'' ''bmp'') includes: extension asLowercase'.
 store compile: 'directory: file
  directory := file.
 mutex := Mutex new.
@@ -82,7 +84,7 @@ file := (extension isNotEmpty and: [ extension size <= 16 and: [
  ifTrue: [ ''original.'', extension ] ifFalse: [ ''original'' ].
 ^ Dictionary new at: ''id'' put: id; at: ''name'' put: source basename;
  at: ''relativePath'' put: (''attachments/'', id, ''/'', file);
- at: ''image'' put: (#(''png'' ''jpg'' ''jpeg'' ''gif'' ''bmp'') includes: extension); yourself'.
+ at: ''image'' put: (self class isImageExtension: extension); yourself'.
 store compile: 'discardAttachment: attachment
  | file |
 file := directory resolve: (attachment at: ''relativePath'').

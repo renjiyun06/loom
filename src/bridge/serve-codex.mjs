@@ -13,6 +13,8 @@ import {Checkpoints} from './checkpoints.mjs';
 import {NativeLifecycle} from './native-lifecycle.mjs';
 import {atomicJSON} from './atomic-files.mjs';
 import {VoiceService} from '../audio/voice-service.mjs';
+import {ConversationStore} from '../conversation/store.mjs';
+import {ConversationService} from '../conversation/service.mjs';
 import {openEnvironment} from './open-environment.mjs';
 
 const live=paths.ipc;
@@ -29,6 +31,7 @@ const status={status:'starting',pid:process.pid,startedAt:new Date().toISOString
 const gui=JSON.parse(fs.readFileSync(path.join(root,'config/runtime.json'),'utf8').replace(/^\uFEFF/,'' )).gui===true;
 status.gui=gui;
 let vm,server,registry,checkpoints,checkpointWatcher,nativeLifecycle,nativeWatcher,nativeShutdown,voice,voiceWatcher,shutdownRequested=false,expectedVmExit=false,watcher,activeRequest=null,fatalError=null,finished=false;
+let conversationService,conversationWatcher;
 function writeStatus(phase,extra={}){
   if(phase==='ready')fs.writeFileSync(path.join(live,'bridge-heartbeat.txt'),new Date().toISOString());
   atomicJSON(statusFile,{...status,status:phase,...extra});
@@ -47,6 +50,8 @@ function fail(error){
 }
 function emergencyCleanup(){
   if(finished)return;
+  clearInterval(conversationWatcher);
+  conversationService?.close();conversationService=null;
   if(vm?.exitCode===null)vm.kill();
   server?.close();
   registry?.close();registry=null;
@@ -56,6 +61,9 @@ process.on('SIGINT',()=>{shutdownRequested=true;});process.on('SIGTERM',()=>{shu
 try {
   if(!status.supervisorPid)throw new Error('Start this environment through start.ps1 so all processes are job-supervised');
   writeStatus('starting');
+  const conversationStore=new ConversationStore(path.join(root,'state/conversation'));
+  conversationService=new ConversationService(live,conversationStore);
+  conversationWatcher=setInterval(()=>{try{conversationService.poll(fail);}catch(error){fail(error);}},40);
   registry=new SessionRegistry(path.join(root,'state/bridge'));
   migrateActivities(registry, paths);
   const activityFeed=new ActivityFeed(live,registry.activity);
@@ -112,9 +120,9 @@ try {
     const result=await evaluate(fs.readFileSync(path.join(root,'src/runtime/codex-client.st'),'utf8'),'install-codex-client');
     if(!result.ok)throw new Error(JSON.stringify(result));
   }
-  const conversationInstalled=await evaluate('Smalltalk globals includesKey: #LoomConversation','check-conversation');
-  if(!conversationInstalled.ok)throw new Error(JSON.stringify(conversationInstalled));
-  if(!conversationInstalled.value){
+  const conversationVersion=await evaluate('(Smalltalk globals at: #LMConversation ifAbsent: [ nil ]) ifNil: [ 0 ] ifNotNil: [ :model | model bootstrapVersion ]','check-conversation');
+  if(!conversationVersion.ok)throw new Error(JSON.stringify(conversationVersion));
+  if(conversationVersion.value<2){
     const conversation=await evaluate(fs.readFileSync(path.join(root,'src/runtime/conversation.st'),'utf8').replace(/\r?\n/g,'\r'),'install-conversation');
     if(!conversation.ok)throw new Error(JSON.stringify(conversation));
   }
@@ -122,11 +130,11 @@ try {
   if(!mainSession.ok)throw new Error(JSON.stringify(mainSession));
   const voiceVersion=await evaluate('(Smalltalk globals includesKey: #LMVoice) ifTrue: [ (Smalltalk globals at: #LMVoice) featureVersion ] ifFalse: [ 0 ]','check-voice');
   if(!voiceVersion.ok)throw new Error(JSON.stringify(voiceVersion));
-  if(voiceVersion.value<3){
+  if(voiceVersion.value<4 || conversationVersion.value<2){
     const installedVoice=await evaluate(fs.readFileSync(path.join(root,'src/runtime/voice.st'),'utf8').replace(/\r?\n/g,'\r'),'install-voice');
     if(!installedVoice.ok)throw new Error(JSON.stringify(installedVoice));
   }
-  voice=new VoiceService(root,{notify:async()=>{
+  voice=new VoiceService(root,{audioMessages:()=>conversationStore.audioMessages(),notify:async()=>{
     if(shutdownRequested)return;
     const notified=await evaluate('LoomConversation start. true','voice-ready-'+Date.now());
     if(!notified.ok)throw new Error('Cannot notify Loom of transcription completion');
@@ -170,7 +178,7 @@ try {
   nativeWatcher=setInterval(()=>{void nativeLifecycle.poll().catch(fail);},100);
   const uiVersion=await evaluate('(Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ]) ifNil: [ 0 ] ifNotNil: [ :ui | ui featureVersion ]','check-ui');
   if(!uiVersion.ok)throw new Error(JSON.stringify(uiVersion));
-  if(uiVersion.value<22){
+  if(uiVersion.value<23){
     const ui=await evaluate(fs.readFileSync(path.join(root,'src/runtime/conversation-ui.st'),'utf8').replace(/\r?\n/g,'\r'),'install-ui');
     if(!ui.ok)throw new Error(JSON.stringify(ui));
   }
@@ -258,6 +266,8 @@ try {
   const exitDeadline=Date.now()+20000;
   while(vm.exitCode===null&&Date.now()<exitDeadline)await sleep(50);
   if(vm.exitCode!==0)throw new Error('Runtime did not finish saving its image');
+  clearInterval(conversationWatcher);
+  conversationService.close();conversationService=null;
   // The verified committed checkpoint is also the saved-shutdown recovery copy.
   // Do not accumulate another full image/changes pair on every exit.
   const backup=null;

@@ -17,11 +17,11 @@ export function durableJSON(file,value) {
   replaceFileSync(temporary,file);
 }
 export class VoiceService {
-  constructor(root,{provider,notify=async()=>{}}={}) {
+  constructor(root,{provider,notify=async()=>{},audioMessages=()=>[]}={}) {
     this.root=root; this.directory=path.join(root,'state/audio');this.ipc=path.join(root,'ipc/voice');
     this.host=path.join(root,'runtime/audio/AudioHost.exe');this.media=path.join(root,'runtime/media');
     this.provider=provider??new Xfyun(path.join(root,'config/xfyun.local.json'));
-    this.notify=notify;this.wakePending=false;this.jobs=new Map();this.recorder=null;this.player=null;this.busy=false;this.closed=false;
+    this.notify=notify;this.audioMessages=audioMessages;this.wakePending=false;this.jobs=new Map();this.recorder=null;this.player=null;this.busy=false;this.closed=false;
     for(const folder of [this.directory,path.join(this.ipc,'requests'),path.join(this.ipc,'results')])fs.mkdirSync(folder,{recursive:true});
     // Requests without receipts belong to the old runtime and are never replayed.
     for(const name of fs.readdirSync(path.join(this.ipc,'requests')).filter(n=>n.endsWith('.json'))) {
@@ -261,10 +261,8 @@ export class VoiceService {
         try {const request=JSON.parse(fs.readFileSync(path.join(this.ipc,'requests',name),'utf8'));durableJSON(receipt,{ok:true,...await this.command(request)});}
         catch(error){durableJSON(receipt,{ok:false,error:error.message});}
       }
-      // Disk inputs are authoritative if a crash occurred between submit and queueing.
-      const inputs=path.join(this.root,'state/conversation/inputs');
-      if(fs.existsSync(inputs))for(const name of fs.readdirSync(inputs).filter(n=>n.endsWith('.json'))) {
-        const input=JSON.parse(fs.readFileSync(path.join(inputs,name),'utf8'));
+      // The message store can recover work interrupted before the recording was queued.
+      for(const input of this.audioMessages()) {
         const job=this.jobs.get(input.audioId);
         if(job&&!job.messageId)await this.submit(job.id,input.id);
       }

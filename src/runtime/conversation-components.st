@@ -469,6 +469,7 @@ cls compile: 'build
   (descriptor includesKey: ''audio'') ifTrue: [ self addRecordingPlayerTo: bubble ].
   body := LMChatStyle readOnly: (descriptor at: ''text'') trimBoth size: 14.
   bubble addChild: body.
+  self addAttachmentsTo: bubble.
   row addChildren: { spacer. bubble }. self addChild: row.
   userMetadataLabel := (LMChatStyle label: '''' size: 12) hMatchParent; alignCenterRight; yourself.
   self addChild: userMetadataLabel.
@@ -480,6 +481,36 @@ cls compile: 'build
  bodyHolder addChild: body. self addChild: bodyHolder.
  actions := self replyActions.
  self addChild: actions'.
+cls compile: 'addAttachmentsTo: bubble
+ (descriptor at: ''attachments'' ifAbsent: [ #() ]) do: [ :attachment |
+  | name file thumb |
+  name := attachment at: ''name''.
+  file := LoomConversation fileForAttachment: attachment.
+  file exists
+   ifTrue: [
+    (attachment at: ''image'' ifAbsent: [ false ]) ifTrue: [
+     thumb := self thumbnailFor: file.
+     thumb ifNotNil: [ bubble addChild: thumb ] ].
+    bubble addChild: ((LMChatStyle button: name action: [ self openAttachment: file ]
+     foreground: (Color gray: 0.22) background: (Color gray: 0.92))
+     hMatchParent; vExact: 26; margin: (BlInsets top: 4); yourself) ]
+   ifFalse: [ bubble addChild: (LMChatStyle label: name, ''（附件找不到）'' size: 12) ] ]'.
+cls compile: 'thumbnailFor: file
+ | form scale extent element |
+ [ form := Form fromFileNamed: file.
+   scale := ((210 / form width) min: (140 / form height)) min: 1.
+   extent := (form extent * scale) rounded max: 1@1.
+   element := BlElement new size: extent;
+    margin: (BlInsets top: 5);
+    background: (BlImageBackground image: (form scaledToSize: extent)); yourself.
+   element addEventHandlerOn: BlClickEvent do: [ :event |
+    event consumed: true. self openAttachment: file ].
+   ^ element
+ ] on: Error do: [ :error | ^ nil ]'.
+cls compile: 'openAttachment: file
+ file exists
+  ifTrue: [ WebBrowser openOn: file fullName ]
+  ifFalse: [ controller ifNotNil: [ controller voiceNotice: ''附件找不到'' ] ]'.
 cls compile: 'addRecordingPlayerTo: bubble
  | player caption |
  player := BrHorizontalPane new id: #voiceMessagePlayer; hMatchParent; vExact: 26; alignCenterLeft; yourself.
@@ -535,7 +566,8 @@ cls compile: 'descriptor: value
  rebuild := descriptor isNil or: [
   (descriptor at: ''id'') ~= (value at: ''id'') or: [
    (descriptor at: ''role'') ~= (value at: ''role'') or: [
-    (descriptor includesKey: ''audio'') ~= (value includesKey: ''audio'') ] ] ].
+    (descriptor includesKey: ''audio'') ~= (value includesKey: ''audio'') or: [
+     (descriptor at: ''attachments'' ifAbsent: [ #() ]) ~= (value at: ''attachments'' ifAbsent: [ #() ]) ] ] ] ].
  role := value at: ''role''.
  (role = ''user'' and: [ userMetadataLabel isNil ]) ifTrue: [ rebuild := true ].
  rebuild ifTrue: [ rawShown := controller ifNil: [ false ] ifNotNil: [ controller messageSourceFor: (value at: ''id'') ]. self removeChildren. descriptor := value. self build ].
@@ -543,6 +575,8 @@ cls compile: 'descriptor: value
  role = ''user''
   ifTrue: [
    body text: (LMChatStyle formattedText: (value at: ''text'') trimBoth size: 14).
+   body visibility: (((value includesKey: ''attachments'') and: [ (value at: ''text'') trimBoth isEmpty ])
+    ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
    value at: ''audio'' ifPresent: [ :audio | self renderRecording: audio ].
    caption := self userMetadata.
    userMetadataLabel text: caption;
@@ -602,6 +636,7 @@ cls compile: 'updateGeometry
    largest max: (LMChatStyle measureLabel: line size: 14) ].
   descriptor at: ''audio'' ifPresent: [ :audio |
    ideal := (ideal max: 116) max: (LMChatStyle measureLabel: (audio at: ''status'') size: 12) ].
+  (descriptor includesKey: ''attachments'') ifTrue: [ ideal := ideal max: 210 ].
   limit := (self width - (inset * 2)) * (viewport <= 800 ifTrue: [ 0.94 ] ifFalse: [ 0.88 ]).
   target := ((ideal ceiling + 37) min: limit) max: 54.
   bubble := body parent.

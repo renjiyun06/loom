@@ -1,7 +1,7 @@
 "Add audio behavior without reinstalling or replacing the text program."
 | voice |
 voice := (Object << #LMVoice package: 'Loom-Voice') install.
-voice class compile: 'featureVersion ^ 3'.
+voice class compile: 'featureVersion ^ 4'.
 voice class compile: 'directory ^ ExperimentRoot / ''state'' / ''audio'''.
 voice class compile: 'index
  | file previous index |
@@ -61,37 +61,22 @@ voice class compile: 'label: job
   duration asString, '' 秒  |  '', (job at: ''title'')'.
 (LMConversation includesSelector: #prepareTextPrompt:) ifFalse: [
  LMConversation compile: 'prepareTextPrompt:' , ((LMConversation >> #preparePrompt:) sourceCode allButFirst: 'preparePrompt:' size) ].
-(LMConversation includesSelector: #nextUnansweredInput) ifFalse: [
- LMConversation compile: 'nextUnansweredInput' , ((LMConversation >> #nextInput) sourceCode allButFirst: 'nextInput' size) ].
 LMConversation compile: 'submitAudio: audioId text: text
- | id |
- mutex critical: [
-  | inputs job message sequence |
-  inputs := self orderedInputs.
-  (inputs detect: [ :item | (item at: ''audioId'' ifAbsent: [ nil ]) = audioId ] ifNone: [ nil ])
-   ifNotNil: [ :existing | ^ existing at: ''id'' ].
-  job := LMVoice job: audioId.
-  job ifNil: [ self error: ''找不到音频'' ].
-  (job at: ''state'') = ''recording'' ifTrue: [ self error: ''请先停止录音'' ].
-  (job includesKey: ''messageId'') ifTrue: [ self error: ''此音频已发送'' ].
-  text size > 50000 ifTrue: [ self error: ''Message exceeds 50000 characters'' ].
-  sequence := inputs ifEmpty: [ 1 ] ifNotEmpty: [ (inputs last at: ''sequence'') + 1 ].
-  id := UUID new asString.
-  message := Dictionary new at: ''id'' put: id; at: ''sequence'' put: sequence;
-   at: ''text'' put: text; at: ''audioId'' put: audioId;
-   at: ''createdAt'' put: DateAndTime now asUTC asString; yourself.
-  self write: message to: self directory / ''inputs'' / (id , ''.json'') ].
- gate signal. ^ id'.
+ | job |
+ job := LMVoice job: audioId.
+ job ifNil: [ self error: ''找不到音频'' ].
+ (job at: ''state'') = ''recording'' ifTrue: [ self error: ''请先停止录音'' ].
+ ^ self submitMessage: (Dictionary new
+  at: ''text'' put: text; at: ''audioId'' put: audioId;
+  at: ''recordedMessageId'' put: (job at: ''messageId'' ifAbsent: [ nil ]); yourself)'.
 LMConversation compile: 'nextInput
- | replies jobs |
- replies := self directory / ''replies''.
- self orderedInputs do: [ :message |
-  (replies / ((message at: ''id'') , ''.json'')) exists ifFalse: [
-   | audioId transcript |
-   audioId := message at: ''audioId'' ifAbsent: [ ^ message ].
-   jobs ifNil: [ jobs := LMVoice jobsById: LMVoice index ].
-   transcript := LMVoice transcribedText: (jobs at: audioId ifAbsent: [ nil ]).
-   transcript ifNotEmpty: [ ^ self recordingMessage: message transcript: transcript ] ] ].
+ | jobs |
+ self pendingInputs do: [ :message |
+  | audioId transcript |
+  audioId := message at: ''audioId'' ifAbsent: [ ^ message ].
+  jobs ifNil: [ jobs := LMVoice jobsById: LMVoice index ].
+  transcript := LMVoice transcribedText: (jobs at: audioId ifAbsent: [ nil ]).
+  transcript ifNotEmpty: [ ^ self recordingMessage: message transcript: transcript ] ].
  ^ nil'.
 LMConversation compile: 'recordingMessage: message transcript: transcript
  | input caption |

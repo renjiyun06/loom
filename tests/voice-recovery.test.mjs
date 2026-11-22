@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {root} from '../src/bridge/paths.mjs';
 import {VoiceService,durableJSON} from '../src/audio/voice-service.mjs';
+import {ConversationStore} from '../src/conversation/store.mjs';
 import {parseTranscript} from '../src/audio/xfyun.mjs';
 const result={lattice:[{json_1best:JSON.stringify({st:{bg:'3000',ed:'5000',rt:[{ws:[{wb:10,we:70,cw:[{w:'测试',wp:'n'}]}]}]}})}]};
 function fixture(state,extra={}) {
@@ -72,12 +73,15 @@ test('stopping capture preserves a draft and cancel discards only an unsent reco
  await service.close();
 });
 
-test('a persisted audio message starts one order and survives a failed GT wake',async()=>{
+test('a migrated audio message starts one order and survives a failed GT wake',async t=>{
  const {directory,id}=fixture('draft',{source:'microphone'});
  const messageId=randomUUID();
- durableJSON(path.join(directory,'state/conversation/inputs',`${messageId}.json`),{id:messageId,audioId:id,text:''});
+ durableJSON(path.join(directory,'state/conversation/inputs',`${messageId}.json`),{id:messageId,audioId:id,sequence:1,text:''});
+ const conversations=new ConversationStore(path.join(directory,'state/conversation'));
+ t.after(()=>conversations.close());
  let uploads=0,wakes=0;
  const service=new VoiceService(directory,{
+  audioMessages:()=>conversations.audioMessages(),
   provider:{configured:()=>true,
    upload:async()=>{uploads++;return {orderId:'one-order'};},
    query:async()=>({orderInfo:{status:4},orderResult:JSON.stringify(result)}),

@@ -4,47 +4,73 @@ existing := Smalltalk globals at: #LoomConversation ifAbsent: [ nil ].
 conversation := (Object << #LMConversation
  slots: { #client. #gate. #worker. #currentId. #mutex };
  package: 'Loom-Conversation') install.
-conversation comment: 'A persistent conversation program living in the GT image. Inputs and replies are durable files; the worker waits on a semaphore between messages. preparePrompt: and answer: are replaceable behavior. client uses the existing Codex thread. Inspect the LoomConversation global for live state.'.
+conversation comment: 'A persistent conversation program living in the GT image. SQLite stores messages and replies. The worker waits on a semaphore between messages. Inspect the LoomConversation global for live state.'.
 conversation compile: 'initialize
  super initialize. client := LoomCodex session: #main. gate := Semaphore new. mutex := Mutex new'.
-conversation class compile: 'bootstrapVersion ^ 1'.
+conversation class compile: 'bootstrapVersion ^ 2'.
 conversation compile: 'directory
- | directory |
- directory := ExperimentRoot / ''state'' / ''conversation''.
- directory ensureCreateDirectory.
- (directory / ''inputs'') ensureCreateDirectory.
- (directory / ''replies'') ensureCreateDirectory.
- ^ directory'.
+ ^ ExperimentRoot / ''state'' / ''conversation'''.
 conversation compile: 'write: object to: file
  | temporary |
+ "A checkpoint may resume a reply frame compiled before the SQLite upgrade."
+ file parent = (self directory / ''replies'') ifTrue: [
+  ^ self storage: ''reply'' options: (Dictionary new at: ''reply'' put: object; yourself) ].
  file exists ifTrue: [ ^ self ].
  temporary := file parent / (file basename , ''.tmp'').
  temporary writeStreamDo: [ :stream | stream nextPutAll: (STONJSON toString: object) ].
  temporary renameTo: file basename'.
+conversation compile: 'storage: action options: options
+ | id ipc request receipt deadline result bridgeStatus |
+ id := UUID new asString.
+ ipc := ExperimentRoot / ''ipc'' / ''conversation''.
+ request := ipc / ''requests'' / (id, ''.json'').
+ receipt := ipc / ''results'' / (id, ''.json'').
+ self write: (options copy at: ''action'' put: action; yourself) to: request.
+ deadline := DateAndTime now + (Duration seconds: (action = ''pick'' ifTrue: [ 605 ] ifFalse: [ 30 ])).
+ bridgeStatus := ExperimentRoot / ''ipc'' / ''bridge-ready.json''.
+ [ receipt exists ] whileFalse: [
+  DateAndTime now >= deadline ifTrue: [
+   | phase |
+   phase := [ (STONJSON fromString: bridgeStatus contents) at: ''status'' ]
+    on: Error do: [ :error | nil ].
+   ((#(''submit'' ''reply'') includes: action) and: [ phase = ''ready'' ])
+    ifFalse: [ self error: ''对话存储尚未返回，请查看当前状态'' ].
+   deadline := DateAndTime now + (Duration seconds: 30) ].
+  (Delay forMilliseconds: 30) wait ].
+ [ result := STONJSON fromString: receipt contents ]
+  ensure: [ request ensureDelete. receipt ensureDelete ].
+ (result at: ''ok'') ifFalse: [ self error: (result at: ''error'') ].
+ ^ result at: ''value'''.
+conversation compile: 'storage: action
+ ^ self storage: action options: Dictionary new'.
+conversation compile: 'storageRevision
+ | file |
+ file := ExperimentRoot / ''ipc'' / ''conversation'' / ''revision.json''.
+ ^ file exists ifTrue: [ file contents ] ifFalse: [ nil ]'.
+conversation compile: 'attachment: id
+ ^ self storage: ''attachment'' options: (Dictionary new at: ''attachmentId'' put: id; yourself)'.
+conversation compile: 'fileForAttachment: attachment
+ ^ self directory resolve: (attachment at: ''relativePath'')'.
 conversation compile: 'inputs
- ^ ((self directory / ''inputs'') files
-  select: [ :file | file extension = ''json'' ])
-  collect: [ :file | STONJSON fromString: file contents ]'.
-conversation compile: 'orderedInputs
- ^ self inputs sorted: [ :a :b | (a at: ''sequence'') < (b at: ''sequence'') ]'.
+ ^ self records collect: [ :record |
+  record copy removeKey: ''reply'' ifAbsent: [ ]; removeKey: ''attachments'' ifAbsent: [ ]; yourself ]'.
+conversation compile: 'orderedInputs ^ self inputs'.
 conversation compile: 'submit: text
- | id message sequence |
- (text isString and: [ text trimBoth isNotEmpty ])
-  ifFalse: [ self error: ''Please enter a message'' ].
- text size > 50000 ifTrue: [ self error: ''Message exceeds 50000 characters'' ].
- mutex critical: [
-  sequence := self orderedInputs ifEmpty: [ 1 ] ifNotEmpty: [ :items | (items last at: ''sequence'') + 1 ].
-  id := UUID new asString.
-  message := Dictionary new
-   at: ''id'' put: id; at: ''sequence'' put: sequence;
-   at: ''text'' put: text; at: ''createdAt'' put: DateAndTime now asUTC asString; yourself.
-  self write: message to: self directory / ''inputs'' / (id , ''.json'') ].
+ ^ self submit: text files: #()'.
+conversation compile: 'submit: text files: files
+ ^ self submitMessage: (Dictionary new at: ''text'' put: text; at: ''files'' put: files; yourself)'.
+conversation compile: 'submitMessage: message
+ | id |
+ id := mutex critical: [
+  self storage: ''submit'' options: (message copy
+   at: ''id'' put: UUID new asString;
+   at: ''createdAt'' put: DateAndTime now asUTC asString; yourself) ].
  gate signal.
  ^ id'.
-conversation compile: 'nextInput
- ^ self orderedInputs detect: [ :message |
-  (self directory / ''replies'' / ((message at: ''id'') , ''.json'')) exists not
- ] ifNone: [ nil ]'.
+conversation compile: 'pendingInputs ^ self storage: ''pending'''.
+conversation compile: 'nextUnansweredInput
+ ^ self pendingInputs ifEmpty: [ nil ] ifNotEmpty: [ :messages | messages first ]'.
+conversation compile: 'nextInput ^ self nextUnansweredInput'.
 conversation compile: 'preparePrompt: message
  "This is the first replaceable context preparation method."
  ^ message at: ''text'''.
@@ -62,7 +88,7 @@ conversation compile: 'process: message
     at: ''text'' put: error messageText;
     at: ''invocation'' put: client lastResponse; yourself ].
   reply at: ''id'' put: id; at: ''completedAt'' put: DateAndTime now asUTC asString.
-  self write: reply to: self directory / ''replies'' / (id , ''.json'')
+  self storage: ''reply'' options: (Dictionary new at: ''reply'' put: reply; yourself)
  ] ensure: [ currentId := nil ]'.
 conversation compile: 'run
  | message |
@@ -76,13 +102,7 @@ conversation compile: 'start
   worker name: ''Loom conversation loop'' ].
  gate signal.
  ^ self'.
-conversation compile: 'records
- ^ self orderedInputs collect: [ :message |
-  | copy file |
-  copy := message copy.
-  file := self directory / ''replies'' / ((message at: ''id'') , ''.json'').
-  file exists ifTrue: [ copy at: ''reply'' put: (STONJSON fromString: file contents) ].
-  copy ]'.
+conversation compile: 'records ^ self storage: ''records'''.
 conversation compile: 'state
  ^ Dictionary new at: ''currentId'' put: currentId;
   at: ''threadId'' put: client threadId;

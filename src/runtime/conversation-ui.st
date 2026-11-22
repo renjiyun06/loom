@@ -13,10 +13,10 @@ textRunRenderer := (SkiaTextPainter >> #fillTextRun:withColor:strokeColor:) sour
  (Smalltalk globals at: #LMActivityReader) includesSelector: #pageOf:focus:session: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'activity-timeline.st') contents ].
 ((Smalltalk globals includesKey: #LMConversationMessageView) and: [
- (Smalltalk globals at: #LMConversationMessageView) includesSelector: #renderRecording: ])
+ (Smalltalk globals at: #LMConversationMessageView) includesSelector: #addAttachmentsTo: ])
  ifFalse: [ Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-components.st') contents ].
 Smalltalk compiler evaluate: (ExperimentRoot / 'src' / 'runtime' / 'conversation-voice.st') contents.
-slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer #voicePlaybackPending).
+slots := #(#space #history #input #status #poller #lastText #errorText #root #layoutVersion #activity #lastActivity #recordCache #recordKey #refreshQueued #followOutput #followButton #refreshGeneration #historyItems #activityItems #activityPane #bodyPane #splitterElement #activityWidth #activityHidden #activityFollow #stopButton #lastPayload #pendingAnchor #activityExpansionStates #activityDetailModes #messageSourceStates #composerPane #placeholderLabel #sessionLabel #conversationPane #voiceComposer #voicePlaybackPending #draftAttachments #attachmentDraftPane #composerBusy).
 oldClass := Smalltalk globals at: #LMConversationUI ifAbsent: [ nil ].
 oldView := Smalltalk globals at: #LoomConversationWindow ifAbsent: [ nil ].
 oldView ifNotNil: [ oldView stopRefreshing ].
@@ -36,7 +36,7 @@ ui compile: 'activityExpandedFor: id
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
  | messagesChanged activityChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor prefix |
- layoutVersion = 7 ifFalse: [ ^ self ].
+ layoutVersion = 8 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
  lastPayload := payload.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
@@ -123,6 +123,11 @@ ui compile: 'build
  placeholderLabel position: inputInset@11.
  placeholderLabel addEventHandlerOn: BlClickEvent do: [ :event | input requestFocus. event consumed: true ].
  composer addChild: placeholderLabel.
+ draftAttachments ifNil: [ draftAttachments := OrderedCollection new ].
+ attachmentDraftPane := BrVerticalPane new hMatchParent; vFitContent; yourself.
+ attachmentDraftPane padding: (BlInsets left: inputInset right: inputInset).
+ composer addChild: attachmentDraftPane.
+ self renderDraftAttachments.
  footer := BrHorizontalPane new hMatchParent; vExact: 35; alignCenterLeft;
   padding: (BlInsets top: 0 right: 8 bottom: 7 left: inputInset); yourself.
  footer layout cellSpacing: 0.
@@ -135,6 +140,8 @@ ui compile: 'build
  footer addChild: stopButton.
  voiceComposer := LMVoiceComposer new.
  footer addChild: (voiceComposer buildFor: self).
+ footer addChild: (LMChatStyle iconElementButton: (LMIcons iconNamed: ''paperclip'')
+  title: ''添加附件'' action: [ self pickAttachments ]).
  footer addChild: ((LMChatStyle button: ''发送'' action: [ self sendMessage ]
   foreground: Color white background: (Color gray: 0.2)) hExact: 50; vExact: 28; margin: (BlInsets left: 5); yourself).
  composer addChild: footer. left addChild: composer.
@@ -164,7 +171,7 @@ ui compile: 'build
  body addChildren: { left. activityPane. splitter }. root addChild: body.
  self updateResponsiveGeometry.
  space root addChild: root.
- lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 7. pendingAnchor := anchor.
+ lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 8. pendingAnchor := anchor.
  self layoutComposerForWidth: left width.
  self refresh.
  ^ self'.
@@ -224,9 +231,8 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | directory key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient |
- directory := LoomConversation directory.
- key := { (directory / ''inputs'') modificationTime. (directory / ''replies'') modificationTime }.
+ | key current records invocation messages statusText reply page limit partial audioIndex jobs activeClient |
+ key := LoomConversation storageRevision.
  (recordCache isNil or: [ recordKey ~= key ]) ifTrue: [
   recordCache := LoomConversation records asArray. recordKey := key ].
  records := recordCache.
@@ -247,6 +253,7 @@ ui compile: 'collectUpdate
   entry := Dictionary new at: ''id'' put: id, ''-user'';
    at: ''role'' put: ''user''; at: ''text'' put: (record at: ''text'');
    at: ''createdAt'' put: (record at: ''createdAt'' ifAbsent: [ '''' ]); yourself.
+  record at: ''attachments'' ifPresent: [ :attachments | entry at: ''attachments'' put: attachments ].
   showReply := response notNil or: [ audioId isNil or: [ current = id ] ].
   audioId ifNotNil: [
    jobs ifNil: [ audioIndex := LMVoice index. jobs := LMVoice jobsById: audioIndex ].
@@ -559,14 +566,51 @@ ui compile: 'runCodexSetting: operation notice: notice completed: message transi
    (transient and: [ statusText notEmpty ]) ifTrue: [ notice enqueueTask: (BlDelayedTaskAction new delay: 3500 milliSeconds;
     action: [ notice text asString = statusText ifTrue: [ notice text: '''' ] ]; yourself) ] ]
  ] fork'.
+ui compile: 'renderDraftAttachments
+ attachmentDraftPane removeChildren.
+ draftAttachments do: [ :path |
+  | row name |
+  row := BrHorizontalPane new hMatchParent; vExact: 26; alignCenterLeft; yourself.
+  name := path asFileReference basename.
+  row addChild: ((self label: name size: 12) hMatchParent; yourself).
+  row addChild: (LMChatStyle iconElementButton: (LMIcons iconNamed: ''x'')
+   title: ''移除附件'' action: [
+    composerBusy = true ifFalse: [
+     draftAttachments remove: path ifAbsent: [ ]. self renderDraftAttachments ] ]).
+  attachmentDraftPane addChild: row ]'.
+ui compile: 'pickAttachments
+ composerBusy = true ifTrue: [ ^ self ].
+ composerBusy := true.
+ [ [ | files |
+    files := LoomConversation storage: ''pick''.
+    self defer: [
+     composerBusy := false.
+     files do: [ :path | (draftAttachments includes: path) ifFalse: [ draftAttachments add: path ] ].
+     self renderDraftAttachments.
+     input requestFocus ]
+   ] on: Error do: [ :error | | notice |
+    notice := error messageText.
+    self defer: [ composerBusy := false. self voiceNotice: notice ] ]
+ ] fork'.
 ui compile: 'sendMessage
- | text |
+ | text files |
+ composerBusy = true ifTrue: [ ^ self ].
  text := input text asString.
- text trimBoth ifEmpty: [ ^ self ].
- [ LoomConversation submit: text. input text: ''''. errorText := nil ]
-  on: Error do: [ :error | errorText := error messageText ].
- self refresh.
- self resizeComposer'.
+ files := draftAttachments asArray.
+ (text trimBoth isEmpty and: [ files isEmpty ]) ifTrue: [ ^ self ].
+ composerBusy := true.
+ [ [ LoomConversation submit: text files: files.
+    self defer: [
+     composerBusy := false.
+     input text asString = text ifTrue: [ input text: '''' ].
+     draftAttachments removeAll.
+     self renderDraftAttachments.
+     self voiceNotice: nil.
+     self resizeComposer ]
+   ] on: Error do: [ :error | | notice |
+    notice := error messageText.
+    self defer: [ composerBusy := false. self voiceNotice: notice ] ]
+ ] fork'.
 ui compile: 'voiceNotice: text
  errorText := text.
  self refresh'.
@@ -583,13 +627,13 @@ ui compile: 'toggleRecordingPlayback: audioId
     notice := error messageText. self defer: [ self voiceNotice: notice ] ]
  ] ensure: [ voicePlaybackPending := false ] ] fork'.
 ui compile: 'shouldRestore
- ^ self isOpen or: [ layoutVersion ~= 7 and: [ space notNil and: [ space isOpened ] ] ]'.
+ ^ self isOpen or: [ layoutVersion ~= 8 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
  | world model |
  self stopRefreshing.
  (space notNil and: [ space isOpened ]) ifTrue: [
   (BlParallelUniverse forHost: space host class) closeSpaceSynchronously: space ].
- (layoutVersion ~= 7 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
+ (layoutVersion ~= 8 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
  world := self hostWorld ifNil: [
   GtWorld allOpenWorlds detect: [ :each | each host isKindOf: BlWinitHost ]
    ifNone: [ self error: ''请先打开 GT 主界面'' ] ].
@@ -736,7 +780,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 22'.
+ui class compile: 'featureVersion ^ 23'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

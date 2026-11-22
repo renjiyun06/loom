@@ -1,5 +1,5 @@
 answer: message
- "The first argument to replyTo:usingContext: is the user message. For audio, text contains the corrected transcript. Respond to this message and return the full user-facing reply as a GT String."
+ "The first argument to replyTo:usingContext: is the user message. For audio, text contains the corrected transcript. For files, attachmentIds lists the attachments in order. Resolve each ID with LoomConversation attachment: id, then use LoomConversation fileForAttachment: attachment to get the file. Respond to this message and return the full user-facing reply as a GT String."
  | session input context correction send reply |
  session := LoomCodex session: #main.
  input := message.

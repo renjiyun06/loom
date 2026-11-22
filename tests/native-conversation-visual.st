@@ -1,6 +1,7 @@
 "Visual checks for the compact native conversation interface."
 | report checks check ui card body editor text entry row values list bytes before attachments drafts more overflow label
-  file name attachment caption lines longName tooltip draftImage draftFile space voice voiceView strip leftInset rightInset |
+  file name attachment caption lines longName tooltip draftImage draftFile space voice voiceView strip leftInset rightInset
+  audio voiceMessage player duration |
 report := Dictionary new. checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
 [
@@ -83,6 +84,30 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: body parent width < 120 value: 'short user bubbles hug their content'.
  check value: ((card instVarNamed: 'userMetadataLabel') text asString includes: $:)
   value: 'user metadata shows local message time'.
+ audio := Dictionary new at: 'id' put: 'recording-fixture'; at: 'duration' put: 3;
+  at: 'playing' put: false; at: 'playable' put: true; at: 'status' put: ''; yourself.
+ voiceMessage := Dictionary new at: 'id' put: 'audio-bubble'; at: 'role' put: 'user';
+  at: 'text' put: '嗯，好的。'; at: 'audio' put: audio; yourself.
+ card descriptor: voiceMessage; forceLayout; forceLayout.
+ body := card instVarNamed: 'body'.
+ player := card childNamed: #voiceMessagePlay.
+ duration := player children second.
+ check value: (body parent width < 120 and: [ player boundsInParent right < body parent width ])
+  value: 'a short transcript and its playback control fit a compact bubble'.
+ check value: (player children size = 2 and: [ duration text asString = '0:03'
+  and: [ player label asString = '播放原音' and: [ player states isEnabled ] ] ])
+  value: 'the playback button holds both the icon and the recording duration'.
+ card descriptor: (voiceMessage copy at: 'audio' put: (audio copy at: 'playing' put: true;
+  at: 'duration' put: 6035; yourself); yourself); forceLayout; forceLayout.
+ check value: (player children second == duration and: [ duration text asString = '100:35'
+  and: [ duration boundsInParent right < player width and: [ player label asString = '停止播放' ] ] ])
+  value: 'switching to stop retains the duration and fits longer recordings'.
+ card descriptor: (voiceMessage copy at: 'text' put: ''; at: 'audio' put:
+  (audio copy at: 'playable' put: false; at: 'status' put: '转录失败'; yourself); yourself); forceLayout.
+ check value: (player states isDisabled and: [ body visibility class = BlVisibility gone class
+  and: [ (card childNamed: #voiceMessageStatus) text asString = '转录失败'
+   and: [ (card childNamed: #voiceMessageStatus) visibility class = BlVisibility visible class ] ] ])
+  value: 'a missing original disables playback and an empty transcript leaves the error visible'.
  name := '0123456789abcdef0123456789abcdef.jpg'.
  file := Dictionary new at: 'name' put: name; at: 'relativePath' put: 'conversation.sqlite';
   at: 'image' put: true; yourself.

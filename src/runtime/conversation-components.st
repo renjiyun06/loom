@@ -585,19 +585,23 @@ cls compile: 'openAttachment: file
   ifTrue: [ WebBrowser openOn: file fullName ]
   ifFalse: [ controller ifNotNil: [ controller voiceNotice: ''附件找不到'' ] ]'.
 cls compile: 'addRecordingPlayerTo: bubble
- | player caption |
- player := BrHorizontalPane new id: #voiceMessagePlayer; hMatchParent; vExact: 26; alignCenterLeft; yourself.
- player layout cellSpacing: 7.
  voiceButton := LMChatStyle replyAction: #voiceMessagePlay icon: ''play'' action: [
   controller ifNotNil: [ controller toggleRecordingPlayback: ((descriptor at: ''audio'') at: ''id'') ] ].
+ voiceButton hFitContent; vExact: 26;
+  layout: (BlLinearLayout horizontal
+   verticalAlignment: BlElementAlignment vertical center; cellSpacing: 3; yourself);
+  padding: (BlInsets left: 6 right: 7);
+  background: Color white;
+  border: (BlBorder paint: (Color gray: 0.89) width: 1);
+  geometry: (BlRoundedRectangleGeometry cornerRadius: 6).
  voiceDuration := LMChatStyle label: '''' size: 12.
- voiceDuration aptitude foreground: (Color gray: 0.44).
- caption := LMChatStyle label: ''录音'' size: 13.
- player addChildren: { voiceButton. caption. voiceDuration }.
+ voiceDuration aptitude foreground: (Color gray: 0.36).
+ voiceButton addChild: voiceDuration.
  voiceStatus := (LMChatStyle label: '''' size: 12) id: #voiceMessageStatus; hMatchParent; yourself.
  voiceStatus aptitude foreground: (Color gray: 0.42).
- bubble layout cellSpacing: 4.
- bubble addChildren: { player. voiceStatus }'.
+ bubble padding: (BlInsets top: 7 right: 11 bottom: 7 left: 11).
+ bubble layout cellSpacing: 3.
+ bubble addChildren: { voiceButton. voiceStatus }'.
 cls compile: 'renderRecording: audio
  | duration seconds caption playing icon |
  duration := (audio at: ''duration'') rounded.
@@ -612,8 +616,7 @@ cls compile: 'renderRecording: audio
  playing := audio at: ''playing''.
  (voiceButton userData at: #playing ifAbsent: [ nil ]) = playing ifFalse: [
   icon := LMIcons iconNamed: (playing ifTrue: [ ''square'' ] ifFalse: [ ''play'' ]).
-  icon constraintsDo: [ :c | c frame horizontal alignCenter. c frame vertical alignCenter ].
-  voiceButton removeChildren; addChild: icon.
+  voiceButton replaceChild: voiceButton children first with: icon.
   voiceButton label: (playing ifTrue: [ ''停止播放'' ] ifFalse: [ ''播放原音'' ]).
   voiceButton userData at: #playing put: playing ]'.
 cls compile: 'controller: aController controller := aController'.
@@ -710,7 +713,8 @@ cls compile: 'updateGeometry
   ideal := (descriptor at: ''text'') trimBoth lines inject: 0 into: [ :largest :line |
    largest max: (LMChatStyle measureLabel: line size: 14) ].
   descriptor at: ''audio'' ifPresent: [ :audio |
-   ideal := (ideal max: 116) max: (LMChatStyle measureLabel: (audio at: ''status'') size: 12) ].
+   ideal := ideal max: (LMChatStyle measureLabel: voiceDuration text asString size: 12) + 38.
+   ideal := ideal max: (LMChatStyle measureLabel: (audio at: ''status'') size: 12) ].
   limit := (self width - (inset * 2)) * (viewport <= 800 ifTrue: [ 0.94 ] ifFalse: [ 0.88 ]).
   target := ((ideal ceiling + 37) min: limit) max: 54.
   bubble := body parent.

@@ -23,6 +23,7 @@ applications class compile: 'attempt: name during: operation
     false ]'.
 applications class compile: 'resetAfterRuntimeRestart
  (Smalltalk globals removeKey: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #retire.
+ (Smalltalk globals removeKey: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals at: #LMVoice ifAbsent: [ nil ]) ifNotNil: [ :voice |
   (voice respondsTo: #retireRequests) ifTrue: [ voice retireRequests ] ].
  Smalltalk globals removeKey: #LoomConversationStore ifAbsent: [ ].
@@ -30,6 +31,7 @@ applications class compile: 'resetAfterRuntimeRestart
  Smalltalk globals at: #LoomApplicationLoadMutex put: Mutex new.
  Smalltalk globals at: #LoomApplicationSession put: LoomRuntimeSessionId'.
 applications class compile: 'prepareShutdown
+ (Smalltalk globals at: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #close.
  (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #close'.
 applications class compile: 'start
  | mutex gui |
@@ -67,6 +69,7 @@ applications class compile: 'install
     self load: ''conversation-ui.st'' ].
    ((self statusFor: ''conversation'') at: ''phase'') = ''ready'' ifTrue: [ LoomConversation start ] ]
   ifFalse: [ self statuses at: ''conversation'' put: (self statusFor: ''conversation-model'') ].
+ self initializeMail.
  gui ifTrue: [
   self attempt: ''session-view'' during: [ self load: ''loom-session-ui.st'' ].
   self attempt: ''activity-view'' during: [ self load: ''loom-activity-ui.st'' ] ].
@@ -87,6 +90,18 @@ applications class compile: 'initializeVoice
   manager := LMGtVoice new initializeAt: ExperimentRoot forSession: LoomRuntimeSessionId; yourself.
   Smalltalk globals at: #LoomGtVoice put: manager ].
  manager start'.
+applications class compile: 'initializeMail
+ | config manager |
+ config := ExperimentRoot / ''config'' / ''mail.local.json''.
+ config exists ifFalse: [
+  ^ self statuses at: ''mail'' put: (Dictionary new at: ''phase'' put: ''disabled''; yourself) ].
+ self attempt: ''mail'' during: [
+  self load: ''mail.st''.
+  manager := Smalltalk globals at: #LoomGtMail ifAbsent: [ nil ].
+  (manager isNil or: [ manager isClosed ]) ifTrue: [
+   manager := LMGtMail new initializeAt: ExperimentRoot config: config; yourself.
+   Smalltalk globals at: #LoomGtMail put: manager ].
+  manager start ]'.
 applications class compile: 'restoreIn: world
  self dismissRestoredShutdownPromptIn: world.
  self attempt: ''desktop-toolbar'' during: [ (world instVarNamed: #worldElement) updateToolbarActions ].

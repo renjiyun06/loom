@@ -245,7 +245,7 @@ ui compile: 'closed
  voiceComposer ifNotNil: [ voiceComposer close ].
  self stopRefreshing'.
 ui compile: 'collectUpdate
- | key current records invocation messages statusText reply reader page limit partial audioIndex jobs activeClient storage phase sendAllowed |
+ | key current records invocation messages statusText reply reader page limit audioIndex jobs activeClient storage phase sendAllowed closing |
  storage := LoomConversation storageStatus.
  phase := storage at: ''phase''.
  phase = ''ready'' ifTrue: [
@@ -254,16 +254,15 @@ ui compile: 'collectUpdate
    recordCache := LoomConversation records asArray. recordKey := key ] ].
  records := recordCache ifNil: [ #() ].
  current := LoomConversation instVarNamed: ''currentId''.
+ closing := LoomConversation isClosingBrowser.
  activeClient := LoomConversation instVarNamed: ''client''.
  invocation := current ifNotNil: [ activeClient activeRequestId ].
  limit := bodyPane userData at: #activityHistoryLimit ifAbsent: [ self activityPageSize ].
  reader := bodyPane userData at: #activityTimeline ifAbsentPut: [ LMActivityReader new ].
  page := reader pageOf: limit session: LoomSessions mainId.
- partial := reader streamedReplyFor: invocation.
- activeClient activeRequestId ~= invocation ifTrue: [ partial := '''' ].
  messages := OrderedCollection new.
  sendAllowed := current isNil.
- records do: [ :record | | response content entry id audioId showReply audio recording |
+ records do: [ :record | | response entry id audioId showReply audio recording |
   id := record at: ''id''.
   response := record at: ''reply'' ifAbsent: [ nil ].
   audioId := record at: ''audioId'' ifAbsent: [ nil ].
@@ -284,12 +283,16 @@ ui compile: 'collectUpdate
     audioId isNil or: [ (LMVoice transcribedText: recording) notEmpty ] ] ]) ifTrue: [ sendAllowed := false ].
   messages add: entry.
   showReply ifTrue: [
-   content := response ifNil: [ current = id ifTrue: [ partial ] ifFalse: [ '''' ] ]
-    ifNotNil: [ response at: ''text'' ].
-   messages add: (Dictionary new at: ''id'' put: id, ''-assistant'';
-    at: ''role'' put: ''assistant''; at: ''text'' put: content;
+   entry := Dictionary new at: ''id'' put: id, ''-assistant'';
+    at: ''role'' put: ''assistant''; at: ''text'' put: (response ifNil: [ '''' ] ifNotNil: [ response at: ''text'' ]);
     at: ''pending'' put: response isNil;
-    at: ''ok'' put: (response ifNil: [ true ] ifNotNil: [ response at: ''ok'' ]); yourself) ] ].
+    at: ''ok'' put: (response ifNil: [ true ] ifNotNil: [ response at: ''ok'' ]); yourself.
+   response ifNil: [
+    (current = id and: [ closing ]) ifTrue: [ entry at: ''status'' put: ''正在关闭浏览器…'' ] ]
+    ifNotNil: [
+     response at: ''browserClose'' ifPresent: [ :result |
+      (result at: ''ok'') ifFalse: [ entry at: ''status'' put: ''浏览器关闭未确认'' ] ] ].
+   messages add: entry ] ].
  statusText := current ifNil: [ ''已完成'' ] ifNotNil: [
   invocation ifNil: [ ''正在准备'' ] ifNotNil: [ ''正在处理'' ] ].
  records ifEmpty: [ statusText := ''等待消息'' ].

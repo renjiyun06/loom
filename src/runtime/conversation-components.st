@@ -664,9 +664,10 @@ cls compile: 'descriptor: value
     ifTrue: [ body text: (LMChatStyle formattedText: (value at: ''text'') size: 13) ]
     ifFalse: [ body text: (value at: ''text'') ].
    actions visibility: ((value at: ''pending'' ifAbsent: [ false ]) ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]).
-   caption := (value at: ''pending'' ifAbsent: [ false ])
-    ifTrue: [ (value at: ''text'') ifEmpty: [ ''正在处理…'' ] ifNotEmpty: [ ''正在回复…'' ] ]
-    ifFalse: [ (value at: ''ok'' ifAbsent: [ true ]) ifTrue: [ '''' ] ifFalse: [ ''未完成'' ] ].
+   caption := value at: ''status'' ifAbsent: [
+    (value at: ''pending'' ifAbsent: [ false ])
+     ifTrue: [ (value at: ''text'') ifEmpty: [ ''正在处理…'' ] ifNotEmpty: [ ''正在回复…'' ] ]
+     ifFalse: [ (value at: ''ok'' ifAbsent: [ true ]) ifTrue: [ '''' ] ifFalse: [ ''未完成'' ] ] ].
    stateLabel text: caption;
     visibility: (caption isEmpty ifTrue: [ BlVisibility gone ] ifFalse: [ BlVisibility visible ]) ].
  self updateGeometry'.

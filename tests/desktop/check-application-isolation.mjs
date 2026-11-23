@@ -357,6 +357,80 @@ try {
       if (Date.now() >= voiceDeadline) throw Error('The restored conversation did not correct and answer the recording');
       await sleep(200);
     }
+    const closeStartedFile = path.join(fixture, 'browser-close-started.json');
+    const closeReleaseFile = path.join(fixture, 'browser-close-release');
+    for (const variant of ['none', 'keep', 'close', 'close-failed']) {
+      const prompt = 'browser fixture ' + variant;
+      const action = variant === 'close-failed' ? 'close' : variant;
+      const id = await gt(`LoomConversation submit: '${prompt}'`, 'submit-browser-' + variant);
+      let originalInvocation;
+      if (action === 'close') {
+        const started = await until('browser cleanup callback', () => read(closeStartedFile), 30000);
+        assert.equal(started[0], 'main');
+        originalInvocation = started[1];
+        const beforePublish = await gt(`| payload last staged request |
+         payload := LoomTestEchoView collectUpdate.
+         last := (payload at: 'messages') last.
+         staged := LoomConversation storage: 'staged-browser-reply' options: (Dictionary new at: 'id' put: '${id}'; yourself).
+         request := (LoomConversation instVarNamed: #client) activeRequestId.
+         { last at: 'id'. last at: 'text'. last at: 'status'. payload at: 'sendAllowed'.
+           staged at: 'text'. (staged at: 'invocation') at: 'id'.
+           ((Smalltalk globals at: #LoomNativeCodexHost) registry activityAnswerFor: request) includesSubstring: 'Unpublished draft' }`,
+        'browser-cleanup-holds-reply');
+        assert.deepEqual(beforePublish, [id + '-assistant', '', '正在关闭浏览器…', false,
+          prompt + ' reply', originalInvocation, true]);
+        fs.writeFileSync(closeReleaseFile, '');
+      }
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        const result = await gt(`| record reply presented |
+         record := LoomConversation records detect: [ :item | (item at: 'id') = '${id}' ].
+         reply := record at: 'reply' ifAbsent: [ nil ].
+         reply ifNotNil: [
+          presented := (LoomTestEchoView collectUpdate at: 'messages') last.
+          { reply at: 'ok'. reply at: 'text'. reply at: 'browserAction'. reply at: 'browserClose' ifAbsent: [ nil ].
+           (reply at: 'invocation') at: 'id'. presented at: 'status' ifAbsent: [ nil ].
+           (LoomConversation storage: 'staged-browser-reply' options: (Dictionary new at: 'id' put: '${id}'; yourself)) isNil } ]`,
+        'published-browser-' + variant);
+        if (result) {
+          const browserClose = variant === 'close' ? {ok: true} : variant === 'close-failed' ?
+            {ok: false, error: 'fixture could not close browser'} : null;
+          assert.deepEqual(result.slice(0, 4), [true, prompt + ' reply', action, browserClose]);
+          if (originalInvocation) assert.equal(result[4], originalInvocation);
+          assert.deepEqual(result.slice(5), [variant === 'close-failed' ? '浏览器关闭未确认' : null, true]);
+          break;
+        }
+        if (Date.now() >= deadline) throw Error('The browser fixture reply was not published: ' + variant);
+        await sleep(200);
+      }
+      if (action === 'close') {
+        fs.unlinkSync(closeStartedFile);
+        fs.unlinkSync(closeReleaseFile);
+      } else assert.equal(fs.existsSync(closeStartedFile), false);
+    }
+    const orphanId = randomUUID();
+    await gt(`(LoomConversation instVarNamed: #worker) terminate.
+     LoomConversation instVarNamed: #worker put: nil.
+     LoomConversation storage: 'submit' options: (Dictionary new at: 'id' put: '${orphanId}';
+      at: 'text' put: 'browser fixture interrupted'; at: 'createdAt' put: DateAndTime now asString; yourself).
+     LoomConversation storage: 'stage-browser-reply' options: (Dictionary new at: 'reply' put:
+      (Dictionary new at: 'id' put: '${orphanId}'; at: 'ok' put: true; at: 'text' put: 'Preserved answer';
+       at: 'browserAction' put: 'close'; yourself); yourself).
+     LoomConversation start.
+     true`, 'recover-browser-reply-without-old-worker');
+    const orphanDeadline = Date.now() + 12000;
+    for (;;) {
+      const reply = await gt(`(LoomConversation records detect: [ :item | (item at: 'id') = '${orphanId}' ])
+       at: 'reply' ifAbsent: [ nil ]`, 'recover-staged-browser-reply');
+      if (reply) {
+        assert.equal(reply.text, 'Preserved answer');
+        assert.deepEqual(reply.browserClose, {ok: false, error: '关闭状态待确认'});
+        assert.equal(fs.existsSync(closeStartedFile), false);
+        break;
+      }
+      if (Date.now() >= orphanDeadline) throw Error('The saved answer was not recovered after interruption');
+      await sleep(150);
+    }
   }
   await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
   await stoppedAfter(false);

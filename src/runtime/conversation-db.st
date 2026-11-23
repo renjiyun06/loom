@@ -20,6 +20,7 @@ self database: [ :db |
    ''CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY)''
    ''CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, sequence INTEGER NOT NULL UNIQUE, audio_id TEXT UNIQUE, data TEXT NOT NULL)''
    ''CREATE TABLE IF NOT EXISTS replies (id TEXT PRIMARY KEY REFERENCES messages(id), data TEXT NOT NULL)''
+   ''CREATE TABLE IF NOT EXISTS staged_browser_replies (id TEXT PRIMARY KEY REFERENCES messages(id), data TEXT NOT NULL)''
    ''CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(id), data TEXT NOT NULL)''
    ''CREATE INDEX IF NOT EXISTS attachments_message ON attachments(message_id)'') do: [ :sql | db execute: sql ].
  db transaction: [
@@ -45,9 +46,19 @@ store compile: 'saveReply: reply on: db
  { reply at: ''id''. STONJSON toString: reply }'.
 store compile: 'saveReply: reply
  self database: [ :db |
- self saveReply: reply on: db.
+ db transaction: [
+  self saveReply: reply on: db.
+  db execute: ''DELETE FROM staged_browser_replies WHERE id=?'' values: {reply at: ''id''} ].
  revision := UUID new asString ].
 ^ true'.
+store compile: 'stageBrowserReply: reply
+ ^ self database: [ :db |
+  db execute: ''INSERT INTO staged_browser_replies VALUES (?, ?) ON CONFLICT(id) DO NOTHING'' values:
+   { reply at: ''id''. STONJSON toString: reply } ]'.
+store compile: 'stagedBrowserReplyAt: id
+ ^ self database: [ :db |
+  (db execute: ''SELECT data FROM staged_browser_replies WHERE id=?'' values: {id})
+   ifEmpty: [ nil ] ifNotEmpty: [ :rows | STONJSON fromString: rows first ] ]'.
 store compile: 'records
  ^ self database: [ :db |
  | replies attachments |

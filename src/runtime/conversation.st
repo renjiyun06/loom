@@ -2,7 +2,7 @@
 | conversation existing |
 existing := Smalltalk globals at: #LoomConversation ifAbsent: [ nil ].
 conversation := (Object << #LMConversation
- slots: { #client. #gate. #worker. #currentId. #mutex. #pendingReply };
+ slots: { #client. #gate. #worker. #currentId. #mutex. #pendingReply. #closingBrowser };
  package: 'Loom-Conversation') install.
 conversation comment: 'A persistent conversation program living in the GT image. SQLite stores messages and replies. The worker waits on a semaphore between messages. Inspect the LoomConversation global for live state.'.
 conversation compile: 'initialize
@@ -29,6 +29,8 @@ conversation compile: 'storage: action options: options
  action = ''attachment'' ifTrue: [ ^ store attachment: (options at: ''attachmentId'') ].
  action = ''submit'' ifTrue: [ ^ store submit: options ].
  action = ''reply'' ifTrue: [ ^ store saveReply: (options at: ''reply'') ].
+ action = ''stage-browser-reply'' ifTrue: [ ^ store stageBrowserReply: (options at: ''reply'') ].
+ action = ''staged-browser-reply'' ifTrue: [ ^ store stagedBrowserReplyAt: (options at: ''id'') ].
  action = ''pick'' ifTrue: [ ^ LMPlatformTools selectFiles ].
  self error: ''未知对话操作'''.
 conversation compile: 'storageStatus ^ LoomApplications statusFor: ''conversation'''.
@@ -78,18 +80,65 @@ conversation compile: 'preparePrompt: message
  "This is the first replaceable context preparation method."
  ^ message at: ''text'''.
 conversation compile: (ExperimentRoot / 'src' / 'runtime' / 'conversation-answer.st') contents.
+conversation compile: 'isClosingBrowser ^ closingBrowser == true'.
+conversation compile: 'captureReplyTo: message
+ | result text action |
+ result := self answer: message.
+ result isString
+  ifTrue: [ text := result. action := ''none'' ]
+  ifFalse: [
+   result isDictionary ifFalse: [ self error: ''回复必须是字典或字符串'' ].
+   text := result at: ''text'' ifAbsent: [ nil ].
+   action := result at: ''browserAction'' ifAbsent: [ nil ].
+   (text isString and: [ #(''none'' ''keep'' ''close'') includes: action ])
+    ifFalse: [ self error: ''回复正文或浏览器处置值无效'' ] ].
+ ^ Dictionary new at: ''ok'' put: true; at: ''text'' put: text;
+  at: ''browserAction'' put: action asString; at: ''invocation'' put: client lastResponse; yourself'.
+conversation compile: 'browserCloseFailure: reason
+ ^ Dictionary new at: ''ok'' put: false; at: ''error'' put: reason; yourself'.
+conversation compile: 'closeBrowserFor: answerReceipt using: session
+ "Close only the browser used by the reply invocation identified by the first argument.
+ Use the same browser tool and verify the instance belongs to the current Loom session
+ and is the one used by that invocation. Leave user-owned browsers and uncertain
+ targets alone. Return a GT Dictionary through loomReturn with ok true if that
+ instance is confirmed closed, or ok false and an error String otherwise."
+ ^ session requireThread: (answerReceipt at: ''threadId'')
+  during: [ session closeBrowserUsedFor: (answerReceipt at: ''id'') ]'.
+conversation compile: 'performBrowserCloseFor: reply
+ | result |
+ closingBrowser := true.
+ [ result := [
+   | outcome ok reason |
+    outcome := self closeBrowserFor: (reply at: ''invocation'') using: client.
+    outcome isDictionary ifFalse: [ self error: ''浏览器关闭回执无效'' ].
+    ok := outcome at: ''ok'' ifAbsent: [ nil ].
+    ok == true
+     ifTrue: [ Dictionary new at: ''ok'' put: true; yourself ]
+     ifFalse: [
+      reason := outcome at: ''error'' ifAbsent: [ nil ].
+      (ok == false and: [ reason isString and: [ reason trimBoth isNotEmpty ] ])
+       ifFalse: [ self error: ''浏览器关闭回执无效'' ].
+      self browserCloseFailure: reason ]
+   ] on: Error do: [ :error | self browserCloseFailure: error messageText ].
+   reply at: ''browserClose'' put: result
+ ] ensure: [ closingBrowser := false ]'.
 conversation compile: 'process: message
  | reply id |
  id := message at: ''id''.
  mutex critical: [ currentId := id ].
  [
-  [ reply := Dictionary new at: ''ok'' put: true;
-    at: ''text'' put: (self answer: message);
-    at: ''invocation'' put: client lastResponse; yourself
-  ] on: Error do: [ :error |
-   reply := Dictionary new at: ''ok'' put: false;
-    at: ''text'' put: error messageText;
-    at: ''invocation'' put: client lastResponse; yourself ].
+  reply := self storage: ''staged-browser-reply'' options: (Dictionary new at: ''id'' put: id; yourself).
+  reply ifNil: [
+   reply := [ self captureReplyTo: message ] on: Error do: [ :error |
+    Dictionary new at: ''ok'' put: false; at: ''text'' put: error messageText;
+     at: ''invocation'' put: client lastResponse; yourself ].
+   reply at: ''id'' put: id.
+   (reply at: ''browserAction'' ifAbsent: [ ''none'' ]) = ''close'' ifTrue: [
+    self storage: ''stage-browser-reply'' options: (Dictionary new at: ''reply'' put: reply; yourself).
+    self performBrowserCloseFor: reply ] ]
+  ifNotNil: [
+   "A fresh worker has no proof that an earlier cleanup call did or did not close the browser."
+   reply at: ''browserClose'' put: (self browserCloseFailure: ''关闭状态待确认'') ].
   reply at: ''id'' put: id; at: ''completedAt'' put: DateAndTime now asUTC asString.
   pendingReply := reply.
   self flushReply

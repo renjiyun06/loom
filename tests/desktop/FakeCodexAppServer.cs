@@ -8,6 +8,34 @@ public static class FakeCodexAppServer {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static string threadId, turnId;
     static int serial;
+    static readonly string ObjectInvocationCode = @"
+| selector input prompt action staged gate deadline result |
+selector := loomMessage selector.
+input := loomMessage arguments first.
+selector = #closeBrowserUsedFor: ifTrue: [
+    staged := LoomConversation storage: 'staged-browser-reply' options:
+      (Dictionary new at: 'id' put: (LoomConversation records last at: 'id'); yourself).
+    input = ((staged at: 'invocation') at: 'id') ifFalse: [ self error: 'wrong cleanup target' ].
+    LMPlatformTools writeJSON: { loomSessionId. input } to: ExperimentRoot / 'browser-close-started.json'.
+    gate := ExperimentRoot / 'browser-close-release'.
+    deadline := DateAndTime now + 30 seconds.
+    [ gate exists or: [ DateAndTime now >= deadline ] ] whileFalse: [ (Delay forMilliseconds: 50) wait ].
+    gate exists ifFalse: [ self error: 'fixture close gate timed out' ].
+    result := Dictionary new at: 'ok' put: true; yourself.
+    (staged at: 'text') = 'browser fixture close-failed reply' ifTrue: [
+      result at: 'ok' put: false; at: 'error' put: 'fixture could not close browser' ].
+    loomReturn value: result
+] ifFalse: [
+    selector = #correctSpeechTranscript: ifTrue: [ loomReturn value: input, ' corrected' ] ifFalse: [
+      selector = #replyTo:usingContext: ifTrue: [
+        prompt := input at: 'text'.
+        (prompt beginsWith: 'browser fixture ') ifTrue: [
+          action := (prompt endsWith: 'close-failed') ifTrue: [ 'close' ] ifFalse: [ prompt allButFirst: 16 ].
+          loomReturn value: (Dictionary new at: 'text' put: prompt, ' reply'; at: 'browserAction' put: action; yourself)
+        ] ifFalse: [ loomReturn value: prompt, ' reply' ]
+      ] ifFalse: [
+        loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ].
+true";
 
     static void Send(object value) {
         Console.WriteLine(Json.Serialize(value));
@@ -66,13 +94,9 @@ public static class FakeCodexAppServer {
                     Event("item/agentMessage/delta",new {threadId,turnId,itemId="progress-"+turnId,delta=" offline"});
                     if(text=="mock-active") break;
                     if(text=="Loom \u8c03\u7528\u4e86\u4f60\u3002") {
+                        Event("item/started",new {threadId,turnId,item=new {id="draft-"+turnId,type="agentMessage",phase="final_answer",text="Unpublished draft"}});
                         Send(new {id="tool-"+turnId,method="item/tool/call",@params=new {threadId,turnId,callId="tool-"+turnId,
-                            tool="runtime_eval",arguments=new {code=
-                                "loomReturn value: (loomMessage selector = #correctSpeechTranscript: " +
-                                "ifTrue: [ loomMessage arguments first, ' corrected' ] " +
-                                "ifFalse: [ loomMessage selector = #replyTo:usingContext: " +
-                                "ifTrue: [ (loomMessage arguments first at: 'text'), ' reply' ] " +
-                                "ifFalse: [ Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: loomMessage arguments first; yourself ] ]). true"}}});
+                            tool="runtime_eval",arguments=new {code=ObjectInvocationCode}}});
                     } else Finish(text+" \u56de\u6267","completed");
                     break;
                 case "turn/interrupt":

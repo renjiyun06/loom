@@ -1,5 +1,5 @@
 answer: message
- "The first argument to replyTo:usingContext: is the user message. For audio, text contains the corrected transcript. For files, attachmentIds lists the attachments in order. Resolve each ID with LoomConversation attachment: id, then use LoomConversation fileForAttachment: attachment to get the file. Respond to this message and return the full user-facing reply as a GT String."
+ "The first argument to replyTo:usingContext: is the user message. For audio, text contains the corrected transcript. For files, resolve attachmentIds using LoomConversation attachment: and fileForAttachment:. Return a GT Dictionary with text (the complete user-facing reply) and browserAction. Use 'none' if you did not use a browser, 'keep' if the browser may still be needed or the user is using it, and 'close' if you used it and confirmed it can be closed. Loom will handle the close in a separate call."
  | session input context correction send reply |
  session := LoomCodex session: #main.
  input := message.
@@ -9,5 +9,4 @@ answer: message
  context := self preparePrompt: input.
  send := [ session replyTo: input usingContext: context ].
  reply := correction ifNil: [ send value ] ifNotNil: [ session requireThread: (correction at: 'threadId') during: send ].
- reply isString ifFalse: [ self error: 'The Loom conversation expects a text reply' ].
  ^ reply

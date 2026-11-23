@@ -89,6 +89,7 @@ LMConversation compile: 'submitAudio: audioId text: text
   at: ''recordedMessageId'' put: (job at: ''messageId'' ifAbsent: [ nil ]); yourself)'.
 LMConversation compile: 'nextInput
  | jobs |
+ "This is the queue entry point for both text and recordings."
  self pendingInputs do: [ :message |
   | audioId transcript |
   audioId := message at: ''audioId'' ifAbsent: [ ^ message ].

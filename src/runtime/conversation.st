@@ -74,7 +74,6 @@ conversation compile: 'submitMessage: message
 conversation compile: 'pendingInputs ^ self storage: ''pending'''.
 conversation compile: 'nextUnansweredInput
  ^ self pendingInputs ifEmpty: [ nil ] ifNotEmpty: [ :messages | messages first ]'.
-conversation compile: 'nextInput ^ self nextUnansweredInput'.
 conversation compile: 'preparePrompt: message
  "This is the first replaceable context preparation method."
  ^ message at: ''text'''.

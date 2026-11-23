@@ -238,12 +238,16 @@ try {
   assert.equal(fs.readdirSync(path.join(fixture, 'state/runtime/checkpoints')).length, 1);
   assert.equal(path.resolve(read(sessionFile).image), sealed.image);
   fs.writeFileSync(path.join(fixture, 'main.changes'), '\n');
+  // Reload the conversation source without changing the voice source.
+  fs.appendFileSync(path.join(fixture, 'src/runtime/conversation.st'),
+    ".\nLMConversation compile: 'restartFixtureMarker ^ true'.\n");
   await start(core.pid);
   assert.deepEqual(read(migrationReceipt), {threads: 1});
   assert.deepEqual(await gt('{ LoomIPC fullName. LMCodexClient package name asString }', 'restored-runtime-bindings'),
     [ipc, 'Loom-Codex']);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
+  assert.equal(await gt('LMConversation includesSelector: #restartFixtureMarker', 'conversation-source-after-restart'), true);
   const restored = await gt(`{
    LoomConversation records size.
    ((LMVoice index at: 'jobs') anySatisfy: [ :job | (job at: 'title') = 'offline.wav' ]).
@@ -320,6 +324,39 @@ try {
        (item at: 'seq') > ${activityBeforeEcho} and: [ (item at: 'type') = 'dynamicToolCall' ] ] }`,
     'live-activity-after-restored-echo');
     assert.deepEqual(resumedActivity, [true, true]);
+    const [audioId, messageId] = await gt(`| manager job |
+     manager := Smalltalk globals at: #LoomGtVoice.
+     job := manager makeJob: 'Voice restart fixture' original: 'original.wav'.
+     job at: 'state' put: 'processing'; at: 'nextPoll' put: 9999999999999.
+     manager save: job.
+     { job at: 'id'. LoomConversation submitAudio: (job at: 'id') text: '' }`,
+    'submit-untranscribed-recording-after-restart');
+    assert.equal(await gt('LoomConversation nextInput isNil', 'pending-audio-waits-for-transcription'), true);
+    await gt(`| manager job |
+     manager := Smalltalk globals at: #LoomGtVoice.
+     job := manager job: '${audioId}'.
+     job at: 'state' put: 'completed'; at: 'transcript' put: 'voice fixture'.
+     manager save: job.
+     LoomConversation start.
+     true`, 'complete-fixture-transcription');
+    const voiceDeadline = Date.now() + 30000;
+    for (;;) {
+      const result = await gt(`| record reply correction |
+       record := LoomConversation records detect: [ :item | (item at: 'id') = '${messageId}' ].
+       reply := record at: 'reply' ifAbsent: [ nil ].
+       reply ifNotNil: [
+        correction := LoomConversation speechCorrectionAt: '${messageId}'.
+        { reply at: 'ok'. reply at: 'text'. correction ifNotNil: [
+           { correction at: 'ok'. correction at: 'text'.
+            (correction at: 'threadId') = ((reply at: 'invocation') at: 'threadId') } ] } ]`,
+      'read-corrected-voice-reply');
+      if (result) {
+        assert.deepEqual(result, [true, 'voice fixture corrected reply', [true, 'voice fixture corrected', true]]);
+        break;
+      }
+      if (Date.now() >= voiceDeadline) throw Error('The restored conversation did not correct and answer the recording');
+      await sleep(200);
+    }
   }
   await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
   await stoppedAfter(false);

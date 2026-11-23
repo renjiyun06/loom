@@ -2,7 +2,7 @@
 id: "loom-entry"
 title: "织境运行环境入口"
 summary: "所有 Loom 会话共用的入口，说明使用者如何通过不同入口与 Loom 协作、Codex 如何参与持续工作，以及系统演进和调用约定。"
-updated: "2026-11-22T21:30:31+08:00"
+updated: "2026-11-23T10:32:08+08:00"
 ---
 # 织境运行环境入口
 
@@ -23,6 +23,10 @@ Codex 参与的是工作中的具体步骤。Loom 程序决定何时调用、选
 每条 Loom 会话都有持久标识，程序通过 `LoomCodex session: #标识` 明确选择。每条 Loom 会话可以按时间先后接续多条底层 Codex 会话。重启沿用当前绑定，明确切换底层会话后仍使用原来的 Loom 标识和业务状态。
 
 这份文件只定义共用约定。收到「Loom 调用了你。」后，从 `runtime_eval` 读取 `loomSessionId` 确认会话身份，并以原始调用帧 `loomCaller` 和消息 `loomMessage` 为起点，自行查阅调用栈、源码、注释和实际入参。弄清程序为什么走到这里、接下来怎么使用结果，再用 `loomReturn value: anObject` 把实际对象交回等待中的程序。
+
+## 浏览器数据
+
+每个 Loom 会话使用独立的浏览器实例和数据目录。操作浏览器前，从 `runtime_eval` 确认本次调用的 `loomSessionId`。所选工具应打开或接续该会话在 `D:\Loom\state\browser-profiles` 下对应的浏览器数据目录。例如，`main` 使用 `D:\Loom\state\browser-profiles\main`。关闭后重新打开时复用同一目录。
 
 ## 用户交互与系统修改
 

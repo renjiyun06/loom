@@ -11,7 +11,8 @@ cls compile: 'channel: value channel := value'.
 cls compile: 'registry: value explicitRegistry := value'.
 cls compile: 'registry
  | current |
- current := explicitRegistry ifNil: [ LoomNativeCodexHost registry ].
+ "The compiled global binding can outlive the host replaced during image restore."
+ current := explicitRegistry ifNil: [ (Smalltalk globals at: #LoomNativeCodexHost) registry ].
  registry == current ifFalse: [
   registry := current.
   published := nil.

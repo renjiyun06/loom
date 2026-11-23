@@ -288,6 +288,11 @@ try {
     const resumed = await submitModel("(LoomSessions session: 'isolation-check') ask: '会话续接'", 'resumed-model-call');
     assert.deepEqual(await resumed(), {ok: true, value: '会话续接 回执'});
     assert.equal((await gt("LoomSessions show: 'isolation-check'", 'resumed-binding')).threadId, thread);
+    const activityBeforeEcho = await gt(`| page |
+     page := (Smalltalk globals at: #LoomNativeCodexHost) registry
+      activitySummariesBefore: nil limit: 1 session: LoomSessions mainId managedOnly: false.
+     (page at: 'items') ifEmpty: [ 0 ] ifNotEmpty: [ :items | items last at: 'seq' ]`,
+    'activity-before-restored-echo');
     await gt(`| view |
      view := LMConversationUI new build.
      Smalltalk globals at: #LoomTestEchoView put: view.
@@ -306,6 +311,15 @@ try {
       if (Date.now() >= echoDeadline) throw Error('The restored conversation did not echo the message and reply: ' + JSON.stringify(messages));
       await sleep(200);
     }
+    const resumedActivity = await gt(`| view reader |
+     view := LoomTestEchoView.
+     view applyUpdate: view collectUpdate.
+     reader := (view instVarNamed: #bodyPane) userData at: #activityTimeline.
+     { reader registry == (Smalltalk globals at: #LoomNativeCodexHost) registry.
+      (view instVarNamed: #activityItems) anySatisfy: [ :item |
+       (item at: 'seq') > ${activityBeforeEcho} and: [ (item at: 'type') = 'dynamicToolCall' ] ] }`,
+    'live-activity-after-restored-echo');
+    assert.deepEqual(resumedActivity, [true, true]);
   }
   await gt('[ Smalltalk snapshot: false andQuit: true ] fork. true', 'discard-fixture-runtime');
   await stoppedAfter(false);

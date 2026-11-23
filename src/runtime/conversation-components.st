@@ -811,7 +811,7 @@ cls compile: 'activityDetailText
   self userData at: #detailRequest put: token.
   [ | result |
    result := [
-    (LoomNativeCodexHost registry activityDetailAt: seq) ifNil: [
+    ((Smalltalk globals at: #LoomNativeCodexHost) registry activityDetailAt: seq) ifNil: [
      { tab. version. ''这条活动已不可用'' } ] ifNotNil: [ :entry |
      { tab. entry at: ''revision''. self detailTextFrom: (entry at: ''data'') mode: tab } ]
    ] on: Error do: [ :error | { tab. version. ''读取详情失败：'', error messageText } ].

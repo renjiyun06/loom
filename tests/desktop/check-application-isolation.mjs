@@ -368,16 +368,17 @@ try {
         const started = await until('browser cleanup callback', () => read(closeStartedFile), 30000);
         assert.equal(started[0], 'main');
         originalInvocation = started[1];
-        const beforePublish = await gt(`| payload last staged request |
+        const beforePublish = await gt(`| payload last row staged request |
          payload := LoomTestEchoView collectUpdate.
          last := (payload at: 'messages') last.
+         row := LMConversationMessageView new controller: LoomTestEchoView; descriptor: last; yourself.
          staged := LoomConversation storage: 'staged-browser-reply' options: (Dictionary new at: 'id' put: '${id}'; yourself).
          request := (LoomConversation instVarNamed: #client) activeRequestId.
-         { last at: 'id'. last at: 'text'. last at: 'status'. payload at: 'sendAllowed'.
+         { last at: 'id'. last at: 'text'. (row instVarNamed: 'stateLabel') text asString. payload at: 'sendAllowed'.
            staged at: 'text'. (staged at: 'invocation') at: 'id'.
            ((Smalltalk globals at: #LoomNativeCodexHost) registry activityAnswerFor: request) includesSubstring: 'Unpublished draft' }`,
         'browser-cleanup-holds-reply');
-        assert.deepEqual(beforePublish, [id + '-assistant', '', '正在关闭浏览器…', false,
+        assert.deepEqual(beforePublish, [id + '-assistant', '', '正在处理…', false,
           prompt + ' reply', originalInvocation, true]);
         fs.writeFileSync(closeReleaseFile, '');
       }

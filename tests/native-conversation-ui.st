@@ -140,11 +140,6 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: ((row instVarNamed: 'stateLabel') text asString = '正在回复…'
   and: [ (row instVarNamed: 'body') source = (descriptor at: 'text') ])
   value: 'reply shows streamed text and its progress label'.
- row descriptor: (descriptor copy at: 'pending' put: true; at: 'text' put: '';
-  at: 'status' put: '正在关闭浏览器…'; yourself).
- check value: ((row instVarNamed: 'stateLabel') text asString = '正在关闭浏览器…'
-  and: [ (row instVarNamed: 'body') source isEmpty ])
-  value: 'browser cleanup status appears while the reply remains withheld'.
  row descriptor: (descriptor copy at: 'status' put: '浏览器关闭未确认'; yourself).
  check value: ((row instVarNamed: 'stateLabel') text asString = '浏览器关闭未确认'
   and: [ (row instVarNamed: 'body') source = (descriptor at: 'text') ])

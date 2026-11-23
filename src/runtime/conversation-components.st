@@ -171,6 +171,10 @@ cls class compile: 'inlineText: source
      (span fourth beginsWith: ''http://'') or: [
       (span fourth beginsWith: ''mailto:'') or: [ (span fourth beginsWith: ''file:///'') or: [ span fourth size > 2 and: [ (span fourth at: 2) = $: and: [ span fourth first isLetter ] ] ] ] ] ])
      ifTrue: [
+      part attribute: (BrTextHoverDynamicAttribute new
+       enterAction: [ :linkText :element | element mouseCursor: BlHandCursor new ];
+       leaveAction: [ :linkText :element | element mouseCursor: nil ];
+       yourself).
       part attribute: (BrTextClickAttribute new action: [
        | target |
        target := span fourth.

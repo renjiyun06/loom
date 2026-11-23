@@ -7,6 +7,39 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  fence := String new: 3 withAll: (Character value: 96).
  text := LMChatStyle inlineText: '**粗体** 和 ', (String with: (Character value: 96)), 'code', (String with: (Character value: 96)), ' 与 [链接](https://example.com)'.
  check value: text asString = '粗体 和 code 与 链接' value: 'inline Markdown renders without source markers'.
+ [ | markdown scripter paragraph point previous cursors left link right clicked |
+  markdown := LMMarkdownView new text: 'Alpha [Link text](https://example.com) tail [unsupported](ftp://example.com)'; yourself.
+  scripter := BlDevScripter new element: markdown; yourself.
+  paragraph := (markdown allChildrenBreadthFirstSelect: [ :node | node isKindOf: BrTextEditorParagraphElement ]) first.
+  point := [ :index | | start end |
+   start := (paragraph globalCursorBoundsForIndex: index - 1) center.
+   end := (paragraph globalCursorBoundsForIndex: index) center.
+   start + ((end - start) / 3) ].
+  previous := 0 @ 0.
+  cursors := #(2 8 12 18 24) collect: [ :index | | next |
+   next := point value: index.
+   BlSpace simulateMouseMoveOn: markdown from: previous to: next.
+   scripter pulse.
+   previous := next.
+   scripter space currentCursor class ].
+  check value: cursors = { BlTextCursor. BlHandCursor. BlHandCursor. BlTextCursor. BlTextCursor }
+   value: 'the hand cursor is confined to clickable Markdown link text'.
+  left := point value: 2. link := point value: 8. right := point value: 18.
+  clicked := false.
+  ((paragraph text attributesAt: 8) detect: [ :attr | attr isKindOf: BrTextClickAttribute ])
+   action: [ clicked := true ].
+  BlSpace simulateMouseMoveOn: markdown from: previous to: link.
+  scripter pulse.
+  BlSpace simulateMouseDownOn: markdown at: link.
+  BlSpace simulateMouseUpOn: markdown at: link.
+  scripter pulse.
+  check value: clicked value: 'clicking a hovered Markdown link still runs its action'.
+  BlSpace simulateMouseMoveOn: markdown from: link to: left.
+  BlSpace simulateMouseDownOn: markdown at: left.
+  BlSpace simulateMouseMoveOn: markdown from: left to: right.
+  BlSpace simulateMouseUpOn: markdown at: right.
+  scripter pulse.
+  check value: markdown children first editor hasSelection value: 'dragging across a link still selects text' ] value.
  view := LMMarkdownView new.
  raw := '第一段', String cr, String cr, '正在生成'.
  view text: raw.

@@ -1,5 +1,5 @@
 "Native conversation regression. Never invokes a model or executes Markdown code."
-| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle offset editor shortcut |
+| report checks check ui view first raw code fence marker text row descriptor one two before payload result bytes model splitter divider pane space footer send attach hovered focus applyStyle offset editor shortcut running failed duration foreground |
 report := Dictionary new.
 checks := OrderedCollection new.
 check := [ :condition :name | condition ifFalse: [ self error: name ]. checks add: name ].
@@ -69,6 +69,21 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  two := one copy at: 'id' put: 'activity-two'; yourself.
  row descriptor: one; toggle; showDetailMode: #result; descriptor: two; descriptor: one.
  check value: ((row instVarNamed: 'expanded') and: [ (row instVarNamed: 'mode') = #result ]) value: 'tool details survive row reuse'.
+ running := Dictionary new at: 'id' put: 'command-failure'; at: 'type' put: 'commandExecution';
+  at: 'command' put: 'fixture'; at: 'status' put: 'inProgress'; yourself.
+ failed := running copy at: 'status' put: 'failed'; at: 'exitCode' put: 1; yourself.
+ row descriptor: running; descriptor: failed.
+ duration := row instVarNamed: 'duration'.
+ foreground := [ :label |
+  ((label text attributesAt: 1) detect: [ :attribute | attribute class = BlTextForegroundAttribute ]) paint ].
+ check value: ((duration text asString = '失败' and: [ (foreground value: duration) = (Color r: 0.67 g: 0.19 b: 0.21) ])
+  and: [ (row instVarNamed: 'expanded') not ]) value: 'failed commands show a red status and stay collapsed'.
+ row descriptor: running; toggle; descriptor: failed.
+ check value: ((row instVarNamed: 'expanded') and: [ (row instVarNamed: 'mode') = #arguments ])
+  value: 'failed commands keep manually opened details and the selected tab'.
+ row descriptor: one.
+ check value: (foreground value: (row instVarNamed: 'duration')) = (Color gray: 0.55)
+  value: 'a reused row displays the normal color for a successful tool'.
  before := LoomConversation orderedInputs size.
  payload := LoomConversationWindow collectUpdate.
  ui applyUpdate: payload.

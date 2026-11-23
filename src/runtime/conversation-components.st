@@ -766,7 +766,6 @@ cls compile: 'build
  tool := LMChatStyle label: '''' size: 12.
  tool aptitude fontName: ''Consolas''; foreground: (Color gray: 0.58).
  duration := LMChatStyle label: '''' size: 12.
- duration aptitude foreground: (Color gray: 0.55).
  chevron := BrHorizontalPane new hExact: 14; vExact: 14; alignCenter; yourself.
  summary addChildren: { mark. title. tool. duration. chevron }.
  self addChild: summary.
@@ -774,9 +773,8 @@ cls compile: 'build
  self addChild: preview'.
 cls compile: 'controller: aController controller := aController'.
 cls compile: 'descriptor: value
- | changedId wasFailed |
+ | changedId |
  changedId := preview isNil or: [ descriptor isNil or: [ (descriptor at: ''id'') ~= (value at: ''id'') ] ].
- wasFailed := descriptor notNil and: [ self isFailed ].
  descriptor := value.
  changedId ifTrue: [
   expanded := controller ifNil: [ false ] ifNotNil: [ controller activityExpandedFor: (value at: ''id'') ].
@@ -784,10 +782,6 @@ cls compile: 'descriptor: value
   self userData removeKey: #detailRequest ifAbsent: [ ].
   self userData removeKey: #detailText ifAbsent: [ ].
   detailCache := nil. self removeChildren. self build ].
- (self isFailed and: [ wasFailed not and: [ changedId not ] ]) ifTrue: [
-  expanded := true. mode := #result.
-  controller ifNotNil: [ controller activityExpanded: true for: (value at: ''id'');
-   activityDetailMode: #result for: (value at: ''id'') ] ].
  self updateSummary.
  expanded ifTrue: [ self updateDetails ] ifFalse: [
   details ifNotNil: [ details removeFromParent. details := nil ] ]'.
@@ -920,7 +914,7 @@ cls compile: 'detailTab: caption mode: tabMode
   foreground: (Color gray: 0.24) background: (mode = tabMode ifTrue: [ Color gray: 0.93 ] ifFalse: [ Color white ]))
   geometry: (BlRoundedRectangleGeometry cornerRadius: 4); yourself'.
 cls compile: 'updateSummary
- | label icon |
+ | label icon statusColor |
  summary enabled: self hasDetails.
  self hasDetails ifFalse: [ expanded := false ].
  chevron visibility: (self hasDetails ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
@@ -930,10 +924,14 @@ cls compile: 'updateSummary
   mark removeChildren; addChild: (LMIcons iconNamed: icon size: 15 color: (Color gray: 0.45)) ].
  tool visibility: (self isTool ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  tool text: ((descriptor at: ''tool'' ifAbsent: [ '''' ]) asRopedText fontName: ''Consolas''; fontSize: 12; foreground: (Color gray: 0.58); yourself).
- label := self isInterrupted ifTrue: [ ''中断'' ] ifFalse: [ self isFailed ifTrue: [ ''失败'' ] ifFalse: [
+ statusColor := Color gray: 0.55.
+ label := self isInterrupted ifTrue: [ ''中断'' ] ifFalse: [ self isFailed ifTrue: [
+  statusColor := Color r: 0.67 g: 0.19 b: 0.21.
+  ''失败'' ] ifFalse: [
   self isRunning ifTrue: [ ''执行中'' ] ifFalse: [
    (descriptor at: ''durationMs'' ifAbsent: [ nil ]) ifNil: [ '''' ] ifNotNil: [ :ms | ms asString, '' ms'' ] ] ] ].
- duration text: (label asRopedText foreground: (Color gray: 0.55); yourself).
+ duration aptitude foreground: statusColor.
+ duration text: label.
  (chevron userData at: #expanded ifAbsent: [ nil ]) = expanded ifFalse: [
   chevron userData at: #expanded put: expanded.
   chevron removeChildren; addChild: (LMChatStyle chevron: expanded) ].

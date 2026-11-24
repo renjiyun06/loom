@@ -13,6 +13,22 @@ applications class compile: 'statusFor: name
  ((Smalltalk globals at: #LoomApplicationSession ifAbsent: [ nil ]) = LoomRuntimeSessionId)
   ifFalse: [ ^ Dictionary new at: ''phase'' put: ''starting''; yourself ].
  ^ self statuses at: name ifAbsent: [ Dictionary new at: ''phase'' put: ''starting''; yourself ]'.
+applications class compile: 'replyContextFor: message from: source
+ | context sources threadId mailDatabase |
+ mailDatabase := ExperimentRoot / ''state'' / ''mail'' / ''mail.sqlite''.
+ sources := Dictionary new
+  at: ''mail'' put: (''要查邮件往来时，如果本次调用带有 threadId，用该值通过 runtime_eval 调用 LoomGtMail threadHistory:。如果只有邮件主题、时间或关键词，可以只读查询 '', mailDatabase fullName, '' 的 mail_messages 表。'');
+  at: ''conversation'' put: ''要查用户以前在 GT 界面说过什么，通过 runtime_eval 读取 LoomConversation records。找到语音消息后，用消息 ID 调用 LoomConversation speechCorrectionAt: 获取纠正稿。'';
+  yourself.
+ context := Dictionary new
+  at: ''source'' put: source;
+  at: ''messageId'' put: (message at: ''id'');
+  at: ''historyLookupInstructions'' put: ''给处理当前消息的 Codex。当前消息提到以前的约定，而你缺少相关前文时，可以按需查询下面的历史来源。'';
+  at: ''historySources'' put: sources;
+  yourself.
+ threadId := message at: ''threadId'' ifAbsent: [ nil ].
+ threadId ifNotNil: [ context at: ''threadId'' put: threadId ].
+ ^ context'.
 applications class compile: 'attempt: name during: operation
  ^ [ operation value.
      self statuses at: name put: (Dictionary new at: ''phase'' put: ''ready''; yourself).
@@ -54,7 +70,6 @@ applications class compile: 'install
  self attempt: ''desktop-ime'' during: [ self load: ''windows-ime.st'' ].
  self attempt: ''platform-tools'' during: [ self load: ''platform-tools.st'' ].
  modelLoaded := self attempt: ''conversation-model'' during: [
-  self load: ''reply-context.st''.
   self load: ''conversation-db.st''.
   self load: ''conversation.st''.
   self load: ''upgrade-main-session.st''.

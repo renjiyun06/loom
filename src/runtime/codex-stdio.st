@@ -1,9 +1,10 @@
 "Speak Codex App Server JSON-RPC from GT; native process handles are scoped to this VM."
 | transport |
-transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending #loaded #models #toolProcesses #writeMutex #serial #session #epoch #registry #failure #active); package: 'Loom-Codex') install.
+transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending #loaded #models #toolProcesses #writeMutex #serial #session #epoch #registry #failure #active #usage); package: 'Loom-Codex') install.
 transport compile: 'start: options registry: aRegistry
  | builder cwd temp logs identity |
 registry := aRegistry.
+self initializeUsage.
 session := LoomRuntimeSessionId.
 epoch := OSEnvironment current at: ''LOOM_RUNTIME_EPOCH''.
 pending := Dictionary new.
@@ -30,6 +31,9 @@ identity := self rpc: ''initialize'' params: (STONJSON fromString:
  ''{"clientInfo":{"name":"loom","title":"Loom","version":"0.1.0"},"capabilities":{"experimentalApi":true,"requestAttestation":false}}'').
 self send: (Dictionary new at: ''method'' put: ''initialized''; yourself).
 ^ identity'.
+transport compile: 'initializeUsage
+ usage := LMCodexUsage new initializeWith: self registry: registry; yourself'.
+transport compile: 'usage ^ usage'.
 transport compile: 'modelCatalog
  | params page cursor models deadline |
  params := Dictionary new at: ''limit'' put: 100; yourself.
@@ -63,9 +67,7 @@ transport compile: 'rpc: method params: arguments
  ^ self rpc: method params: arguments timeout: 30'.
 transport compile: 'rpc: method params: arguments timeout: seconds
  | id deadline result |
-serial := serial + 1.
-id := serial.
-pending at: id put: nil.
+writeMutex critical: [ serial := serial + 1. id := serial. pending at: id put: nil ].
 [
  self send: (Dictionary new at: ''id'' put: id; at: ''method'' put: method; at: ''params'' put: arguments; yourself).
  deadline := DateAndTime now + (Duration seconds: seconds).
@@ -102,6 +104,11 @@ method ifNil: [
  (id notNil and: [ pending includesKey: id ]) ifTrue: [ pending at: id put: message ].
  ^ self ].
 params := message at: ''params'' ifAbsent: [ Dictionary new ].
+usage ifNotNil: [
+ [ method = ''thread/tokenUsage/updated'' ifTrue: [ usage acceptTokenUsage: params ].
+   method = ''account/updated'' ifTrue: [ usage resetAccount ].
+   method = ''account/rateLimits/updated'' ifTrue: [ usage refreshRates ]
+ ] on: Error do: [ :ignored | nil ] ].
 current := active.
 (current notNil and: [ (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') ]) ifTrue: [
  turnId := params at: ''turnId'' ifAbsent: [ (params at: ''turn'' ifAbsent: [ Dictionary new ]) at: ''id'' ifAbsent: [ nil ] ].

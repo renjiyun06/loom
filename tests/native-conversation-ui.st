@@ -59,6 +59,34 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (LMChatStyle tableCells: '| D:\Loom | 路径 |') = #('D:\Loom' '路径') value: 'Windows paths retain backslashes inside tables'.
  ui := LMConversationUI new build.
  space := ui presentationSpace.
+ [ | activityPane usage weekly contextButton weeklyButton panel resetValue notice |
+  activityPane := ui instVarNamed: 'activityPane'.
+  weekly := Dictionary new at: 'windowDurationMins' put: 10080; at: 'usedPercent' put: 5;
+   at: 'resetsAt' put: 1796086982; yourself.
+  usage := Dictionary new at: 'context' put: (Dictionary new at: 'recent' put: 80;
+   at: 'window' put: 200; at: 'total' put: 900; yourself);
+   at: 'weekly' put: weekly; at: 'windows' put: { weekly }; yourself.
+  ui updateCodexUsage: usage.
+  contextButton := activityPane childNamed: #loomCodexContextUsage.
+  weeklyButton := activityPane childNamed: #loomCodexWeeklyUsage.
+  check value: (contextButton label asString = '上下文 40%' and: [ weeklyButton label asString = '周已用 5%' ])
+   value: 'the toolbar displays thread context and account quota'.
+  weeklyButton viewModel action value.
+  panel := activityPane userData at: #codexUsagePanel.
+  resetValue := ui quotaResetLabel: 1796086982.
+  check value: ((panel allChildrenBreadthFirstSelect: [ :element |
+   element class = BrLabel and: [ element text asString = resetValue ] ]) notEmpty)
+   value: 'usage details include the local reset time'.
+  ui updateCodexUsage: (usage copy at: 'context' put: nil; yourself).
+  check value: (contextButton label asString = '上下文 —' and: [ weeklyButton label asString = '周已用 5%' ])
+   value: 'new threads show a pending context with the same weekly quota'.
+  (panel childNamed: #closeCodexUsage) viewModel action value.
+  check value: (activityPane userData includesKey: #codexUsagePanel) not value: 'the usage panel can be dismissed'.
+  notice := (activityPane childNamed: #loomActivityToolbar) children first.
+  ui codexSettingNotice: '等待执行…' in: notice.
+  check value: contextButton visibility class = BlVisibility gone class value: 'session notices have room in the toolbar'.
+  ui codexSettingNotice: '' in: notice.
+  check value: contextButton visibility class = BlVisibility visible class value: 'usage returns after a session notice' ] value.
  footer := (ui instVarNamed: 'status') parent.
  send := footer children last.
  attach := footer childNamed: #loomPickAttachments.

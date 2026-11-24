@@ -37,7 +37,7 @@ ui compile: 'activityExpandedFor: id
  ^ activityExpansionStates at: id ifAbsent: [ false ]'.
 ui compile: 'applyUpdate: payload
  | messagesChanged anchor anchorIndex firstUpdate incomingActivities activityAnchor previousTail statusText |
- layoutVersion = 10 ifFalse: [ ^ self ].
+ layoutVersion = 11 ifFalse: [ ^ self ].
  firstUpdate := lastPayload isNil.
  incomingActivities := payload at: ''activities''.
  previousTail := activityItems ifEmpty: [ nil ] ifNotEmpty: [ activityItems last at: ''id'' ].
@@ -47,6 +47,7 @@ ui compile: 'applyUpdate: payload
     activityAnchor := self listAnchor: activity with: activityItems ].
   LMChatStyle syncActivities: activity collection: activityItems with: incomingActivities ].
  lastPayload := payload.
+ self updateCodexUsage: (payload at: ''codexUsage'' ifAbsent: [ Dictionary new ]).
  self updateSendAvailability.
  messagesChanged := self syncList: history collection: historyItems with: (payload at: ''messages'').
  statusText := errorText ifNil: [
@@ -168,7 +169,7 @@ ui compile: 'build
  body addChildren: { left. activityPane. splitter }. root addChild: body.
  self updateResponsiveGeometry.
  space root addChild: root.
- lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 10. pendingAnchor := anchor.
+ lastText := ''''. lastActivity := ''''. lastPayload := nil. layoutVersion := 11. pendingAnchor := anchor.
  self updateSendAvailability.
  self layoutComposerForWidth: left width.
  self refresh.
@@ -200,19 +201,132 @@ ui compile: 'buildActivityPane
  pane addChildren: { activity. empty. self activityToolbar. self activityToolbarRule }.
  ^ pane'.
 ui compile: 'activityToolbar
- | bar notice rotate settings |
+ | bar notice context quota rotate settings |
  bar := BrHorizontalPane new id: #loomActivityToolbar; hMatchParent; vExact: 33; alignCenterLeft;
   padding: (BlInsets left: 12 right: 12);
   constraintsDo: [ :c | c frame vertical alignTop ]; yourself.
  bar layout cellSpacing: 4.
  notice := (self label: '''' size: 12) hMatchParent; yourself.
  notice aptitude foreground: (Color gray: 0.44).
+ context := (LMChatStyle flatButton: ''上下文 —'' action: [ self showCodexUsage ])
+  id: #loomCodexContextUsage; padding: (BlInsets left: 5 right: 5); yourself.
+ quota := (LMChatStyle flatButton: ''周已用 —'' action: [ self showCodexUsage ])
+  id: #loomCodexWeeklyUsage; padding: (BlInsets left: 5 right: 5); yourself.
+ bar userData at: #codexUsageButtons put: { context. quota }.
  rotate := LMChatStyle replyAction: #newCodexSession icon: ''repeat-2'' action: [
   self runCodexSetting: [ LoomCodex newConversation ] notice: notice completed: '''' transient: true ].
  rotate addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [ self label: ''切换到新 Codex 会话'' size: 12 ]).
  settings := LMChatStyle replyAction: #loomCodexSettings icon: ''settings'' action: [ self showCodexSettings ].
- bar addChildren: { notice. rotate. settings }.
+ bar addChildren: { notice. context. quota. rotate. settings }.
  ^ bar'.
+ui compile: 'codexUsage
+ | host |
+ host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
+ ^ [ host ifNil: [ Dictionary new ] ifNotNil: [ host usageForMain ] ]
+  on: Error do: [ :error | Dictionary new ]'.
+ui compile: 'updateCodexUsage: snapshot
+ | data context quota label |
+ data := activityPane userData.
+ (data at: #codexUsage ifAbsent: [ nil ]) = snapshot ifTrue: [ ^ self ].
+ data at: #codexUsage put: snapshot.
+ context := snapshot at: ''context'' ifAbsent: [ nil ].
+ quota := snapshot at: ''weekly'' ifAbsent: [ nil ].
+ label := self contextUsageLabel: context.
+ (activityPane childNamed: #loomCodexContextUsage) label: label.
+ (activityPane childNamed: #loomCodexWeeklyUsage) label: (''周已用 '', (self quotaUsageLabel: quota)).
+ data at: #codexUsagePanel ifPresent: [ :panel | self renderCodexUsage: snapshot in: panel ]'.
+ui compile: 'contextUsageLabel: context
+ | window |
+ window := context ifNotNil: [ context at: ''window'' ].
+ window ifNil: [ ^ ''上下文 —'' ].
+ ^ ''上下文 '', (((context at: ''recent'') * 100 / window) rounded asString), ''%'''.
+ui compile: 'quotaUsageLabel: quota
+ | percent |
+ percent := quota ifNotNil: [ quota at: ''usedPercent'' ifAbsent: [ nil ] ].
+ ^ percent ifNil: [ ''—'' ] ifNotNil: [ percent asString, ''%'' ]'.
+ui compile: 'showCodexUsage
+ | data overlay panel heading scroll close host |
+ data := activityPane userData.
+ (data includesKey: #codexUsagePanel) ifTrue: [ ^ self ].
+ host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
+ host ifNotNil: #refreshDailyUsage.
+ overlay := BlElement new id: #loomCodexUsageOverlay; layout: BlFrameLayout new;
+  background: (Color black alpha: 0.10);
+  constraintsDo: [ :c | c horizontal matchParent. c vertical matchParent ]; yourself.
+ panel := BrVerticalPane new hExact: ((activityPane width - 20 min: 340) max: 0); vFitContent;
+  margin: (BlInsets top: 39 right: 10); padding: (BlInsets all: 12); background: Color white;
+  border: (BlBorder paint: (Color gray: 0.88) width: 1);
+  geometry: (BlRoundedRectangleGeometry cornerRadius: 8);
+  constraintsDo: [ :c | c frame horizontal alignRight. c frame vertical alignTop ]; yourself.
+ close := [ overlay removeFromParent. data removeKey: #codexUsagePanel ifAbsent: [ ] ].
+ overlay addEventHandlerOn: BlClickEvent do: [ :event | event target == overlay ifTrue: [ close value ] ].
+ overlay addShortcut: (BlShortcutWithAction new combination: BlKeyCombination escape; action: close; yourself).
+ heading := BrHorizontalPane new hMatchParent; vExact: 28; alignCenterLeft; yourself.
+ heading addChildren: { (self label: (''Codex 用量'' asRopedText bold; yourself) size: 14) hMatchParent; yourself.
+  LMChatStyle replyAction: #closeCodexUsage icon: ''x'' action: close }.
+ scroll := BrScrollPane new id: #loomCodexUsageDetails; hMatchParent;
+  aptitude: BrScrollPaneAptitude new + BrGlamorousWithVerticalScrollbarAptitude new; yourself.
+ panel addChildren: { heading. scroll }.
+ overlay addChild: panel. activityPane addChild: overlay.
+ data at: #codexUsagePanel put: panel.
+ overlay addEventHandlerOn: BlElementExtentChangedEvent do: [ :event |
+  panel hExact: ((overlay width - 20 min: 340) max: 0).
+  self resizeCodexUsageIn: panel ].
+ self renderCodexUsage: (data at: #codexUsage ifAbsent: [ Dictionary new ]) in: panel'.
+ui compile: 'resizeCodexUsageIn: panel
+ | scroll wanted height |
+ scroll := panel childNamed: #loomCodexUsageDetails.
+ wanted := scroll userData at: #wantedHeight ifAbsent: [ 100 ].
+ height := activityPane height.
+ scroll vExact: (height > 0 ifTrue: [ wanted min: ((height - 98) max: 28) ] ifFalse: [ wanted ])'.
+ui compile: 'renderCodexUsage: snapshot in: panel
+ | body context windows credits daily scroll |
+ body := BrVerticalPane new hMatchParent; vFitContent; yourself.
+ context := snapshot at: ''context'' ifAbsent: [ nil ].
+ body addChild: (self usageRow: ''上下文占用'' value: (context ifNil: [ ''待统计'' ] ifNotNil: [
+  | window |
+  window := context at: ''window''.
+  window ifNil: [ ''待统计'' ] ifNotNil: [ (context at: ''recent'') asString, '' / '', window asString, '' tokens'' ] ])).
+ context ifNotNil: [ body addChild: (self usageRow: ''线程累计'' value: ((context at: ''total'') asString, '' tokens'')) ].
+ windows := snapshot at: ''windows'' ifAbsent: [ #() ].
+ windows ifEmpty: [ body addChild: (self usageRow: ''账号额度'' value: ''待更新'') ].
+ windows do: [ :quota | | duration reset |
+  duration := quota at: ''windowDurationMins'' ifAbsent: [ nil ].
+  reset := quota at: ''resetsAt'' ifAbsent: [ nil ].
+  body addChild: (self usageRow: (self quotaWindowLabel: duration) value: (self quotaUsageLabel: quota)).
+  reset ifNotNil: [ body addChild: (self usageRow: ''重置时间'' value: (self quotaResetLabel: reset)) ] ].
+ credits := snapshot at: ''credits'' ifAbsent: [ nil ].
+ credits ifNotNil: [ | balance |
+  balance := credits at: ''balance'' ifAbsent: [ nil ].
+  (credits at: ''unlimited'' ifAbsent: [ false ]) ifTrue: [ balance := ''不限'' ] ifFalse: [
+   balance ifNotNil: [ balance := [ balance asNumber printShowingDecimalPlaces: 2 ] on: Error do: [ :error | balance ] ] ].
+  balance ifNotNil: [ body addChild: (self usageRow: ''积分余额'' value: balance asString) ] ].
+ body addChild: ((self label: (''近 7 天 token 用量'' asRopedText bold; yourself) size: 12)
+  margin: (BlInsets top: 9 bottom: 3); yourself).
+ daily := snapshot at: ''daily'' ifAbsent: [ #() ].
+ daily ifEmpty: [ body addChild: (self usageRow: ((snapshot at: ''dailyLoaded'' ifAbsent: [ false ])
+  ifTrue: [ ''暂无记录'' ] ifFalse: [ ''正在读取…'' ]) value: '''') ].
+ daily do: [ :entry | body addChild: (self usageRow: (entry at: ''startDate'') value: (entry at: ''tokens'') asString) ].
+ scroll := panel childNamed: #loomCodexUsageDetails.
+ scroll content: body.
+ scroll userData at: #wantedHeight put: body children size * 22 + 12.
+ self resizeCodexUsageIn: panel'.
+ui compile: 'usageRow: title value: value
+ | row name |
+ row := BrHorizontalPane new hMatchParent; vExact: 22; alignCenterLeft; yourself.
+ name := (self label: title size: 12) hMatchParent; yourself.
+ name aptitude foreground: (Color gray: 0.42).
+ row addChildren: { name. self label: value size: 12 }.
+ ^ row'.
+ui compile: 'quotaWindowLabel: minutes
+ minutes = 10080 ifTrue: [ ^ ''周额度已用'' ].
+ minutes = 300 ifTrue: [ ^ ''5 小时额度已用'' ].
+ minutes ifNil: [ ^ ''额度已用'' ].
+ minutes \\ 1440 = 0 ifTrue: [ ^ (minutes // 1440) asString, '' 天额度已用'' ].
+ minutes \\ 60 = 0 ifTrue: [ ^ (minutes // 60) asString, '' 小时额度已用'' ].
+ ^ minutes asString, '' 分钟额度已用'''.
+ui compile: 'quotaResetLabel: epoch
+ ^ ((DateAndTime fromUnixTime: epoch) asLocal asString first: 16) copyReplaceAll: ''T'' with: '' '''.
 ui compile: 'activityToolbarRule
  ^ BlElement new id: #loomActivityToolbarRule; background: (Color gray: 0.90);
   margin: (BlInsets top: 32);
@@ -302,6 +416,7 @@ ui compile: 'collectUpdate
   at: ''activities'' put: (page ifNil: [ #() ] ifNotNil: [ page at: ''items'' ]);
   at: ''activityLimit'' put: (page ifNil: [ 0 ] ifNotNil: [ page at: ''limit'' ]);
   at: ''hasOlderActivities'' put: (page notNil and: [ page at: ''older'' ]);
+ at: ''codexUsage'' put: self codexUsage;
   at: ''status'' put: statusText; at: ''processing'' put: current notNil;
   at: ''sendAllowed'' put: sendAllowed; yourself'.
 ui compile: 'addRecording: job id: id playing: playing correction: correction awaitingReply: awaitingReply to: entry
@@ -595,14 +710,19 @@ ui compile: 'runCodexSetting: operation notice: notice completed: message transi
  data := activityPane userData.
  (data at: #codexSettingPending ifAbsent: [ false ]) ifTrue: [ ^ self ].
  data at: #codexSettingPending put: true.
- notice text: ''等待执行…''.
+ self codexSettingNotice: ''等待执行…'' in: notice.
  [ | statusText |
   statusText := [ operation value. message ] on: Error do: [ :error | error messageText ].
   self defer: [
-   data removeKey: #codexSettingPending ifAbsent: [ ]. notice text: statusText.
+   data removeKey: #codexSettingPending ifAbsent: [ ]. self codexSettingNotice: statusText in: notice.
    (transient and: [ statusText notEmpty ]) ifTrue: [ notice enqueueTask: (BlDelayedTaskAction new delay: 3500 milliSeconds;
-    action: [ notice text asString = statusText ifTrue: [ notice text: '''' ] ]; yourself) ] ]
+    action: [ notice text asString = statusText ifTrue: [ self codexSettingNotice: '''' in: notice ] ]; yourself) ] ]
  ] fork'.
+ui compile: 'codexSettingNotice: text in: notice
+ notice text: text.
+ notice parent ifNotNil: [ :parent |
+  parent userData at: #codexUsageButtons ifPresent: [ :buttons |
+   buttons do: [ :button | button visibility: (text isEmpty ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]) ] ] ]'.
 ui compile: 'renderDraftAttachments
  | data width total gap limit moreWidth visible used chipWidth name row hidden expanded more |
  data := attachmentDraftPane userData.
@@ -765,13 +885,13 @@ ui compile: 'toggleRecordingPlayback: audioId
     notice := error messageText. self defer: [ self voiceNotice: notice ] ]
  ] ensure: [ voicePlaybackPending := false ] ] fork'.
 ui compile: 'shouldRestore
- ^ self isOpen or: [ layoutVersion ~= 10 and: [ space notNil and: [ space isOpened ] ] ]'.
+ ^ self isOpen or: [ layoutVersion ~= 11 and: [ space notNil and: [ space isOpened ] ] ]'.
 ui compile: 'show
  | world model |
  self stopRefreshing.
  (space notNil and: [ space isOpened ]) ifTrue: [
   (BlParallelUniverse forHost: space host class) closeSpaceSynchronously: space ].
- (layoutVersion ~= 10 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
+ (layoutVersion ~= 11 or: [ voiceComposer isNil or: [ voiceComposer isClosed ] ]) ifTrue: [ self build ].
  world := self hostWorld ifNil: [
   GtWorld allOpenWorlds detect: [ :each | each host isKindOf: BlWinitHost ]
    ifNone: [ self error: ''请先打开 GT 主界面'' ] ].
@@ -918,7 +1038,7 @@ ui compile: 'updateResponsiveGeometry
 ui compile: 'viewportWidth
  bodyPane ifNil: [ ^ nil ].
  ^ bodyPane width > 0 ifTrue: [ bodyPane width ] ifFalse: [ nil ]'.
-ui class compile: 'featureVersion ^ 26'.
+ui class compile: 'featureVersion ^ 27'.
 ui class compile: 'openConversation
  | view |
  (Smalltalk globals at: #LoomGuiEnabled ifAbsent: [ false ]) ifFalse: [ self error: ''请使用桌面织境入口打开界面'' ].

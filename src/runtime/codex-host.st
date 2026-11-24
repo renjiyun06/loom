@@ -59,6 +59,17 @@ host compile: 'isCurrent
 host compile: 'isToolProcess
  ^ transport notNil and: [ transport isToolProcess ]'.
 host compile: 'registry ^ registry'.
+host compile: 'usageForMain
+ | thread current usage |
+ usage := transport usage.
+ usage ifNil: [ ^ Dictionary new ].
+ thread := LoomCodex threadId.
+ current := transport active.
+ (current notNil and: [ (current at: ''clientKey'') = LoomCodex clientKey ]) ifTrue: [
+  thread := current at: ''threadId'' ifAbsent: [ thread ] ].
+ ^ usage snapshotFor: thread'.
+host compile: 'refreshDailyUsage
+ transport usage ifNotNil: #refreshDaily'.
 host compile: 'uuid: value
  ^ value isString and: [ value matchesRegex: ''[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}'' ]'.
 host compile: 'filesIn: name

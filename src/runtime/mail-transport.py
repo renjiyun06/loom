@@ -5,6 +5,7 @@ import ctypes
 from ctypes import wintypes
 from datetime import datetime, timezone
 from email import policy
+from email.errors import InvalidHeaderDefect
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import format_datetime
@@ -117,11 +118,23 @@ def addresses(header):
     return tuple(address.addr_spec.casefold() for address in header.addresses)
 
 
+def allowed_from_defects(defects):
+    if not defects:
+        return True
+    # QQ Mail can place an encoded display name inside quotes around an otherwise valid address.
+    quoted_name = "encoded word inside quoted string"
+    display_name_defects = {quoted_name, "missing trailing whitespace after encoded-word"}
+    return any(str(defect) == quoted_name for defect in defects) and all(
+        isinstance(defect, InvalidHeaderDefect) and str(defect) in display_name_defects
+        for defect in defects
+    )
+
+
 def is_allowed(message, sender):
     headers = message.get_all("From", [])
     auto_submitted = str(message.get("Auto-Submitted", "no")).split(";", 1)[0]
     return (
-        len(headers) == 1 and not headers[0].defects
+        len(headers) == 1 and allowed_from_defects(headers[0].defects)
         and addresses(headers[0]) == (sender,)
         and auto_submitted.strip().casefold() == "no"
     )

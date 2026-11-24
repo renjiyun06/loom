@@ -1,5 +1,7 @@
 import importlib.util
+from email import policy
 from email.message import EmailMessage
+from email.parser import BytesParser
 import json
 from pathlib import Path
 import smtplib
@@ -71,6 +73,22 @@ class TestMailTransport(unittest.TestCase):
                            if call.args[2] == "(BODY.PEEK[])"]
         self.assertEqual(only_full_fetch, [b"1"])
         self.assertEqual((self.directory / "attachments" / "7-1" / "1.txt").read_bytes(), b"reference")
+
+    def test_qq_quoted_encoded_display_name_keeps_exact_sender_check(self):
+        raw = (
+            b'From: "=?utf-8?B?cmVu?=" <owner@example.org>\r\n'
+            b'Subject: Test\r\n\r\nHello.\r\n'
+        )
+        parser = BytesParser(policy=policy.default)
+        parsed = parser.parsebytes(raw)
+        self.assertTrue(transport.is_allowed(parsed, SENDER))
+        self.assertIsNotNone(transport.mail_task(raw, "7:1", SENDER, self.directory))
+        wrong = raw.replace(b"<owner@example.org>", b"<other@example.org>")
+        self.assertFalse(transport.is_allowed(parser.parsebytes(wrong), SENDER))
+        ambiguous = raw.replace(b"<owner@example.org>", b"<owner@example.org>, <other@example.org>")
+        self.assertFalse(transport.is_allowed(parser.parsebytes(ambiguous), SENDER))
+        broken = raw.replace(b"<owner@example.org>", b"<owner@example.org")
+        self.assertFalse(transport.is_allowed(parser.parsebytes(broken), SENDER))
 
     def queue_task(self):
         inbox = self.inbox({b"1": message(SENDER, "<original@example.org>")})

@@ -144,6 +144,20 @@ def message_ids(text):
     return re.findall(r"<[^<>\s@]+@[^<>\s@]+>", str(text))
 
 
+def first_message_id(header):
+    identifiers = message_ids(header)
+    return identifiers[0] if identifiers else None
+
+
+def message_date(header):
+    value = getattr(header, "datetime", None)
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
 def mail_task(raw, key, sender, directory):
     message = BytesParser(policy=policy.default).parsebytes(raw)
     if not is_allowed(message, sender):
@@ -167,22 +181,24 @@ def mail_task(raw, key, sender, directory):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
         attachments.append({"name": name, "path": str(path)})
-    identifiers = message_ids(message.get("Message-ID", ""))
     return {
         "id": key,
         "sender": sender,
         "subject": str(message.get("Subject", "")),
         "text": text.strip(),
-        "messageId": identifiers[0] if identifiers else "",
+        "messageId": first_message_id(message.get("Message-ID")) or "",
+        "inReplyTo": first_message_id(message.get("In-Reply-To")),
         "references": message_ids(message.get("References", "")),
+        "sentAt": message_date(message.get("Date")),
         "attachments": attachments,
     }
 
 
-def open_database(directory):
+def open_database(directory, account):
     directory.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(directory / "mail.sqlite", timeout=5)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     with connection:
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("""
@@ -201,7 +217,99 @@ def open_database(directory):
         for column in ("reply_subject", "reply_attachments", "reply_draft"):
             if column not in columns:
                 connection.execute(f"ALTER TABLE mail ADD COLUMN {column} TEXT")
+        if not connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mail_messages'"
+        ).fetchone():
+            initialize_history(connection, account)
     return connection
+
+
+def initialize_history(db, account):
+    db.execute("""
+        CREATE TABLE mail_messages (
+            id INTEGER PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES mail(id),
+            direction TEXT NOT NULL CHECK (direction IN ('incoming', 'outgoing')),
+            thread_id TEXT NOT NULL,
+            message_id TEXT,
+            in_reply_to TEXT,
+            reference_ids TEXT NOT NULL,
+            sent_at TEXT,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            attachments TEXT NOT NULL,
+            UNIQUE (task_id, direction)
+        )
+    """)
+    db.execute("CREATE INDEX mail_messages_thread ON mail_messages (thread_id, sent_at, id)")
+    db.execute("CREATE INDEX mail_messages_message_id ON mail_messages (message_id)")
+    db.execute("""
+        CREATE TABLE mail_message_links (
+            reference_id TEXT NOT NULL,
+            message_row_id INTEGER NOT NULL REFERENCES mail_messages(id),
+            PRIMARY KEY (reference_id, message_row_id)
+        )
+    """)
+    for row in db.execute("SELECT * FROM mail WHERE task IS NOT NULL ORDER BY rowid"):
+        task = json.loads(row["task"])
+        record_incoming(db, task)
+        if row["phase"] == "sent" and row["reply"] is not None:
+            message = reply_message(task, row["reply"], account, task["sender"], row["reply_subject"])
+            record_outgoing(db, row, message, sent_at=None)
+
+
+def record_message(db, task_id, direction, message_id, in_reply_to, references,
+                   sent_at, subject, body, attachments):
+    # Index known and not-yet-known IDs so a parent arriving later can join its descendants.
+    links = list(dict.fromkeys(value for value in (message_id, in_reply_to, *references) if value))
+    threads = db.execute("""
+        SELECT thread_id FROM mail_messages
+        WHERE task_id = ? OR id IN (
+            SELECT message_row_id FROM mail_message_links
+            WHERE reference_id IN (SELECT value FROM json_each(?))
+        )
+        GROUP BY thread_id ORDER BY min(id)
+    """, (task_id, json.dumps(links))).fetchall()
+    thread_id = threads[0]["thread_id"] if threads else task_id
+    if len(threads) > 1:
+        db.executemany("UPDATE mail_messages SET thread_id = ? WHERE thread_id = ?",
+                       ((thread_id, row["thread_id"]) for row in threads[1:]))
+    row = db.execute("""
+        INSERT INTO mail_messages
+            (task_id, direction, thread_id, message_id, in_reply_to, reference_ids,
+             sent_at, subject, body, attachments)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (task_id, direction, thread_id, message_id, in_reply_to, json.dumps(references),
+          sent_at, subject, body, json.dumps(attachments)))
+    db.executemany("INSERT INTO mail_message_links VALUES (?, ?)",
+                   ((value, row.lastrowid) for value in links))
+
+
+def record_incoming(db, task):
+    record_message(
+        db, task["id"], "incoming", task["messageId"] or None, task.get("inReplyTo"),
+        task["references"], task.get("sentAt"), task["subject"], task["text"], task["attachments"],
+    )
+
+
+def record_outgoing(db, row, message, sent_at):
+    record_message(
+        db, row["id"], "outgoing", str(message["Message-ID"]),
+        first_message_id(message.get("In-Reply-To")), message_ids(message.get("References")),
+        sent_at, str(message["Subject"]), row["reply"], json.loads(row["reply_attachments"] or "[]"),
+    )
+
+
+def thread_history(db, thread_id):
+    rows = db.execute("""
+        SELECT direction, message_id, in_reply_to, reference_ids, sent_at, subject, body, attachments
+        FROM mail_messages WHERE thread_id = ? ORDER BY sent_at, id
+    """, (thread_id,))
+    messages = [dict(row) for row in rows]
+    for message in messages:
+        message["reference_ids"] = json.loads(message["reference_ids"])
+        message["attachments"] = json.loads(message["attachments"])
+    return messages
 
 
 def scan(inbox, db, sender, directory):
@@ -231,11 +339,13 @@ def scan(inbox, db, sender, directory):
                     continue
                 task = mail_task(raw, key, sender, directory)
         with db:
-            db.execute(
+            result = db.execute(
                 "INSERT OR IGNORE INTO mail (id, message_id, phase, task) VALUES (?, ?, ?, ?)",
                 (key, (task["messageId"] or None) if task else None,
                  "pending" if task else "ignored", json.dumps(task) if task else None),
             )
+            if task and result.rowcount == 1:
+                record_incoming(db, task)
 
 
 def attachment_directory(directory, key):
@@ -355,12 +465,14 @@ def submit_reply(db, directory, response):
 
 def next_task(db, directory):
     row = db.execute("""
-        SELECT task, reply_draft FROM mail
-        WHERE phase IN ('pending', 'correcting') ORDER BY rowid LIMIT 1
+        SELECT mail.task, mail.reply_draft, messages.thread_id FROM mail
+        JOIN mail_messages AS messages ON messages.task_id = mail.id AND messages.direction = 'incoming'
+        WHERE mail.phase IN ('pending', 'correcting') ORDER BY mail.rowid LIMIT 1
     """).fetchone()
     if row is None:
         return None
     task = json.loads(row["task"])
+    task["threadId"] = row["thread_id"]
     task["attachmentDirectory"] = str(attachment_directory(directory, task["id"]))
     if row["reply_draft"] is not None:
         task["replyDraft"] = json.loads(row["reply_draft"])
@@ -382,7 +494,8 @@ def reply_message(task, text, account, sender, subject=None):
     reply["Message-ID"] = f"<loom.{key}@{account.split('@')[1]}>"
     if task["messageId"]:
         reply["In-Reply-To"] = task["messageId"]
-        refs = dict.fromkeys([*task["references"], task["messageId"]])
+        history = task["references"] or ([task["inReplyTo"]] if task.get("inReplyTo") else [])
+        refs = dict.fromkeys([*history, task["messageId"]])
         reply["References"] = " ".join(refs)
     reply["Auto-Submitted"] = "auto-replied"
     reply.set_content(text)
@@ -423,7 +536,13 @@ def deliver(db, account, sender, code, directory):
             )
             delivery_phase(db, row["id"], "sending", "ready" if 400 <= response < 500 else "failed")
             raise RuntimeError(f"SMTP rejected the reply ({response})") from None
-        delivery_phase(db, row["id"], "sending", "sent")
+        with db:
+            updated = db.execute(
+                "UPDATE mail SET phase = 'sent' WHERE id = ? AND phase = 'sending'", (row["id"],)
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("The mail task changed after SMTP accepted it")
+            record_outgoing(db, row, reply, sent_at=message_date(reply["Date"]))
     finally:
         smtp.close()
 
@@ -431,23 +550,30 @@ def deliver(db, account, sender, code, directory):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=Path)
-    parser.add_argument("operation", choices=("check", "poll", "reply", "status"))
-    parser.add_argument("reply_file", type=Path, nargs="?")
+    parser.add_argument("operation", choices=("check", "poll", "reply", "status", "thread"))
+    parser.add_argument("argument", nargs="?")
     args = parser.parse_args()
+    if args.operation in ("reply", "thread") and not args.argument:
+        parser.error(f"{args.operation} requires an argument")
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     account = config["account"].strip().casefold()
     sender = config["sender"].strip().casefold()
     directory = args.config.resolve().parent.parent / "state" / "mail"
+    if args.operation == "thread":
+        uri = (directory / "mail.sqlite").as_uri() + "?mode=ro"
+        with sqlite3.connect(uri, uri=True) as db:
+            db.row_factory = sqlite3.Row
+            return {"messages": thread_history(db, args.argument)}
     if args.operation == "check":
         code = read_credential(account)
         with connect_inbox(account, code), connect_smtp(account, code):
             return {"imap": True, "smtp": True}
-    with open_database(directory) as db:
+    with open_database(directory, account) as db:
         if args.operation == "status":
             rows = db.execute("SELECT phase, count(*) FROM mail GROUP BY phase")
             return {"messages": dict(rows)}
         if args.operation == "reply":
-            response = json.loads(args.reply_file.read_text(encoding="utf-8-sig"))
+            response = json.loads(Path(args.argument).read_text(encoding="utf-8-sig"))
             outcome = submit_reply(db, directory, response)
             if outcome["phase"] == "ready":
                 deliver(db, account, sender, read_credential(account), directory)

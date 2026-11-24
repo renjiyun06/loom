@@ -1,7 +1,9 @@
 import importlib.util
+from datetime import datetime, timedelta, timezone
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
+from email.utils import format_datetime
 import json
 from pathlib import Path
 import smtplib
@@ -35,7 +37,7 @@ class TestMailTransport(unittest.TestCase):
         scratch = tempfile.TemporaryDirectory()
         self.addCleanup(scratch.cleanup)
         self.directory = Path(scratch.name)
-        self.db = transport.open_database(self.directory)
+        self.db = transport.open_database(self.directory, ACCOUNT)
         self.addCleanup(self.db.close)
 
     def inbox(self, messages):
@@ -113,6 +115,38 @@ class TestMailTransport(unittest.TestCase):
         self.assertEqual(str(reply["In-Reply-To"]), "<original@example.org>")
         self.assertEqual(str(reply["References"]), "<original@example.org>")
 
+    def test_reply_with_new_subject_joins_the_sent_message_thread(self):
+        self.queue_reply()
+        with patch.object(transport, "connect_smtp") as connect:
+            transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
+        outgoing = connect.return_value.send_message.call_args.args[0]
+        follow_up = message(SENDER, "<follow-up@example.org>")
+        follow_up.replace_header("Subject", "换一个主题")
+        follow_up["In-Reply-To"] = outgoing["Message-ID"]
+        follow_up["Date"] = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=5))
+        separate = message(SENDER, "<separate@example.org>")
+        transport.scan(self.inbox({b"2": follow_up, b"3": separate}), self.db, SENDER, self.directory)
+        task = transport.next_task(self.db, self.directory)
+        self.assertEqual(task["threadId"], "7:1")
+        self.assertEqual(task["inReplyTo"], str(outgoing["Message-ID"]))
+        self.assertNotIn("history", task)
+        history = transport.thread_history(self.db, task["threadId"])
+        self.assertEqual([entry["direction"] for entry in history], ["incoming", "outgoing", "incoming"])
+        self.assertEqual([entry["in_reply_to"] for entry in history],
+                         [None, "<original@example.org>", str(outgoing["Message-ID"])])
+        self.assertEqual(history[-1]["subject"], "换一个主题")
+        self.assertEqual(len(transport.thread_history(self.db, "7:3")), 1)
+
+    def test_later_arriving_parent_joins_its_known_descendant(self):
+        child = message(SENDER, "<child@example.org>")
+        child["In-Reply-To"] = "<parent@example.org>"
+        transport.scan(self.inbox({b"2": child}), self.db, SENDER, self.directory)
+        parent = message(SENDER, "<parent@example.org>")
+        transport.scan(self.inbox({b"1": parent}), self.db, SENDER, self.directory)
+        history = transport.thread_history(self.db, "7:2")
+        self.assertEqual({entry["message_id"] for entry in history},
+                         {"<parent@example.org>", "<child@example.org>"})
+
     def test_saved_body_from_older_database_can_still_be_sent(self):
         legacy_dir = self.directory / "legacy"
         legacy_dir.mkdir()
@@ -132,13 +166,26 @@ class TestMailTransport(unittest.TestCase):
                     "INSERT INTO mail VALUES (?, ?, 'ready', ?, ?)",
                     (task["id"], task["messageId"], json.dumps(task), "旧版回信。"),
                 )
+                sent_task = transport.mail_task(
+                    message(SENDER, "<already-sent@example.org>").as_bytes(), "7:2", SENDER, legacy_dir
+                )
+                legacy_db.execute(
+                    "INSERT INTO mail VALUES (?, ?, 'sent', ?, ?)",
+                    (sent_task["id"], sent_task["messageId"], json.dumps(sent_task), "已发送。"),
+                )
         finally:
             legacy_db.close()
 
-        db = transport.open_database(legacy_dir)
+        db = transport.open_database(legacy_dir, ACCOUNT)
         self.addCleanup(db.close)
+        history = transport.thread_history(db, "7:2")
+        self.assertEqual([entry["direction"] for entry in history], ["incoming", "outgoing"])
+        self.assertEqual(history[-1]["in_reply_to"], "<already-sent@example.org>")
+        self.assertEqual(history[-1]["body"], "已发送。")
+        self.assertIsNone(history[-1]["sent_at"])
         with patch.object(transport, "connect_smtp") as connect:
             transport.deliver(db, ACCOUNT, SENDER, "fake", legacy_dir)
+        connect.return_value.send_message.assert_called_once()
         reply = connect.return_value.send_message.call_args.args[0]
         self.assertEqual(str(reply["Subject"]), "Re: 测试")
         self.assertEqual(reply.get_content().strip(), "旧版回信。")
@@ -178,7 +225,7 @@ class TestMailTransport(unittest.TestCase):
             transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
         connect.assert_not_called()
 
-        reopened = transport.open_database(self.directory)
+        reopened = transport.open_database(self.directory, ACCOUNT)
         self.addCleanup(reopened.close)
         self.assertEqual(transport.next_task(reopened, self.directory)["replyDraft"], outcome["draft"])
         path = workspace / "report.pdf"

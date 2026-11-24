@@ -70,6 +70,16 @@ store compile: 'records
   replies at: (item at: ''id'') ifPresent: [ :reply | item at: ''reply'' put: reply ].
   item at: ''attachmentIds'' ifPresent: [ :ids | item at: ''attachments'' put: (ids collect: [ :id | attachments at: id ]) ].
   item ] ]'.
+store compile: 'historyRecordsFor: id
+ ^ self database: [ :db |
+  (db execute: ''SELECT json_object(''''messageId'''', m.id,
+    ''''audioId'''', m.audio_id, ''''sentAt'''', json_extract(m.data, ''''$.createdAt''''),
+    ''''text'''', coalesce(json_extract(m.data, ''''$.text''''), ''''''''),
+    ''''replyAt'''', json_extract(r.data, ''''$.completedAt''''),
+    ''''replyText'''', json_extract(r.data, ''''$.text''''))
+   FROM messages AS m LEFT JOIN replies AS r ON r.id = m.id AND coalesce(json_extract(r.data, ''''$.ok''''), 1)
+   WHERE ? IS NULL OR m.id = ? ORDER BY m.sequence DESC'' values: { id. id })
+   collect: [ :row | STONJSON fromString: row ] ]'.
 store compile: 'pending
  ^ self database: [ :db | self all: ''SELECT m.data FROM messages m WHERE NOT EXISTS (SELECT 1 FROM replies r WHERE r.id=m.id) ORDER BY m.sequence'' on: db ]'.
 store compile: 'audioMessages

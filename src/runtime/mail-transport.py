@@ -302,7 +302,8 @@ def record_outgoing(db, row, message, sent_at):
 
 def thread_history(db, thread_id):
     rows = db.execute("""
-        SELECT direction, message_id, in_reply_to, reference_ids, sent_at, subject, body, attachments
+        SELECT id AS recordId, direction, message_id, in_reply_to, reference_ids,
+               sent_at, subject, body, attachments
         FROM mail_messages WHERE thread_id = ? ORDER BY sent_at, id
     """, (thread_id,))
     messages = [dict(row) for row in rows]
@@ -310,6 +311,23 @@ def thread_history(db, thread_id):
         message["reference_ids"] = json.loads(message["reference_ids"])
         message["attachments"] = json.loads(message["attachments"])
     return messages
+
+
+def search_history(db, phrase):
+    needle = phrase.strip()
+    if not needle:
+        return []
+    return [dict(row) for row in db.execute("""
+        WITH matches AS (
+            SELECT *, instr(lower(body), lower(:needle)) AS body_match
+            FROM mail_messages
+            WHERE instr(lower(subject), lower(:needle)) > 0 OR instr(lower(body), lower(:needle)) > 0
+        )
+        SELECT 'mail' AS source, id AS recordId, thread_id AS threadId, message_id AS messageId,
+               direction, sent_at AS sentAt, subject,
+               substr(body, max(1, body_match - 45), 180) AS snippet
+        FROM matches ORDER BY sent_at DESC, id DESC LIMIT 8
+    """, {"needle": needle})]
 
 
 def scan(inbox, db, sender, directory):
@@ -550,20 +568,22 @@ def deliver(db, account, sender, code, directory):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=Path)
-    parser.add_argument("operation", choices=("check", "poll", "reply", "status", "thread"))
+    parser.add_argument("operation", choices=("check", "poll", "reply", "status", "thread", "search"))
     parser.add_argument("argument", nargs="?")
     args = parser.parse_args()
-    if args.operation in ("reply", "thread") and not args.argument:
+    if args.operation in ("reply", "thread", "search") and args.argument is None:
         parser.error(f"{args.operation} requires an argument")
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     account = config["account"].strip().casefold()
     sender = config["sender"].strip().casefold()
     directory = args.config.resolve().parent.parent / "state" / "mail"
-    if args.operation == "thread":
+    if args.operation in ("thread", "search"):
         uri = (directory / "mail.sqlite").as_uri() + "?mode=ro"
         with sqlite3.connect(uri, uri=True) as db:
             db.row_factory = sqlite3.Row
-            return {"messages": thread_history(db, args.argument)}
+            messages = (thread_history(db, args.argument) if args.operation == "thread"
+                        else search_history(db, args.argument))
+            return {"messages": messages}
     if args.operation == "check":
         code = read_credential(account)
         with connect_inbox(account, code), connect_smtp(account, code):

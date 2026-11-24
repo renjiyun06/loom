@@ -136,6 +136,13 @@ class TestMailTransport(unittest.TestCase):
                          [None, "<original@example.org>", str(outgoing["Message-ID"])])
         self.assertEqual(history[-1]["subject"], "换一个主题")
         self.assertEqual(len(transport.thread_history(self.db, "7:3")), 1)
+        result, = transport.search_history(self.db, "换一个")
+        self.assertEqual(result["source"], "mail")
+        self.assertEqual(result["threadId"], task["threadId"])
+        self.assertEqual(result["recordId"], history[-1]["recordId"])
+        self.assertEqual(result["messageId"], "<follow-up@example.org>")
+        self.assertIn("测试邮件", result["snippet"])
+        self.assertEqual(transport.search_history(self.db, "%"), [])
 
     def test_later_arriving_parent_joins_its_known_descendant(self):
         child = message(SENDER, "<child@example.org>")

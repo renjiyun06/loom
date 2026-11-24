@@ -20,6 +20,8 @@ applications class compile: 'replyContextFor: message from: source
   at: ''mail'' put: (''要查邮件往来时，如果本次调用带有 threadId，用该值通过 runtime_eval 调用 LoomGtMail threadHistory:。如果只有邮件主题、时间或关键词，可以只读查询 '', mailDatabase fullName, '' 的 mail_messages 表。'');
   at: ''conversation'' put: ''要查用户以前在 GT 界面说过什么，通过 runtime_eval 读取 LoomConversation records。找到语音消息后，用消息 ID 调用 LoomConversation speechCorrectionAt: 获取纠正稿。'';
   yourself.
+ (Smalltalk globals includesKey: #LoomGtWeixin) ifTrue: [
+  sources at: ''weixin'' put: ''要查近期微信对话，通过 runtime_eval 读取 LoomGtWeixin recentHistory。'' ].
  context := Dictionary new
   at: ''source'' put: source;
   at: ''messageId'' put: (message at: ''id'');
@@ -40,6 +42,7 @@ applications class compile: 'attempt: name during: operation
 applications class compile: 'resetAfterRuntimeRestart
  (Smalltalk globals removeKey: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals removeKey: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #retire.
+ (Smalltalk globals removeKey: #LoomGtWeixin ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals at: #LMVoice ifAbsent: [ nil ]) ifNotNil: [ :voice |
   (voice respondsTo: #retireRequests) ifTrue: [ voice retireRequests ] ].
  Smalltalk globals removeKey: #LoomConversationStore ifAbsent: [ ].
@@ -48,6 +51,7 @@ applications class compile: 'resetAfterRuntimeRestart
  Smalltalk globals at: #LoomApplicationSession put: LoomRuntimeSessionId'.
 applications class compile: 'prepareShutdown
  (Smalltalk globals at: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #close.
+ (Smalltalk globals at: #LoomGtWeixin ifAbsent: [ nil ]) ifNotNil: #close.
  (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #close'.
 applications class compile: 'start
  | mutex gui |
@@ -86,6 +90,7 @@ applications class compile: 'install
    ((self statusFor: ''conversation'') at: ''phase'') = ''ready'' ifTrue: [ LoomConversation start ] ]
   ifFalse: [ self statuses at: ''conversation'' put: (self statusFor: ''conversation-model'') ].
  self initializeMail.
+ self initializeWeixin.
  gui ifTrue: [
   self attempt: ''session-view'' during: [ self load: ''loom-session-ui.st'' ].
   self attempt: ''activity-view'' during: [ self load: ''loom-activity-ui.st'' ] ].
@@ -118,6 +123,18 @@ applications class compile: 'initializeMail
    manager := LMGtMail new initializeAt: ExperimentRoot config: config; yourself.
    Smalltalk globals at: #LoomGtMail put: manager ].
   manager start ]'.
+applications class compile: 'initializeWeixin
+ | config manager |
+ config := ExperimentRoot / ''config'' / ''weixin.local.json''.
+ config exists ifFalse: [
+  ^ self statuses at: ''weixin'' put: (Dictionary new at: ''phase'' put: ''disabled''; yourself) ].
+ self attempt: ''weixin'' during: [
+  self load: ''weixin.st''.
+  manager := Smalltalk globals at: #LoomGtWeixin ifAbsent: [ nil ].
+  (manager isNil or: [ manager isClosed ]) ifTrue: [
+   manager := (Smalltalk globals at: #LMGtWeixin) new initializeAt: ExperimentRoot config: config; yourself.
+   manager start.
+   Smalltalk globals at: #LoomGtWeixin put: manager ] ]'.
 applications class compile: 'restoreIn: world
  self dismissRestoredShutdownPromptIn: world.
  self attempt: ''desktop-toolbar'' during: [ (world instVarNamed: #worldElement) updateToolbarActions ].

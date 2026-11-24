@@ -195,6 +195,10 @@ try {
     const nativeContract = await gt("Smalltalk compiler evaluate: (ExperimentRoot / 'tests' / 'gt-codex-contract.st') contents",
       'native-codex-contract');
     assert.equal(nativeContract, 'GT Codex contract passed');
+    await gt("LoomApplications load: 'weixin.st'. true", 'load-weixin');
+    const weixinReply = await submitModel("LMGtWeixin new answer: (Dictionary new at: 'id' put: 'fixture-id'; at: 'text' put: '微信'; yourself)",
+      'weixin-main-session');
+    assert.deepEqual(await weixinReply(), {ok: true, value: '微信 reply'});
     const objectCall = await submitModel("(LoomSessions session: 'isolation-check') fixtureCall: '活对象'", 'object-call');
     assert.deepEqual(await objectCall(), {ok: true, value: {session: 'isolation-check', argument: '活对象'}});
     const bound = await gt("LoomSessions show: 'isolation-check'", 'durable-binding');

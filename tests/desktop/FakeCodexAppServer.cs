@@ -34,7 +34,12 @@ selector = #closeBrowserUsedFor: ifTrue: [
           loomReturn value: (Dictionary new at: 'text' put: prompt, ' reply'; at: 'browserAction' put: action; yourself)
         ] ifFalse: [ loomReturn value: prompt, ' reply' ]
       ] ifFalse: [
-        loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ].
+        selector = #replyToWeixin:usingContext: ifTrue: [
+          ((loomMessage arguments second at: 'source') = 'weixin' and: [ loomSessionId = 'main' ])
+            ifFalse: [ self error: 'wrong Weixin invocation context' ].
+          loomReturn value: (input at: 'text'), ' reply'
+        ] ifFalse: [
+          loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ] ].
 true";
 
     static void Send(object value) {

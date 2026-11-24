@@ -72,16 +72,19 @@ class TestMailTransport(unittest.TestCase):
         self.assertEqual(only_full_fetch, [b"1"])
         self.assertEqual((self.directory / "attachments" / "7-1" / "1.txt").read_bytes(), b"reference")
 
-    def queue_reply(self):
+    def queue_task(self):
         inbox = self.inbox({b"1": message(SENDER, "<original@example.org>")})
         transport.scan(inbox, self.db, SENDER, self.directory)
+
+    def queue_reply(self):
+        self.queue_task()
         transport.save_reply(self.db, "7:1", "邮件入口已就绪", "收到。")
 
     def test_reply_stays_in_thread_and_goes_only_to_owner(self):
         self.queue_reply()
         with patch.object(transport, "connect_smtp") as connect:
-            transport.deliver(self.db, ACCOUNT, SENDER, "fake")
-            transport.deliver(self.db, ACCOUNT, SENDER, "fake")
+            transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
+            transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
         send = connect.return_value.send_message
         send.assert_called_once()
         self.assertEqual(send.call_args.kwargs, {"from_addr": ACCOUNT, "to_addrs": [SENDER]})
@@ -117,7 +120,7 @@ class TestMailTransport(unittest.TestCase):
         db = transport.open_database(legacy_dir)
         self.addCleanup(db.close)
         with patch.object(transport, "connect_smtp") as connect:
-            transport.deliver(db, ACCOUNT, SENDER, "fake")
+            transport.deliver(db, ACCOUNT, SENDER, "fake", legacy_dir)
         reply = connect.return_value.send_message.call_args.args[0]
         self.assertEqual(str(reply["Subject"]), "Re: 测试")
         self.assertEqual(reply.get_content().strip(), "旧版回信。")
@@ -128,10 +131,63 @@ class TestMailTransport(unittest.TestCase):
         with patch.object(transport, "connect_smtp") as connect:
             connect.return_value.send_message.side_effect = smtplib.SMTPServerDisconnected()
             with self.assertRaises(smtplib.SMTPServerDisconnected):
-                transport.deliver(self.db, ACCOUNT, SENDER, "fake")
-            transport.deliver(self.db, ACCOUNT, SENDER, "fake")
+                transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
+            transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
         self.assertEqual(self.db.execute("SELECT phase FROM mail").fetchone()[0], "sending")
         connect.return_value.send_message.assert_called_once()
+
+    def test_corrected_attachment_is_saved_and_sent_from_its_snapshot(self):
+        self.queue_task()
+        task = transport.next_task(self.db, self.directory)
+        workspace = Path(task["attachmentDirectory"])
+        outside = workspace.parent / "outside.txt"
+        outside.write_bytes(b"outside")
+        response = {
+            "id": task["id"], "subject": "文件", "text": "见附件。",
+            "attachments": [
+                {"path": "report.pdf"},
+                {"path": str(workspace / ".." / outside.name)},
+                {"path": str(workspace / "missing.pdf")},
+            ],
+        }
+        outcome = transport.submit_reply(self.db, self.directory, response)
+        self.assertEqual(outcome["phase"], "correcting")
+        self.assertEqual(len(outcome["draft"]["errors"]), 3)
+        self.assertIn("绝对路径", outcome["draft"]["errors"][0])
+        self.assertIn("目录之外", outcome["draft"]["errors"][1])
+        self.assertIn("不存在", outcome["draft"]["errors"][2])
+        with patch.object(transport, "connect_smtp") as connect:
+            transport.deliver(self.db, ACCOUNT, SENDER, "fake", self.directory)
+        connect.assert_not_called()
+
+        reopened = transport.open_database(self.directory)
+        self.addCleanup(reopened.close)
+        self.assertEqual(transport.next_task(reopened, self.directory)["replyDraft"], outcome["draft"])
+        path = workspace / "report.pdf"
+        path.write_bytes(b"original result")
+        response["attachments"] = [{"path": str(path), "name": "整理结果.pdf"}]
+        self.assertEqual(transport.submit_reply(reopened, self.directory, response), {"phase": "ready"})
+        path.write_bytes(b"later edit")
+        with patch.object(transport, "connect_smtp") as connect:
+            transport.deliver(reopened, ACCOUNT, SENDER, "fake", self.directory)
+        reply = connect.return_value.send_message.call_args.args[0]
+        attachment, = reply.iter_attachments()
+        self.assertEqual(attachment.get_filename(), "整理结果.pdf")
+        self.assertEqual(attachment.get_content_type(), "application/pdf")
+        self.assertEqual(attachment.get_payload(decode=True), b"original result")
+
+    def test_invalid_correction_keeps_draft_and_releases_the_queue(self):
+        self.queue_task()
+        response = {
+            "id": "7:1", "subject": "文件", "text": "见附件。",
+            "attachments": [{"path": "still-relative.pdf"}],
+        }
+        transport.submit_reply(self.db, self.directory, response)
+        outcome = transport.submit_reply(self.db, self.directory, response)
+        self.assertEqual(outcome["phase"], "validation_failed")
+        row = self.db.execute("SELECT reply_draft FROM mail WHERE id = '7:1'").fetchone()
+        self.assertEqual(json.loads(row["reply_draft"]), outcome["draft"])
+        self.assertIsNone(transport.next_task(self.db, self.directory))
 
 
 if __name__ == "__main__":

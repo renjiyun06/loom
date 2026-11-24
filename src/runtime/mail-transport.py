@@ -12,12 +12,16 @@ from hashlib import sha256
 from html.parser import HTMLParser
 import imaplib
 import json
+import mimetypes
+import os
 from pathlib import Path
 import re
+import shutil
 import smtplib
 import sqlite3
 import ssl
 import sys
+import tempfile
 
 
 class Credential(ctypes.Structure):
@@ -175,12 +179,15 @@ def open_database(directory):
                 phase TEXT NOT NULL,
                 task TEXT,
                 reply TEXT,
-                reply_subject TEXT
+                reply_subject TEXT,
+                reply_attachments TEXT,
+                reply_draft TEXT
             )
         """)
         columns = {column["name"] for column in connection.execute("PRAGMA table_info(mail)")}
-        if "reply_subject" not in columns:
-            connection.execute("ALTER TABLE mail ADD COLUMN reply_subject TEXT")
+        for column in ("reply_subject", "reply_attachments", "reply_draft"):
+            if column not in columns:
+                connection.execute(f"ALTER TABLE mail ADD COLUMN {column} TEXT")
     return connection
 
 
@@ -218,7 +225,80 @@ def scan(inbox, db, sender, directory):
             )
 
 
-def save_reply(db, key, subject, text):
+def attachment_directory(directory, key):
+    if not re.fullmatch(r"[0-9]+:[0-9]+", key):
+        raise ValueError("Invalid mail task ID")
+    workspace = directory.resolve() / "outgoing" / key.replace(":", "-")
+    if workspace.resolve() != workspace:
+        raise ValueError("The attachment directory must stay under the mail state directory")
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
+def attachment_source(workspace, entry):
+    if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+        raise ValueError("path 必须是字符串")
+    source = Path(entry["path"])
+    if not source.is_absolute():
+        raise ValueError("path 必须是绝对路径")
+    if not source.is_relative_to(workspace):
+        raise ValueError("文件位于这封回信的附件目录之外")
+    source = source.resolve(strict=True)
+    if not source.is_relative_to(workspace):
+        raise ValueError("文件实际位于这封回信的附件目录之外")
+    if not source.is_file():
+        raise ValueError("路径必须指向普通文件")
+    name = entry.get("name", source.name)
+    if (not isinstance(name, str) or not name.strip() or name.strip() in {".", ".."}
+            or re.search(r"[\x00-\x1f\x7f/\\]", name)):
+        raise ValueError("name 必须是有效的文件名")
+    return source, name.strip()
+
+
+def remove_staged_attachments(stage):
+    if stage is not None:
+        for part in stage.iterdir():
+            part.unlink()
+        stage.rmdir()
+
+
+def stage_attachments(directory, key, entries):
+    if not isinstance(entries, list):
+        return None, [], ["attachments 必须是附件列表"]
+    if not entries:
+        return None, [], []
+    workspace = attachment_directory(directory, key)
+    outbox = directory.resolve() / "outbox"
+    if outbox.resolve() != outbox:
+        raise ValueError("The outbox must stay under the mail state directory")
+    outbox.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix=workspace.name + "-", dir=outbox))
+    manifest, errors = [], []
+    try:
+        for index, entry in enumerate(entries, 1):
+            try:
+                source, name = attachment_source(workspace, entry)
+                snapshot = stage / str(index)
+                with source.open("rb") as input_file, snapshot.open("xb") as output_file:
+                    shutil.copyfileobj(input_file, output_file)
+                    output_file.flush()
+                    os.fsync(output_file.fileno())
+                manifest.append({"path": snapshot.relative_to(outbox.parent).as_posix(), "name": name})
+            except (ValueError, RuntimeError) as error:
+                errors.append(f"第 {index} 个附件：{error}")
+            except OSError as error:
+                reason = "文件不存在" if isinstance(error, FileNotFoundError) else "文件无法读取或保存"
+                errors.append(f"第 {index} 个附件：{reason}")
+    except BaseException:
+        remove_staged_attachments(stage)
+        raise
+    if errors:
+        remove_staged_attachments(stage)
+        return None, [], errors
+    return stage, manifest, []
+
+
+def save_reply(db, key, subject, text, attachments=None):
     if not isinstance(subject, str) or not subject.strip():
         raise ValueError("The reply must contain a subject")
     if not isinstance(text, str) or not text.strip():
@@ -226,12 +306,52 @@ def save_reply(db, key, subject, text):
     subject = " ".join(subject.splitlines()).strip()
     with db:
         result = db.execute(
-            """UPDATE mail SET reply_subject = ?, reply = ?, phase = 'ready'
-            WHERE id = ? AND phase = 'pending'""",
-            (subject, text.strip(), key),
+            """UPDATE mail
+            SET reply_subject = ?, reply = ?, reply_attachments = ?, reply_draft = NULL, phase = 'ready'
+            WHERE id = ? AND phase IN ('pending', 'correcting')""",
+            (subject, text.strip(), json.dumps(attachments or []), key),
         )
         if result.rowcount != 1:
             raise RuntimeError("The mail task is no longer pending")
+
+
+def submit_reply(db, directory, response):
+    key = response["id"]
+    row = db.execute("SELECT phase FROM mail WHERE id = ?", (key,)).fetchone()
+    if row is None or row["phase"] not in ("pending", "correcting"):
+        raise RuntimeError("The mail task is no longer pending")
+    stage, manifest, errors = stage_attachments(directory, key, response.get("attachments", []))
+    if errors:
+        draft = {"reply": response, "errors": errors}
+        phase = "correcting" if row["phase"] == "pending" else "validation_failed"
+        with db:
+            result = db.execute(
+                "UPDATE mail SET phase = ?, reply_draft = ? WHERE id = ? AND phase = ?",
+                (phase, json.dumps(draft), key, row["phase"]),
+            )
+            if result.rowcount != 1:
+                raise RuntimeError("The mail task changed during attachment validation")
+        return {"phase": phase, "draft": draft}
+    try:
+        save_reply(db, key, response["subject"], response["text"], manifest)
+    except Exception:
+        remove_staged_attachments(stage)
+        raise
+    return {"phase": "ready"}
+
+
+def next_task(db, directory):
+    row = db.execute("""
+        SELECT task, reply_draft FROM mail
+        WHERE phase IN ('pending', 'correcting') ORDER BY rowid LIMIT 1
+    """).fetchone()
+    if row is None:
+        return None
+    task = json.loads(row["task"])
+    task["attachmentDirectory"] = str(attachment_directory(directory, task["id"]))
+    if row["reply_draft"] is not None:
+        task["replyDraft"] = json.loads(row["reply_draft"])
+    return task
 
 
 def reply_message(task, text, account, sender, subject=None):
@@ -264,13 +384,18 @@ def delivery_phase(db, key, previous, new):
         ).rowcount == 1
 
 
-def deliver(db, account, sender, code):
+def deliver(db, account, sender, code, directory):
     row = db.execute("SELECT * FROM mail WHERE phase = 'ready' ORDER BY rowid LIMIT 1").fetchone()
     if row is None:
         return
     reply = reply_message(
         json.loads(row["task"]), row["reply"], account, sender, subject=row["reply_subject"]
     )
+    for attachment in json.loads(row["reply_attachments"] or "[]"):
+        content = (directory / attachment["path"]).read_bytes()
+        mime = mimetypes.guess_type(attachment["name"])[0] or "application/octet-stream"
+        main_type, sub_type = mime.split("/", 1)
+        reply.add_attachment(content, maintype=main_type, subtype=sub_type, filename=attachment["name"])
     smtp = connect_smtp(account, code)
     try:
         if not delivery_phase(db, row["id"], "ready", "sending"):
@@ -308,16 +433,17 @@ def main():
         if args.operation == "status":
             rows = db.execute("SELECT phase, count(*) FROM mail GROUP BY phase")
             return {"messages": dict(rows)}
-        code = read_credential(account)
         if args.operation == "reply":
             response = json.loads(args.reply_file.read_text(encoding="utf-8-sig"))
-            save_reply(db, response["id"], response["subject"], response["text"])
-        else:
-            with connect_inbox(account, code) as inbox:
-                scan(inbox, db, sender, directory)
-        deliver(db, account, sender, code)
-        row = db.execute("SELECT task FROM mail WHERE phase = 'pending' ORDER BY rowid LIMIT 1").fetchone()
-        return {"task": json.loads(row["task"]) if row else None}
+            outcome = submit_reply(db, directory, response)
+            if outcome["phase"] == "ready":
+                deliver(db, account, sender, read_credential(account), directory)
+            return outcome
+        code = read_credential(account)
+        with connect_inbox(account, code) as inbox:
+            scan(inbox, db, sender, directory)
+        deliver(db, account, sender, code, directory)
+        return {"task": next_task(db, directory)}
 
 
 if __name__ == "__main__":

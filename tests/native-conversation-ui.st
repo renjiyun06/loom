@@ -59,34 +59,35 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  check value: (LMChatStyle tableCells: '| D:\Loom | 路径 |') = #('D:\Loom' '路径') value: 'Windows paths retain backslashes inside tables'.
  ui := LMConversationUI new build.
  space := ui presentationSpace.
- [ | activityPane usage weekly contextButton weeklyButton panel resetValue notice |
+ [ | activityPane usage weekly contextLabel weeklyLabel toolbar notice |
   activityPane := ui instVarNamed: 'activityPane'.
-  weekly := Dictionary new at: 'windowDurationMins' put: 10080; at: 'usedPercent' put: 5;
-   at: 'resetsAt' put: 1796086982; yourself.
+  weekly := Dictionary new at: 'windowDurationMins' put: 10080; at: 'usedPercent' put: 5; yourself.
   usage := Dictionary new at: 'context' put: (Dictionary new at: 'recent' put: 80;
    at: 'window' put: 200; at: 'total' put: 900; yourself);
-   at: 'weekly' put: weekly; at: 'windows' put: { weekly }; yourself.
+   at: 'weekly' put: weekly; yourself.
   ui updateCodexUsage: usage.
-  contextButton := activityPane childNamed: #loomCodexContextUsage.
-  weeklyButton := activityPane childNamed: #loomCodexWeeklyUsage.
-  check value: (contextButton label asString = '上下文 40%' and: [ weeklyButton label asString = '周已用 5%' ])
-   value: 'the toolbar displays thread context and account quota'.
-  weeklyButton viewModel action value.
-  panel := activityPane userData at: #codexUsagePanel.
-  resetValue := ui quotaResetLabel: 1796086982.
-  check value: ((panel allChildrenBreadthFirstSelect: [ :element |
-   element class = BrLabel and: [ element text asString = resetValue ] ]) notEmpty)
-   value: 'usage details include the local reset time'.
+  toolbar := activityPane childNamed: #loomActivityToolbar.
+  contextLabel := toolbar childNamed: #loomCodexContextUsage.
+  weeklyLabel := toolbar childNamed: #loomCodexWeeklyUsage.
+  check value: (contextLabel text asString = '上下文 40%' and: [ weeklyLabel text asString = '周剩余 95%' ])
+   value: 'the toolbar displays thread context and remaining account quota'.
+  check value: (contextLabel class = BrLabel and: [ weeklyLabel class = BrLabel ])
+   value: 'usage values are ordinary non-interactive labels'.
+  check value: (toolbar children first == contextLabel and: [ toolbar children second == weeklyLabel
+   and: [ toolbar children last == (toolbar childNamed: #loomCodexSettings)
+   and: [ (toolbar children at: 4) == (toolbar childNamed: #newCodexSession) ] ] ])
+   value: 'the usage labels are on the left and the existing buttons are on the right'.
   ui updateCodexUsage: (usage copy at: 'context' put: nil; yourself).
-  check value: (contextButton label asString = '上下文 —' and: [ weeklyButton label asString = '周已用 5%' ])
+  check value: (contextLabel text asString = '上下文 —' and: [ weeklyLabel text asString = '周剩余 95%' ])
    value: 'new threads show a pending context with the same weekly quota'.
-  (panel childNamed: #closeCodexUsage) viewModel action value.
-  check value: (activityPane userData includesKey: #codexUsagePanel) not value: 'the usage panel can be dismissed'.
-  notice := (activityPane childNamed: #loomActivityToolbar) children first.
+  check value: (ui quotaRemainingLabel: (weekly copy at: 'usedPercent' put: 105; yourself)) = '周剩余 0%'
+   value: 'remaining quota is zero after the account exceeds the allowance'.
+  check value: (ui quotaRemainingLabel: nil) = '周剩余 —' value: 'missing quota has a placeholder'.
+  notice := toolbar childNamed: #loomCodexToolbarNotice.
   ui codexSettingNotice: '等待执行…' in: notice.
-  check value: contextButton visibility class = BlVisibility gone class value: 'session notices have room in the toolbar'.
+  check value: contextLabel visibility class = BlVisibility gone class value: 'session notices have room in the toolbar'.
   ui codexSettingNotice: '' in: notice.
-  check value: contextButton visibility class = BlVisibility visible class value: 'usage returns after a session notice' ] value.
+  check value: contextLabel visibility class = BlVisibility visible class value: 'usage returns after a session notice' ] value.
  footer := (ui instVarNamed: 'status') parent.
  send := footer children last.
  attach := footer childNamed: #loomPickAttachments.

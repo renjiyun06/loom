@@ -5,6 +5,7 @@ previous := Smalltalk globals at: #LMNativeCodexHost ifAbsent: [ nil ].
  #(start pollActivity acceptView: publishView:channel:) do: [ :selector |
   (previous includesSelector: selector) ifTrue: [ previous removeSelector: selector ] ] ].
 host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping); package: 'Loom-Codex') install.
+(host includesSelector: #refreshDailyUsage) ifTrue: [ host removeSelector: #refreshDailyUsage ].
 host compile: 'start
  | config pathConfig default identity state |
 session := LoomRuntimeSessionId.
@@ -68,8 +69,6 @@ host compile: 'usageForMain
  (current notNil and: [ (current at: ''clientKey'') = LoomCodex clientKey ]) ifTrue: [
   thread := current at: ''threadId'' ifAbsent: [ thread ] ].
  ^ usage snapshotFor: thread'.
-host compile: 'refreshDailyUsage
- transport usage ifNotNil: #refreshDaily'.
 host compile: 'uuid: value
  ^ value isString and: [ value matchesRegex: ''[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}'' ]'.
 host compile: 'filesIn: name

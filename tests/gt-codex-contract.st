@@ -82,7 +82,7 @@ verify value: (registry reset: request) = receipt value: 'replaying a completed 
 binding := registry initializeDefault: 'old-thread'.
 verify value: ((binding at: 'state') = 'unbound' and: [ (binding at: 'generation') = 1 ])
  value: 'reset survives old image state'.
-[ | usage reopened account lastWeek snapshot |
+[ | usage reopened account snapshot |
  usage := LMCodexUsage new initializeWith: nil registry: registry; yourself.
  usage acceptTokenUsage: (STONJSON fromString:
   '{"threadId":"fixture-thread","tokenUsage":{"last":{"totalTokens":80},"total":{"totalTokens":900},"modelContextWindow":200}}').
@@ -93,15 +93,9 @@ verify value: ((binding at: 'state') = 'unbound' and: [ (binding at: 'generation
  account at: 'account/rateLimits/read' put: (STONJSON fromString:
   '{"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":5,"windowDurationMins":10080},"secondary":null}}}').
  (usage instVarNamed: 'nextRead') at: 'account/rateLimits/read' put: DateAndTime now + 60 seconds.
- lastWeek := (DateAndTime now asUTC - 7 days) asDate yyyymmdd.
- account at: 'account/usage/read' put: (Dictionary new at: 'dailyUsageBuckets' put: {
-  Dictionary new at: 'startDate' put: lastWeek; at: 'tokens' put: 25; yourself.
-  Dictionary new at: 'startDate' put: DateAndTime now asUTC asDate yyyymmdd; at: 'tokens' put: 50; yourself }; yourself).
  snapshot := usage snapshotFor: nil.
  verify value: ((snapshot at: 'context') isNil and: [ ((snapshot at: 'weekly') at: 'usedPercent') = 5 ])
   value: 'changing threads clears context usage while retaining the account quota'.
- verify value: ((snapshot at: 'daily') size = 1 and: [ ((snapshot at: 'daily') first at: 'tokens') = 50 ])
-  value: 'the recent activity detail displays the last seven days'.
  usage resetAccount.
  verify value: (account ~~ (usage instVarNamed: 'account') and: [ (usage threadSnapshot: 'fixture-thread') notNil ])
   value: 'changing accounts clears quota without replacing thread usage' ] value.

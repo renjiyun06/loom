@@ -10,6 +10,8 @@ registry compile: 'saveTokenUsage: snapshot for: thread
   db execute: ''INSERT INTO loom_thread_usage(thread_id,data) VALUES (?,?)
    ON CONFLICT(thread_id) DO UPDATE SET data=excluded.data'' values: { thread. STONJSON toString: snapshot } ]'.
 usage := (Object << #LMCodexUsage slots: #(transport registry threads account nextRead generation); package: 'Loom-Codex') install.
+#(refreshDaily refresh:every: recentDays:) do: [ :selector |
+ (usage includesSelector: selector) ifTrue: [ usage removeSelector: selector ] ].
 usage compile: 'initializeWith: connection registry: storage
  transport := connection. registry := storage.
  registry initializeUsageStorage.
@@ -38,47 +40,29 @@ usage compile: 'resetAccount
  generation := generation + 1.
  account := Dictionary new. nextRead := Dictionary new'.
 usage compile: 'refreshRates
- self refresh: ''account/rateLimits/read'' every: 60'.
-usage compile: 'refreshDaily
- self refresh: ''account/usage/read'' every: 300'.
-usage compile: 'refresh: method every: seconds
- | now observed |
+ | method now observed |
+ method := ''account/rateLimits/read''.
  now := DateAndTime now.
  (now < (nextRead at: method ifAbsent: [ now ])) ifTrue: [ ^ self ].
- nextRead at: method put: now + seconds seconds.
+ nextRead at: method put: now + 60 seconds.
  observed := generation.
  [ | result |
   result := [ transport rpc: method params: nil timeout: 10 ] on: Error do: [ :error | nil ].
   observed = generation ifTrue: [
-   result ifNil: [
-    nextRead at: method put: DateAndTime now + 30 seconds.
-    (account includesKey: method) ifFalse: [ account at: method put: nil ]
-   ] ifNotNil: [ account at: method put: result ] ] ] fork'.
+   result ifNil: [ nextRead at: method put: DateAndTime now + 30 seconds ]
+    ifNotNil: [ account at: method put: result ] ] ] fork'.
 usage compile: 'meteredLimits: rates
  | buckets |
  rates ifNil: [ ^ Dictionary new ].
  buckets := rates at: ''rateLimitsByLimitId'' ifAbsent: [ nil ].
  ^ (buckets ifNotNil: [ buckets at: ''codex'' ifAbsent: [ nil ] ])
   ifNil: [ rates at: ''rateLimits'' ifAbsent: [ Dictionary new ] ]'.
-usage compile: 'recentDays: daily
- | entries minimum |
- daily ifNil: [ ^ #() ].
- entries := daily at: ''dailyUsageBuckets'' ifAbsent: [ nil ].
- entries ifNil: [ ^ #() ].
- minimum := (DateAndTime now asUTC - 6 days) asDate yyyymmdd.
- ^ ((entries select: [ :entry | (entry at: ''startDate'') >= minimum ])
-  sorted: [ :a :b | (a at: ''startDate'') < (b at: ''startDate'') ]) asArray'.
 usage compile: 'snapshotFor: thread
- | current rates limits windows daily |
+ | limits windows |
  self refreshRates.
- current := self threadSnapshot: thread.
- rates := account at: ''account/rateLimits/read'' ifAbsent: [ nil ].
- limits := self meteredLimits: rates.
+ limits := self meteredLimits: (account at: ''account/rateLimits/read'' ifAbsent: [ nil ]).
  windows := (#(''primary'' ''secondary'') collect: [ :field | limits at: field ifAbsent: [ nil ] ]) reject: #isNil.
- daily := account at: ''account/usage/read'' ifAbsent: [ nil ].
- ^ Dictionary new at: ''context'' put: current;
+ ^ Dictionary new at: ''context'' put: (self threadSnapshot: thread);
   at: ''weekly'' put: (windows detect: [ :each | (each at: ''windowDurationMins'' ifAbsent: [ nil ]) = 10080 ] ifNone: [ nil ]);
-  at: ''windows'' put: windows; at: ''credits'' put: (limits at: ''credits'' ifAbsent: [ nil ]);
-  at: ''daily'' put: (self recentDays: daily);
-  at: ''dailyLoaded'' put: (account includesKey: ''account/usage/read''); yourself'.
+  yourself'.
 usage

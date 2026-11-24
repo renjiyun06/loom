@@ -166,15 +166,21 @@ def open_database(directory):
     directory.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(directory / "mail.sqlite", timeout=5)
     connection.row_factory = sqlite3.Row
-    connection.execute("""
-        CREATE TABLE IF NOT EXISTS mail (
-            id TEXT PRIMARY KEY,
-            message_id TEXT UNIQUE,
-            phase TEXT NOT NULL,
-            task TEXT,
-            reply TEXT
-        )
-    """)
+    with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS mail (
+                id TEXT PRIMARY KEY,
+                message_id TEXT UNIQUE,
+                phase TEXT NOT NULL,
+                task TEXT,
+                reply TEXT,
+                reply_subject TEXT
+            )
+        """)
+        columns = {column["name"] for column in connection.execute("PRAGMA table_info(mail)")}
+        if "reply_subject" not in columns:
+            connection.execute("ALTER TABLE mail ADD COLUMN reply_subject TEXT")
     return connection
 
 
@@ -212,26 +218,32 @@ def scan(inbox, db, sender, directory):
             )
 
 
-def save_reply(db, key, text):
+def save_reply(db, key, subject, text):
+    if not isinstance(subject, str) or not subject.strip():
+        raise ValueError("The reply must contain a subject")
     if not isinstance(text, str) or not text.strip():
         raise ValueError("The reply must contain text")
+    subject = " ".join(subject.splitlines()).strip()
     with db:
         result = db.execute(
-            "UPDATE mail SET reply = ?, phase = 'ready' WHERE id = ? AND phase = 'pending'",
-            (text.strip(), key),
+            """UPDATE mail SET reply_subject = ?, reply = ?, phase = 'ready'
+            WHERE id = ? AND phase = 'pending'""",
+            (subject, text.strip(), key),
         )
         if result.rowcount != 1:
             raise RuntimeError("The mail task is no longer pending")
 
 
-def reply_message(task, text, account, sender):
+def reply_message(task, text, account, sender, subject=None):
     if task["sender"] != sender:
         raise ValueError("The saved sender differs from the configured address")
     reply = EmailMessage()
     reply["From"] = account
     reply["To"] = sender
-    subject = " ".join(task["subject"].splitlines()).strip()
-    reply["Subject"] = subject if subject.lower().startswith("re:") else "Re: " + subject
+    if subject is None:
+        original = " ".join(task["subject"].splitlines()).strip()
+        subject = original if original.lower().startswith("re:") else "Re: " + original
+    reply["Subject"] = subject
     reply["Date"] = format_datetime(datetime.now(timezone.utc))
     key = sha256(f'{account}:{task["id"]}'.encode()).hexdigest()[:32]
     reply["Message-ID"] = f"<loom.{key}@{account.split('@')[1]}>"
@@ -256,7 +268,9 @@ def deliver(db, account, sender, code):
     row = db.execute("SELECT * FROM mail WHERE phase = 'ready' ORDER BY rowid LIMIT 1").fetchone()
     if row is None:
         return
-    reply = reply_message(json.loads(row["task"]), row["reply"], account, sender)
+    reply = reply_message(
+        json.loads(row["task"]), row["reply"], account, sender, subject=row["reply_subject"]
+    )
     smtp = connect_smtp(account, code)
     try:
         if not delivery_phase(db, row["id"], "ready", "sending"):
@@ -297,7 +311,7 @@ def main():
         code = read_credential(account)
         if args.operation == "reply":
             response = json.loads(args.reply_file.read_text(encoding="utf-8-sig"))
-            save_reply(db, response["id"], response["text"])
+            save_reply(db, response["id"], response["subject"], response["text"])
         else:
             with connect_inbox(account, code) as inbox:
                 scan(inbox, db, sender, directory)

@@ -1,7 +1,9 @@
 import importlib.util
 from email.message import EmailMessage
+import json
 from pathlib import Path
 import smtplib
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -73,7 +75,7 @@ class TestMailTransport(unittest.TestCase):
     def queue_reply(self):
         inbox = self.inbox({b"1": message(SENDER, "<original@example.org>")})
         transport.scan(inbox, self.db, SENDER, self.directory)
-        transport.save_reply(self.db, "7:1", "收到。")
+        transport.save_reply(self.db, "7:1", "邮件入口已就绪", "收到。")
 
     def test_reply_stays_in_thread_and_goes_only_to_owner(self):
         self.queue_reply()
@@ -85,8 +87,41 @@ class TestMailTransport(unittest.TestCase):
         self.assertEqual(send.call_args.kwargs, {"from_addr": ACCOUNT, "to_addrs": [SENDER]})
         reply = send.call_args.args[0]
         self.assertEqual(str(reply["To"]), SENDER)
+        self.assertEqual(str(reply["Subject"]), "邮件入口已就绪")
+        self.assertEqual(reply.get_content().strip(), "收到。")
         self.assertEqual(str(reply["In-Reply-To"]), "<original@example.org>")
         self.assertEqual(str(reply["References"]), "<original@example.org>")
+
+    def test_saved_body_from_older_database_can_still_be_sent(self):
+        legacy_dir = self.directory / "legacy"
+        legacy_dir.mkdir()
+        task = transport.mail_task(
+            message(SENDER, "<original@example.org>").as_bytes(), "7:1", SENDER, legacy_dir
+        )
+        legacy_db = sqlite3.connect(legacy_dir / "mail.sqlite")
+        try:
+            with legacy_db:
+                legacy_db.execute("""
+                    CREATE TABLE mail (
+                        id TEXT PRIMARY KEY, message_id TEXT UNIQUE,
+                        phase TEXT NOT NULL, task TEXT, reply TEXT
+                    )
+                """)
+                legacy_db.execute(
+                    "INSERT INTO mail VALUES (?, ?, 'ready', ?, ?)",
+                    (task["id"], task["messageId"], json.dumps(task), "旧版回信。"),
+                )
+        finally:
+            legacy_db.close()
+
+        db = transport.open_database(legacy_dir)
+        self.addCleanup(db.close)
+        with patch.object(transport, "connect_smtp") as connect:
+            transport.deliver(db, ACCOUNT, SENDER, "fake")
+        reply = connect.return_value.send_message.call_args.args[0]
+        self.assertEqual(str(reply["Subject"]), "Re: 测试")
+        self.assertEqual(reply.get_content().strip(), "旧版回信。")
+        self.assertEqual(db.execute("SELECT phase FROM mail").fetchone()[0], "sent")
 
     def test_disconnect_keeps_uncertain_delivery_from_replaying(self):
         self.queue_reply()

@@ -126,6 +126,7 @@ class WeixinQueueTest(unittest.TestCase):
     def test_file_and_voice_are_stored_in_order_and_failed_media_remains_visible(self):
         body = b"text file data"
         incoming = dict(self.text(), item_list=[
+            {"type": 1, "text_item": {"text": "另外输入的文字"}},
             {"type": 4, "file_item": {"file_name": "../报告.txt", "media": {}, "len": str(len(body))}},
             {"type": 3, "voice_item": {"encode_type": 6, "text": "语音转写"}},
         ])
@@ -135,11 +136,28 @@ class WeixinQueueTest(unittest.TestCase):
             for attempt in range(4):
                 self.assertEqual(transport.receive(self.db, self.root, self.account, None)["phase"], "receiving_attachment")
         task = transport.receive(self.db, self.root, self.account, None)["message"]
-        self.assertEqual(task["text"], "语音转写")
+        self.assertEqual(task["text"], "另外输入的文字\n语音转写")
         received, missing = task["attachments"]
         self.assertEqual(received["name"], "_报告.txt")
         self.assertEqual(Path(received["path"]).read_bytes(), body)
+        self.assertNotIn("transcript", received)
+        self.assertEqual(missing["transcript"], "语音转写")
         self.assertEqual((missing["name"], missing["phase"], missing["path"]), ("语音.silk", "download_failed", None))
+
+    def test_migrates_old_voice_records_and_distinguishes_new_clips_without_a_transcript(self):
+        incoming = dict(self.text(), item_list=[{"type": 3, "voice_item": {"text": "已有转写"}}])
+        transport.save_updates(self.db, self.account, {"msgs": [incoming]})
+        self.db.execute("ALTER TABLE attachments DROP COLUMN transcript")
+        with closing(transport.open_database(self.root)) as reopened:
+            [legacy] = transport.history(reopened, self.root)
+            self.assertEqual(legacy["text"], "已有转写")
+            self.assertNotIn("transcript", legacy["attachments"][0])
+            clip = dict(incoming, message_id=incoming["message_id"] + 1,
+                        item_list=[{"type": 3, "voice_item": {}}])
+            transport.save_updates(reopened, self.account, {"msgs": [clip]})
+            [_, latest] = transport.history(reopened, self.root)
+            self.assertEqual(latest["text"], "")
+            self.assertEqual(latest["attachments"][0]["transcript"], "")
 
     def test_rejects_outgoing_paths_outside_the_reply_directory(self):
         transport.save_updates(self.db, self.account, {"msgs": [self.text()]})

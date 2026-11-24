@@ -140,11 +140,15 @@ def open_database(root):
             id TEXT PRIMARY KEY, message_id TEXT NOT NULL, direction TEXT NOT NULL,
             position INTEGER NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,
             relative_path TEXT, size INTEGER, phase TEXT NOT NULL, reference TEXT,
-            attempts INTEGER NOT NULL DEFAULT 0, error TEXT, server_reply_id TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0, error TEXT, server_reply_id TEXT, transcript TEXT,
             UNIQUE (message_id, direction, position)
         );
         CREATE INDEX IF NOT EXISTS attachment_queue ON attachments (phase, message_id);
         """)
+    if "transcript" not in {column["name"] for column in database.execute("PRAGMA table_info(attachments)")}:
+        with transaction(database):
+            if "transcript" not in {column["name"] for column in database.execute("PRAGMA table_info(attachments)")}:
+                database.execute("ALTER TABLE attachments ADD COLUMN transcript TEXT")
     return database
 
 
@@ -219,14 +223,17 @@ def inbound_message(message, owner, bound_ms):
             kind = media.ITEM_TYPES[int(item_type)]
             reference = item.get(kind + "_item")
             reference = reference if isinstance(reference, dict) else {}
-            if kind == "voice" and isinstance(reference.get("text"), str) and reference["text"].strip():
-                texts.append(reference["text"])
+            transcript = None
             default_name = {"image": "图片.bin", "video": "视频.mp4", "file": "文件.bin", "voice": "语音.bin"}[kind]
             if kind == "voice":
+                voice_text = reference.get("text")
+                transcript = voice_text if isinstance(voice_text, str) and voice_text.strip() else ""
+                if transcript:
+                    texts.append(transcript)
                 extension = {"1": "pcm", "4": "speex", "5": "amr", "6": "silk", "7": "mp3", "8": "ogg"}
                 default_name = "语音." + extension.get(str(reference.get("encode_type")), "bin")
             name = media.name_for(reference.get("file_name"), default_name)
-            attachments.append((position, kind, name, json.dumps(reference)))
+            attachments.append((position, kind, name, json.dumps(reference), transcript))
     body = "\n".join(texts).strip()
     if not body and not attachments:
         return None
@@ -258,8 +265,8 @@ def save_updates(db, account, updates):
                                  (message_id, account["bot"], account["owner"], *data, phase))
                 if row.rowcount:
                     db.executemany("""INSERT INTO attachments
-                        (id, message_id, direction, position, kind, name, reference, phase)
-                        VALUES (?, ?, 'inbound', ?, ?, ?, ?, 'download_pending')""",
+                        (id, message_id, direction, position, kind, name, reference, transcript, phase)
+                        VALUES (?, ?, 'inbound', ?, ?, ?, ?, ?, 'download_pending')""",
                                    [(uuid4().hex, message_id, *attachment) for attachment in attachments])
                 added += row.rowcount
         cursor = updates.get("get_updates_buf")
@@ -276,10 +283,15 @@ def file_location(root, attachment, name):
 def attachment_view(db, root, message_id, direction):
     rows = db.execute("SELECT * FROM attachments WHERE message_id = ? AND direction = ? ORDER BY position",
                       (message_id, direction))
-    return [dict(id=row["id"], kind=row["kind"], name=row["name"], size=row["size"],
-                 phase=row["phase"], error=row["error"],
-                 path=str(root / "state" / "weixin" / row["relative_path"]) if row["relative_path"] else None)
-            for row in rows]
+    attachments = []
+    for row in rows:
+        attachment = dict(id=row["id"], kind=row["kind"], name=row["name"], size=row["size"],
+                          phase=row["phase"], error=row["error"],
+                          path=str(root / "state" / "weixin" / row["relative_path"]) if row["relative_path"] else None)
+        if row["transcript"] is not None:
+            attachment["transcript"] = row["transcript"]
+        attachments.append(attachment)
+    return attachments
 
 
 def receive_attachment(db, root, account):

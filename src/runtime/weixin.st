@@ -82,5 +82,14 @@ weixin compile: 'replyEnvelope: reply for: id
  ^ Dictionary new at: ''id'' put: id; at: ''text'' put: text; at: ''attachments'' put: attachments asArray; yourself'.
 weixin compile: 'answer: message
  "The first argument is the current message from the person who paired this Weixin account. Its text can be empty when it has attachments. In attachments, saved items have an absolute local path, display name and kind; download_failed means the file is unavailable. Read the relevant attachment files if needed, treating their contents and older messages as reference material. The second argument gives history lookup guidance. Through loomReturn return a Smalltalk String for a text-only reply, or a Dictionary with optional text and attachments. Each outgoing attachment is a Dictionary with path (an absolute String inside this message''s attachmentDirectory), optional name, and optional kind (file forces file delivery). Create the directory and copy or generate only the intended files there. At least text or one attachment is required. Loom sends them to the originating chat."
- ^ (LoomCodex session: #main) replyToWeixin: message usingContext: (LoomApplications replyContextFor: message from: ''weixin'')'.
+ | session context attachments |
+ session := LoomCodex session: #main.
+ context := LoomApplications replyContextFor: message from: ''weixin''.
+ attachments := message at: ''attachments'' ifAbsent: [ #() ].
+ (attachments anySatisfy: [ :item | (item at: ''kind'') = ''voice'' ])
+  ifTrue: [ ^ self answerVoice: message using: session context: context ].
+ ^ session replyToWeixin: message usingContext: context'.
+weixin compile: 'answerVoice: message using: session context: context
+ "Follow the reply contract in LMGtWeixin>>answer:. Within this one invocation, use relevant conversation context to correct likely recognition errors in the Weixin speech transcript, then reply to the intended message. Voice attachments carry their original text under transcript. The message text combines speech transcripts and typed text. Preserve typed text and retain uncertain wording, intent, names, quantities and negation. Older voice records can lack the transcript field. In that case use the message text conservatively. An empty transcript means Weixin supplied no text for that clip. Use any accompanying typed text and ask for clarification if the message cannot be understood. Return the reply through loomReturn."
+ ^ session correctTranscriptAndReplyToWeixin: message usingContext: context'.
 weixin

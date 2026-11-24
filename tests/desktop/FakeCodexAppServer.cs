@@ -34,10 +34,14 @@ selector = #closeBrowserUsedFor: ifTrue: [
           loomReturn value: (Dictionary new at: 'text' put: prompt, ' reply'; at: 'browserAction' put: action; yourself)
         ] ifFalse: [ loomReturn value: prompt, ' reply' ]
       ] ifFalse: [
-        selector = #replyToWeixin:usingContext: ifTrue: [
+        (#(replyToWeixin:usingContext: correctTranscriptAndReplyToWeixin:usingContext:) includes: selector) ifTrue: [
           ((loomMessage arguments second at: 'source') = 'weixin' and: [ loomSessionId = 'main' ])
             ifFalse: [ self error: 'wrong Weixin invocation context' ].
-          loomReturn value: (input at: 'text'), ' reply'
+          selector = #correctTranscriptAndReplyToWeixin:usingContext: ifTrue: [
+            (((input at: 'attachments') first at: 'transcript') = 'fixture transcript')
+              ifFalse: [ self error: 'missing Weixin transcript' ].
+            loomReturn value: (input at: 'text'), ' voice reply'
+          ] ifFalse: [ loomReturn value: (input at: 'text'), ' reply' ]
         ] ifFalse: [
           loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ] ].
 true";

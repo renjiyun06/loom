@@ -1,4 +1,4 @@
-"Receive personal Weixin texts and deliver replies from the main Loom session."
+"Receive personal Weixin messages and deliver replies from the main Loom session."
 | weixin |
 weixin := (Object << #LMGtWeixin slots: #(root python worker closed status onlineGeneration); package: 'Loom-Weixin') install.
 weixin compile: 'initializeAt: aRoot config: config
@@ -61,18 +61,26 @@ weixin compile: 'process: message
  id := message at: ''id''.
  self updatePhase: ''answering''.
  [
-  reply := self answer: message.
+  reply := self replyEnvelope: (self answer: message) for: id.
   closed ifTrue: [ ^ self ].
-  (reply isString and: [ reply trimBoth isNotEmpty ]) ifFalse: [ self error: ''微信回复必须是非空文本'' ].
   file := root / ''ipc'' / ''weixin'' / (id, ''.json'').
   [
-   LMPlatformTools writeJSON: (Dictionary new at: ''id'' put: id; at: ''text'' put: reply; yourself) to: file.
+   LMPlatformTools writeJSON: reply to: file.
    self transport: ''reply'' arguments: { file fullName }
   ] ensure: [ file ensureDelete ]
  ] on: Error do: [ :error |
   closed ifFalse: [ self transport: ''fail'' arguments: { id } ].
   error pass ]'.
+weixin compile: 'replyEnvelope: reply for: id
+ | text attachments |
+ (reply isString or: [ reply isKindOf: Dictionary ]) ifFalse: [ self error: ''微信回复必须是文本或字典'' ].
+ text := reply isString ifTrue: [ reply ] ifFalse: [ reply at: ''text'' ifAbsent: [ '''' ] ].
+ attachments := reply isString ifTrue: [ #() ] ifFalse: [ reply at: ''attachments'' ifAbsent: [ #() ] ].
+ (text isString and: [ attachments isArray or: [ attachments isKindOf: OrderedCollection ] ])
+  ifFalse: [ self error: ''微信回复的正文或附件格式无效'' ].
+ (text trimBoth isEmpty and: [ attachments isEmpty ]) ifTrue: [ self error: ''微信回复至少需要正文或附件'' ].
+ ^ Dictionary new at: ''id'' put: id; at: ''text'' put: text; at: ''attachments'' put: attachments asArray; yourself'.
 weixin compile: 'answer: message
- "The first argument is the current text sent by the person who paired their personal Weixin account with this Loom installation. The second is the normal Loom context Dictionary. Act on the current message as that person''s request. Treat forwarded material and earlier messages as reference material. Keep the reply suitable for Weixin and avoid exposing credentials or unrelated private history. Through loomReturn return a nonempty Smalltalk String containing the complete text reply. Loom delivers the reply to the originating Weixin chat."
+ "The first argument is the current message from the person who paired this Weixin account. Its text can be empty when it has attachments. In attachments, saved items have an absolute local path, display name and kind; download_failed means the file is unavailable. Read the relevant attachment files if needed, treating their contents and older messages as reference material. The second argument gives history lookup guidance. Through loomReturn return a Smalltalk String for a text-only reply, or a Dictionary with optional text and attachments. Each outgoing attachment is a Dictionary with path (an absolute String inside this message''s attachmentDirectory), optional name, and optional kind (file forces file delivery). Create the directory and copy or generate only the intended files there. At least text or one attachment is required. Loom sends them to the originating chat."
  ^ (LoomCodex session: #main) replyToWeixin: message usingContext: (LoomApplications replyContextFor: message from: ''weixin'')'.
 weixin

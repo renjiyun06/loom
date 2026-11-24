@@ -24,7 +24,11 @@ value isArray ifTrue: [ ^ value collect: [ :entry | self masked: entry ] ].
 registry compile: 'visibleActivity: row
  | type |
 type := row at: ''type''.
-type = ''agentMessage'' ifTrue: [ ^ (row at: ''phase'' ifAbsent: [ nil ]) = ''commentary'' ].
+type = ''agentMessage'' ifTrue: [
+ ^ (row at: ''phase'' ifAbsent: [ nil ]) caseOf: {
+  [ ''commentary'' ] -> [ true ].
+  [ ''final_answer'' ] -> [ (row at: ''text'') isNotEmpty ] }
+  otherwise: [ false ] ].
 (#(''reasoning'' ''plan'') includes: type) ifTrue: [ ^ (row at: ''text'') isNotEmpty ].
 ^ true'.
 registry compile: 'entryFor: item call: call type: type at: at on: db
@@ -114,6 +118,7 @@ registry compile: 'activitySummariesWhere: where values: args on: db
   ''''seq'''',a.seq,''''revision'''',a.change_revision,''''visible'''',a.visible,
   ''''id'''',a.call_id||''''/''''||a.item_id,''''sessionId'''',s.id,
   ''''type'''',json_extract(a.data,''''$.type''''),
+  ''''phase'''',json_extract(a.data,''''$.phase''''),
   ''''status'''',json_extract(a.data,''''$.status''''),
   ''''at'''',json_extract(a.data,''''$.at''''),
   ''''title'''',substr(json_extract(a.data,''''$.title''''),1,160),
@@ -153,7 +158,7 @@ registry compile: 'activityDetailAt: sequence
    values: { sequence } on: db ]'.
 registry compile: 'activityAnswerFor: call
  ^ self database: [ :db |
-  String lf join: (db execute: ''SELECT json_extract(data,''''$.text'''') FROM loom_activities WHERE call_id=? AND visible=0
+  String lf join: (db execute: ''SELECT json_extract(data,''''$.text'''') FROM loom_activities WHERE call_id=?
    AND json_extract(data,''''$.type'''')=''''agentMessage'''' AND json_extract(data,''''$.phase'''')=''''final_answer''''
    AND length(json_extract(data,''''$.text'''')) > 0 ORDER BY seq''
    values: { call }) ]'.

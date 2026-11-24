@@ -839,6 +839,7 @@ cls compile: 'progressParts
  | value cut head rest |
  value := (descriptor at: ''text'' ifAbsent: [ '''' ]) trimBoth.
  value ifEmpty: [ ^ { ''''. '''' } ].
+ (descriptor at: ''phase'' ifAbsent: [ nil ]) = ''final_answer'' ifTrue: [ ^ { ''最终回复''. value } ].
  (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption |
   ^ { caption. ((value beginsWith: (caption, ''。''))
    ifTrue: [ value allButFirst: caption size + 1 ] ifFalse: [ value ]) } ].

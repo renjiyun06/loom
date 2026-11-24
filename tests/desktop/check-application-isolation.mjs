@@ -208,9 +208,14 @@ try {
     const activity = await gt(`| page |
      page := (LoomNativeCodexHost instVarNamed: #registry)
       activitySummariesBefore: nil limit: 30 session: 'isolation-check' managedOnly: true.
-     (page at: 'items') collect: [ :item | item at: 'type' ]
+     (page at: 'items') collect: [ :item | { item at: 'type'. item at: 'phase'. item at: 'text' } ]
     `, 'direct-codex-activity');
-    assert.deepEqual(activity, ['agentMessage', 'dynamicToolCall']);
+    assert.deepEqual(activity, [
+      ['agentMessage', 'commentary', 'Starting offline'],
+      ['agentMessage', 'final_answer', 'Unpublished draft'],
+      ['dynamicToolCall', null, ''],
+      ['agentMessage', 'final_answer', 'object callback completed'],
+    ]);
     await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;

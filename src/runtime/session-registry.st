@@ -33,7 +33,7 @@ create ifTrue: [
    ''PRAGMA user_version=1'') do: [ :sql | db execute: sql ].
  db execute: ''INSERT INTO meta VALUES (?,?)'' values: {''installation_id''. UUID new asString} ].
 version := (db execute: ''PRAGMA user_version'') first asNumber.
-(#(1 2 3 4 5) includes: version) ifFalse: [ self error: ''Invalid session registry schema; recovery is required'' ].
+(#(1 2 3 4 5 6) includes: version) ifFalse: [ self error: ''Invalid session registry schema; recovery is required'' ].
 version < 2 ifTrue: [
  db execute: ''CREATE TABLE calls(request_id TEXT PRIMARY KEY,state TEXT NOT NULL,request_json TEXT NOT NULL,result_json TEXT)'' ].
 version < 3 ifTrue: [
@@ -47,7 +47,14 @@ db execute: ''CREATE INDEX IF NOT EXISTS loom_activity_visible ON loom_activitie
 version < 5 ifTrue: [
  db execute: ''ALTER TABLE loom_activities ADD COLUMN change_revision INTEGER NOT NULL DEFAULT 0''.
  db execute: ''CREATE INDEX loom_activity_revision ON loom_activities(change_revision)''.
- db execute: ''PRAGMA user_version=5'' ]'.
+ db execute: ''PRAGMA user_version=5'' ].
+version < 6 ifTrue: [
+ | next |
+ next := (db execute: ''SELECT COALESCE(MAX(change_revision),0) FROM loom_activities'') first asInteger + 1.
+ db execute: ''UPDATE loom_activities SET visible=1,change_revision=? WHERE visible=0
+  AND json_extract(data,''''$.type'''')=''''agentMessage'''' AND json_extract(data,''''$.phase'''')=''''final_answer''''
+  AND length(json_extract(data,''''$.text'''')) > 0'' values: { next }.
+ db execute: ''PRAGMA user_version=6'' ]'.
 registry compile: 'upgradeActivityTracking
  self database: [ :db |
   db transaction: [ self upgrade: db create: false ].

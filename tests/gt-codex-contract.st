@@ -1,6 +1,6 @@
 "Native session registry, activity, and settings checks. The test root is disposable."
 | base registry request receipt binding file settings verify page older protected requestId data roster
-  reader previous change sequence detail savedText progress restored |
+  reader previous change sequence detail savedText progress restored answer |
 base := ExperimentRoot / 'codex-contract'.
 verify := [ :condition :message | condition ifFalse: [ self error: message ] ].
 registry := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
@@ -57,16 +57,37 @@ verify value: (((older at: 'items') at: 2) == progress and: [ ((older at: 'items
  value: 'an incremental update keeps the order and identity of unchanged entries'.
 data := STONJSON fromString: '{"method":"item/started","params":{"item":{"id":"answer","type":"agentMessage","phase":"final_answer"}}}'.
 registry acceptActivity: data call: requestId.
+verify value: (reader pageOf: 2 session: 'Fixture-1') == older
+ value: 'the final answer appears once it has text'.
 data := STONJSON fromString: '{"method":"item/agentMessage/delta","params":{"itemId":"answer","delta":"原样流式正文"}}'.
 registry acceptActivity: data call: requestId.
-verify value: (reader streamedReplyFor: requestId) = '原样流式正文' value: 'the active reply streams separately from the activity rows'.
-verify value: (reader pageOf: 2 session: 'Fixture-1') == older
- value: 'a change to the reply does not republish the visible activity list'.
+verify value: (reader streamedReplyFor: requestId) = '原样流式正文' value: 'final text is still available through the reply lookup'.
+page := reader pageOf: 2 session: 'Fixture-1'.
+answer := (page at: 'items') last.
+verify value: ((answer at: 'text') = '原样流式正文' and: [ (answer at: 'phase') = 'final_answer' ])
+ value: 'the final answer is visible while streaming'.
+data := STONJSON fromString: '{"method":"item/completed","params":{"item":{"id":"answer","type":"agentMessage","phase":"final_answer","text":"完整最终回复"}}}'.
+registry acceptActivity: data call: requestId.
+page := reader pageOf: 2 session: 'Fixture-1'.
+verify value: (((page at: 'items') size = 4) and: [
+ ((page at: 'items') last at: 'seq') = (answer at: 'seq') and: [
+ ((page at: 'items') last at: 'text') = '完整最终回复' ] ])
+ value: 'completion updates the streaming activity in place'.
 data := STONJSON fromString: '{"method":"item/completed","params":{"item":{"id":"progress","type":"agentMessage","phase":"final_answer","text":"reclassified"}}}'.
 registry acceptActivity: data call: requestId.
 page := reader pageOf: 2 session: 'Fixture-1'.
-verify value: ((page at: 'items') noneSatisfy: [ :entry | (entry at: 'seq') = (progress at: 'seq') ])
- value: 'a row that becomes hidden is removed incrementally'.
+verify value: ((page at: 'items') anySatisfy: [ :entry |
+ (entry at: 'seq') = (progress at: 'seq') and: [ (entry at: 'phase') = 'final_answer' ] ])
+ value: 'an activity that becomes a final answer stays visible'.
+registry database: [ :db |
+ db execute: 'UPDATE loom_activities SET visible=0 WHERE seq=?' values: { answer at: 'seq' }.
+ db execute: 'PRAGMA user_version=5' ].
+previous := registry revision.
+registry upgradeActivityTracking.
+change := (registry activityChangesAfter: previous from: nil session: 'Fixture-1' managedOnly: true) second.
+verify value: (change size = 1 and: [
+ (change first at: 'seq') = (answer at: 'seq') and: [ (change first at: 'visible') = 1 ] ])
+ value: 'an upgrade restores saved final answers at their original sequence'.
 restored := LMActivityReader new.
 restored instVarNamed: #registry put: registry.
 restored instVarNamed: #published put: page.

@@ -201,11 +201,18 @@ try {
     assert.deepEqual(await weixinReply(), {ok: true, value: '微信 reply'});
     const weixinCallCount = "LoomNativeCodexHost registry database: [ :db | (db execute: 'SELECT COUNT(*) FROM calls') first asInteger ]";
     const beforeVoice = await gt(weixinCallCount, 'weixin-before-voice');
-    const weixinVoice = await submitModel(`LMGtWeixin new answer: (Dictionary new at: 'id' put: 'voice-id';
+    const weixinVoice = await submitModel(`| entry message |
+      entry := LMGtWeixin new.
+      message := Dictionary new at: 'id' put: 'voice-id';
       at: 'text' put: 'fixture transcript'; at: 'attachments' put: {
-        Dictionary new at: 'kind' put: 'voice'; at: 'transcript' put: 'fixture transcript'; yourself };
-      yourself)`, 'weixin-voice-one-call');
-    assert.deepEqual(await weixinVoice(), {ok: true, value: 'fixture transcript voice reply'});
+        Dictionary new at: 'id' put: 'voice-attachment'; at: 'kind' put: 'voice';
+          at: 'transcript' put: 'fixture transcript'; yourself };
+      yourself.
+      entry replyEnvelope: (entry answer: message) for: 'voice-id'`, 'weixin-voice-one-call');
+    assert.deepEqual(await weixinVoice(), {ok: true, value: {
+      id: 'voice-id', text: 'fixture transcript voice reply', attachments: [],
+      correctedTranscripts: [{id: 'voice-attachment', text: 'corrected fixture transcript'}],
+    }});
     assert.equal(await gt(weixinCallCount, 'weixin-after-voice'), beforeVoice + 1);
     const objectCall = await submitModel("(LoomSessions session: 'isolation-check') fixtureCall: '活对象'", 'object-call');
     assert.deepEqual(await objectCall(), {ok: true, value: {session: 'isolation-check', argument: '活对象'}});

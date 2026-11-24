@@ -1,6 +1,7 @@
 import sys
 from contextlib import closing
 import base64
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -143,11 +144,28 @@ class WeixinQueueTest(unittest.TestCase):
         self.assertNotIn("transcript", received)
         self.assertEqual(missing["transcript"], "语音转写")
         self.assertEqual((missing["name"], missing["phase"], missing["path"]), ("语音.silk", "download_failed", None))
+        correction = {"id": missing["id"], "text": "语音的纠正稿"}
+        with self.assertRaisesRegex(transport.TransportError, "缺少本条语音的纠正稿"):
+            transport.stage_reply(self.db, task["id"], "答复", self.root)
+        with self.assertRaises(transport.TransportError):
+            transport.stage_reply(self.db, task["id"], "答复", self.root, corrected_transcripts=[
+                correction, {"id": received["id"], "text": "不能写到文件附件"},
+            ])
+        self.assertNotIn("correctedTranscript", transport.history(self.db, self.root)[0]["attachments"][1])
+        transport.stage_reply(self.db, task["id"], "答复", self.root, corrected_transcripts=[correction])
+        with closing(transport.open_database(self.root)) as reopened:
+            [record] = transport.history(reopened, self.root)
+            saved_voice = record["attachments"][1]
+            self.assertEqual((saved_voice["transcript"], saved_voice["correctedTranscript"]),
+                             ("语音转写", "语音的纠正稿"))
+            parts = reopened.execute("SELECT parts FROM messages WHERE id = ?", (task["id"],)).fetchone()[0]
+            self.assertEqual(json.loads(parts), ["答复"])
 
     def test_migrates_old_voice_records_and_distinguishes_new_clips_without_a_transcript(self):
         incoming = dict(self.text(), item_list=[{"type": 3, "voice_item": {"text": "已有转写"}}])
         transport.save_updates(self.db, self.account, {"msgs": [incoming]})
         self.db.execute("ALTER TABLE attachments DROP COLUMN transcript")
+        self.db.execute("ALTER TABLE attachments DROP COLUMN corrected_transcript")
         with closing(transport.open_database(self.root)) as reopened:
             [legacy] = transport.history(reopened, self.root)
             self.assertEqual(legacy["text"], "已有转写")

@@ -40,7 +40,10 @@ selector = #closeBrowserUsedFor: ifTrue: [
           selector = #correctTranscriptAndReplyToWeixin:usingContext: ifTrue: [
             (((input at: 'attachments') first at: 'transcript') = 'fixture transcript')
               ifFalse: [ self error: 'missing Weixin transcript' ].
-            loomReturn value: (input at: 'text'), ' voice reply'
+            loomReturn value: (Dictionary new at: 'text' put: (input at: 'text'), ' voice reply';
+              at: 'correctedTranscripts' put: { Dictionary new
+                at: 'id' put: ((input at: 'attachments') first at: 'id');
+                at: 'text' put: 'corrected fixture transcript'; yourself }; yourself)
           ] ifFalse: [ loomReturn value: (input at: 'text'), ' reply' ]
         ] ifFalse: [
           loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ] ].

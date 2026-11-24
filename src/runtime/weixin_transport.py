@@ -140,16 +140,22 @@ def open_database(root):
             id TEXT PRIMARY KEY, message_id TEXT NOT NULL, direction TEXT NOT NULL,
             position INTEGER NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,
             relative_path TEXT, size INTEGER, phase TEXT NOT NULL, reference TEXT,
-            attempts INTEGER NOT NULL DEFAULT 0, error TEXT, server_reply_id TEXT, transcript TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0, error TEXT, server_reply_id TEXT,
+            transcript TEXT, corrected_transcript TEXT,
             UNIQUE (message_id, direction, position)
         );
         CREATE INDEX IF NOT EXISTS attachment_queue ON attachments (phase, message_id);
         """)
-    if "transcript" not in {column["name"] for column in database.execute("PRAGMA table_info(attachments)")}:
+    if missing_attachment_columns(database):
         with transaction(database):
-            if "transcript" not in {column["name"] for column in database.execute("PRAGMA table_info(attachments)")}:
-                database.execute("ALTER TABLE attachments ADD COLUMN transcript TEXT")
+            for name in missing_attachment_columns(database):
+                database.execute(f"ALTER TABLE attachments ADD COLUMN {name} TEXT")
     return database
+
+
+def missing_attachment_columns(db):
+    existing = {column["name"] for column in db.execute("PRAGMA table_info(attachments)")}
+    return [name for name in ("transcript", "corrected_transcript") if name not in existing]
 
 
 @contextmanager
@@ -290,6 +296,8 @@ def attachment_view(db, root, message_id, direction):
                           path=str(root / "state" / "weixin" / row["relative_path"]) if row["relative_path"] else None)
         if row["transcript"] is not None:
             attachment["transcript"] = row["transcript"]
+        if row["corrected_transcript"] is not None:
+            attachment["correctedTranscript"] = row["corrected_transcript"]
         attachments.append(attachment)
     return attachments
 
@@ -463,7 +471,7 @@ def receive(db, root, account, client):
     return {"phase": "ready", **save_updates(db, account, updates)}
 
 
-def stage_reply(db, message_id, text, root, attachments=()):
+def stage_reply(db, message_id, text, root, attachments=(), corrected_transcripts=()):
     body = text.strip()
     if not isinstance(attachments, (list, tuple)):
         raise TransportError("微信回复的附件必须是一个列表")
@@ -476,6 +484,7 @@ def stage_reply(db, message_id, text, root, attachments=()):
         with transaction(db):
             if not db.execute("SELECT 1 FROM messages WHERE id = ? AND phase = 'answering'", (message_id,)).fetchone():
                 raise TransportError("The Weixin message is not waiting for a reply")
+            save_corrected_transcripts(db, message_id, corrected_transcripts)
             for position, entry in enumerate(attachments):
                 attachment_id = stage_attachment(db, root, message_id, position, entry, copies)
                 parts.append({"attachment": attachment_id})
@@ -485,6 +494,30 @@ def stage_reply(db, message_id, text, root, attachments=()):
         for path in copies:
             path.unlink(missing_ok=True)
         raise
+
+
+def save_corrected_transcripts(db, message_id, entries):
+    if not isinstance(entries, (list, tuple)):
+        raise TransportError("微信语音纠正稿必须是一个列表")
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise TransportError("微信语音纠正稿格式无效")
+        attachment_id, text = entry.get("id"), entry.get("text")
+        if not isinstance(attachment_id, str) or attachment_id in seen or not isinstance(text, str) or not text.strip():
+            raise TransportError("微信语音纠正稿缺少正文或附件标识重复或无效")
+        updated = db.execute("""UPDATE attachments SET corrected_transcript = ?
+                                WHERE id = ? AND message_id = ? AND direction = 'inbound' AND kind = 'voice'
+                                  AND (transcript IS NULL OR transcript <> '')""",
+                             (text.strip(), attachment_id, message_id))
+        if updated.rowcount != 1:
+            raise TransportError("微信语音纠正稿必须对应本条消息中有可用转写的语音")
+        seen.add(attachment_id)
+    required = {row["id"] for row in db.execute("""SELECT id FROM attachments WHERE message_id = ?
+                                                  AND direction = 'inbound' AND kind = 'voice' AND transcript <> ''""",
+                                               (message_id,))}
+    if not required.issubset(seen):
+        raise TransportError("微信回复缺少本条语音的纠正稿")
 
 
 def stage_attachment(db, root, message_id, position, entry, copies):
@@ -563,7 +596,8 @@ def main():
             result = poll(db, args.value, root)
         elif args.command == "reply":
             message = json.loads(Path(args.value).read_text(encoding="utf-8-sig"))
-            stage_reply(db, message["id"], message["text"], root, message.get("attachments", []))
+            stage_reply(db, message["id"], message["text"], root,
+                        message.get("attachments", []), message.get("correctedTranscripts", []))
         elif args.command == "fail":
             db.execute("UPDATE messages SET phase = 'answer_failed' WHERE id = ? AND phase = 'answering'", (args.value,))
         elif args.command == "recover":

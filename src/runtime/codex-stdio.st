@@ -176,11 +176,15 @@ transport compile: 'turnProgressLockDuring: current
 transport compile: 'noteTurnProgress: stage at: tick during: current
  (self turnProgressLockDuring: current) critical: [
   (current at: ''turnProgressEnded'' ifAbsent: [ false ]) ifFalse: [
-   current at: ''lastTurnProgress'' put: { tick. stage } ] ]'.
+   current at: ''lastTurnProgress'' put: { tick. stage }.
+   current removeKey: ''quietSince'' ifAbsent: [ ].
+   self endNetworkWaitDuring: current title: ''Codex 轮次恢复进展'' ] ]'.
 transport compile: 'observeTurnEvent: method params: params during: current
  | stage |
  method = ''turn/completed'' ifTrue: [
-  ^ (self turnProgressLockDuring: current) critical: [ current at: ''turnProgressEnded'' put: true ] ].
+  ^ (self turnProgressLockDuring: current) critical: [
+   current at: ''turnProgressEnded'' put: true.
+   self endNetworkWaitDuring: current title: ''Codex 轮次已结束'' ] ].
  stage := self progressStageFor: method params: params during: current.
  stage ifNotNil: [ self noteTurnProgress: stage at: Time millisecondClockValue during: current ]'.
 transport compile: 'progressStageFor: method params: params during: current
@@ -211,22 +215,69 @@ transport compile: 'progressStageFor: method params: params during: current
  delta := params at: ''delta'' ifAbsent: [ ^ nil ].
  ^ ((delta isString) and: [ delta notEmpty ]) ifTrue: [ stage ] ifFalse: [ nil ]'.
 transport compile: 'recordTurnSilenceDuring: current at: tick
- | progress elapsed release |
+ | progress since elapsed release |
+ (current at: ''networkProbe'' ifAbsent: [ nil ]) ifNotNil: [ :probe |
+  ^ self pollNetwork: probe during: current at: tick ].
  progress := current at: ''lastTurnProgress'' ifAbsent: [ ^ self ].
  (current at: ''reportedTurnSilence'' ifAbsent: [ nil ]) == progress ifTrue: [ ^ self ].
- elapsed := Time milliseconds: tick since: progress first.
+ since := current at: ''quietSince'' ifAbsent: [ progress first ].
+ elapsed := Time milliseconds: tick since: since.
  elapsed < 1800000 ifTrue: [ ^ self ].
  release := (self turnProgressLockDuring: current) critical: [
   ((current at: ''lastTurnProgress'') == progress and: [
+   (current at: ''quietSince'' ifAbsent: [ progress first ]) = since and: [
    (current at: ''turnProgressEnded'' ifAbsent: [ false ]) not and: [
-   (current at: ''reportedTurnSilence'' ifAbsent: [ nil ]) ~~ progress ] ]) ifTrue: [
+   (current at: ''reportedTurnSilence'' ifAbsent: [ nil ]) ~~ progress ] ] ]) ifTrue: [
     current at: ''reportedTurnSilence'' put: progress.
     release := current at: ''objectSaved'' ifAbsent: [ false ].
-    release ifTrue: [ current at: ''releasedAfterSilence'' put: true ].
     [ registry recordTurnSilence: current stage: progress second seconds: elapsed // 1000 ]
       on: Error do: [ :error | Smalltalk globals at: #LoomActivityWriteError put: error messageText ].
+    release ifTrue: [ current at: ''releasedAfterSilence'' put: true ] ifFalse: [
+     (self canHandoffDuring: current) ifTrue: [
+      | probe |
+      probe := Dictionary new at: ''progress'' put: progress; yourself.
+      current at: ''networkProbe'' put: probe.
+      self startNetworkProbe: probe at: tick ] ].
     release ] ifFalse: [ false ] ].
  release ifTrue: [ self sendInterruptWithoutWaitingDuring: current ]'.
+transport compile: 'startNetworkProbe: probe at: tick
+ | answer |
+ answer := Array new: 1.
+ probe at: ''answer'' put: answer; at: ''startedAt'' put: tick.
+ [ answer at: 1 put: ([ self probeNetworkReachable ] on: Error do: [ :error | false ]) ] fork'.
+transport compile: 'probeNetworkReachable
+ | curl status |
+ curl := (OSEnvironment current at: ''SystemRoot'') asFileReference / ''System32'' / ''curl.exe''.
+ status := LMPlatformTools run: curl arguments: #(''--disable'' ''--silent'' ''--fail'' ''--max-time'' ''5''
+  ''--output'' ''NUL'' ''--write-out'' ''%{http_code}'' ''https://www.google.com/generate_204'') timeout: 6.
+ ^ status trimBoth = ''204'''.
+transport compile: 'pollNetwork: probe during: current at: tick
+ (self turnProgressLockDuring: current) critical: [
+  ((current at: ''networkProbe'' ifAbsent: [ nil ]) == probe and: [
+    (current at: ''lastTurnProgress'') == (probe at: ''progress'') and: [
+    (self canHandoffDuring: current) and: [ (current at: ''objectSaved'' ifAbsent: [ false ]) not ] ] ]) ifFalse: [ ^ self ].
+  (probe at: ''answer'') first ifNotNil: [ :reachable |
+   reachable ifTrue: [
+    (probe includesKey: ''waitActivity'') ifTrue: [
+     self endNetworkWaitDuring: current title: ''Google 探测已恢复，继续观察原轮次''.
+     current at: ''quietSince'' put: tick.
+     current removeKey: ''reportedTurnSilence'' ] ifFalse: [
+     current removeKey: ''networkProbe''.
+     self markHandoffDuring: current automatic: true.
+     self sendInterruptWithoutWaitingDuring: current ]
+   ] ifFalse: [
+    (probe includesKey: ''waitActivity'') ifFalse: [
+     probe at: ''waitActivity'' put: (''network-wait-'', UUID new asString).
+     self recordNetworkWait: probe during: current title: ''Google 探测失败，正在等待网络恢复'' status: ''inProgress'' ].
+    (Time milliseconds: tick since: (probe at: ''startedAt'')) >= 15000 ifTrue: [
+     self startNetworkProbe: probe at: tick ] ] ] ]'.
+transport compile: 'endNetworkWaitDuring: current title: title
+ (current removeKey: ''networkProbe'' ifAbsent: [ nil ]) ifNotNil: [ :probe |
+  (probe includesKey: ''waitActivity'') ifTrue: [
+   self recordNetworkWait: probe during: current title: title status: ''completed'' ] ]'.
+transport compile: 'recordNetworkWait: probe during: current title: title status: status
+ [ registry recordNetworkWait: (probe at: ''waitActivity'') during: current title: title status: status ]
+  on: Error do: [ :error | Smalltalk globals at: #LoomActivityWriteError put: error messageText ]'.
 transport compile: 'permitsTool: params during: current
  ^ current notNil and: [ active == current and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
  (current at: ''turnId'') notNil and: [
@@ -384,7 +435,7 @@ transport compile: 'recoveryReceipt: receipt handoff: handoff
  ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true; yourself'.
 transport compile: 'canHandoffDuring: current
  ^ current notNil and: [ active == current and: [
-  (current at: ''objectInvocation'') and: [ (current at: ''turnId'') notNil and: [
+  (current at: ''objectInvocation'' ifAbsent: [ false ]) and: [ (current at: ''turnId'') notNil and: [
   (current at: ''turnProgressEnded'' ifAbsent: [ false ]) not and: [
   (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
   (current at: ''handoffRequested'' ifAbsent: [ false ]) not and: [
@@ -396,9 +447,13 @@ transport compile: 'requestHandoffFor: key request: requestId
   (current at: ''requestId'') = requestId ] ]) ifFalse: [ self error: ''当前轮次已变更，请刷新后重试'' ].
  (self turnProgressLockDuring: current) critical: [
   (self canHandoffDuring: current) ifFalse: [ self error: ''当前轮次无法请求接手'' ].
-  registry recordHandoffRequest: requestId turn: (current at: ''turnId'') key: key thread: (current at: ''threadId'').
-  current at: ''handoffRequested'' put: true ].
+  self markHandoffDuring: current automatic: false ].
  self interruptDuring: current'.
+transport compile: 'markHandoffDuring: current automatic: automatic
+ registry recordHandoffRequest: (current at: ''requestId'') turn: (current at: ''turnId'')
+  key: (current at: ''clientKey'') thread: (current at: ''threadId'') automatic: automatic.
+ current at: ''handoffRequested'' put: true.
+ self endNetworkWaitDuring: current title: ''已请求中断旧轮次'''.
 transport compile: 'interrupt
  ^ self interruptDuring: active'.
 transport compile: 'interruptDuring: current

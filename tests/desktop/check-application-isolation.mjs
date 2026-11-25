@@ -360,6 +360,102 @@ try {
     fs.writeFileSync(path.join(fixture, 'workspace', 'release-fixture-silence'), '');
     assert.deepEqual(await subsequent(), {ok: true, value: 'following turn 回执'});
     assert.deepEqual(read(silentReceipt), delivered);
+    await gt(`LMNativeCodexTransport compile: 'probeNetworkReachable ^ (Smalltalk globals at: #LoomTestNetworkProbe) value'.
+      Smalltalk globals at: #LoomTestNetworkProbe put: [ false ]. true`, 'use-controlled-network-probe');
+    async function expireObservation() {
+      await gt(`| transport current |
+        transport := LoomNativeCodexHost instVarNamed: #transport.
+        current := transport active.
+        transport noteTurnProgress: 'fixture progress' at: Time millisecondClockValue - 1800000 during: current. true`,
+      'expire-observation-window');
+    }
+    async function waitForGt(source, label) {
+      const deadline = Date.now() + 30000;
+      do {
+        const result = await gt(source, label);
+        if (result) return result;
+        await sleep(100);
+      } while (Date.now() < deadline);
+      throw Error(`${label} timed out`);
+    }
+    const networkHandoff = await submitModel(`| session original result |
+      session := LoomSessions session: 'handoff-fixture'.
+      original := Object new.
+      result := session fixtureHandoff: original.
+      { result == original. session threadId }`, 'automatic-handoff-after-network-recovers');
+    const networkTurn = await waitForHandoff();
+    await expireObservation();
+    const networkActivity = `| registry |
+      registry := LoomNativeCodexHost registry.
+      registry database: [ :db |
+       (db execute: 'SELECT data FROM loom_activities WHERE call_id=? AND json_extract(data, ''$.phase'')=?'
+        values: { '${networkTurn.call.requestId}'. 'turnNetworkWait' }) collect: [ :line | STONJSON fromString: line ] ]`;
+    const waitingNetwork = await waitForGt(`[ ${networkActivity} ] value ifEmpty: [ nil ]`, 'wait-for-network-activity');
+    assert.deepEqual(waitingNetwork.map(row => [row.status, row.title]),
+      [['inProgress', 'Google 探测失败，正在等待网络恢复']]);
+    assert.equal((await gt("LoomSessions show: 'handoff-fixture'", 'network-wait-keeps-old-turn')).call.handoffRequested, false);
+    await gt(`| transport current |
+      transport := LoomNativeCodexHost instVarNamed: #transport.
+      current := transport active.
+      (transport turnProgressLockDuring: current) critical: [
+       Smalltalk globals at: #LoomTestNetworkProbe put: [ true ].
+       (current at: 'networkProbe') at: 'startedAt' put: Time millisecondClockValue - 15000 ]. true`, 'restore-network');
+    await waitForGt(`| current |
+      current := (LoomNativeCodexHost instVarNamed: #transport) active.
+      current at: 'quietSince' ifAbsent: [ nil ]`, 'start-observing-after-network-restored');
+    const recoveredNetwork = await gt(networkActivity, 'finished-network-activity');
+    assert.deepEqual(recoveredNetwork.map(row => [row.status, row.title]),
+      [['completed', 'Google 探测已恢复，继续观察原轮次']]);
+    assert.equal(await gt(`| transport current since |
+      transport := LoomNativeCodexHost instVarNamed: #transport.
+      current := transport active.
+      since := current at: 'quietSince'.
+      transport recordTurnSilenceDuring: current at: since + 1799999.
+      ((current at: 'lastTurnProgress') second = 'fixture progress') and: [
+       (current includesKey: 'networkProbe') not and: [ (current includesKey: 'handoffRequested') not ] ]`,
+    'observe-original-turn-for-full-window'), true);
+    await gt(`| transport current |
+      transport := LoomNativeCodexHost instVarNamed: #transport.
+      current := transport active.
+      (transport turnProgressLockDuring: current) critical: [ current at: 'quietSince' put: Time millisecondClockValue - 1800000 ].
+      true`, 'expire-post-restore-observation-window');
+    const automatic = await waitForGt(`| record |
+      record := LoomSessions show: 'handoff-fixture'.
+      ((record at: 'call') at: 'handoffRequested') ifTrue: [ record ]`, 'wait-for-automatic-handoff');
+    assert.equal(automatic.call.turnId, networkTurn.call.turnId);
+    assert.equal(automatic.threadId, replacementThread);
+    assert.equal(fs.existsSync(path.join(fixture, 'automatic-handoff-after-network-recovers.json')), false);
+    fs.writeFileSync(releaseHandoff, '');
+    const automaticResult = await networkHandoff();
+    fs.unlinkSync(releaseHandoff);
+    assert.equal(automaticResult.ok, true, JSON.stringify(automaticResult));
+    const [sameNetworkObject, automaticThread] = automaticResult.value;
+    assert.equal(sameNetworkObject, true);
+    assert.notEqual(automaticThread, replacementThread);
+    assert.equal(read(path.join(ipc, 'codex-responses', networkTurn.call.requestId + '.json')).replaceCodexSession, true);
+
+    await gt(`| gate |
+      gate := Semaphore new.
+      Smalltalk globals at: #LoomTestNetworkGate put: gate.
+      Smalltalk globals at: #LoomTestNetworkProbe put: [
+       Smalltalk globals at: #LoomTestNetworkProbeStarted put: true.
+       gate wait. true ]. true`, 'hold-network-probe-open');
+    const oldResult = await submitModel(`| session original result |
+      session := LoomSessions session: 'handoff-fixture'.
+      original := Object new.
+      result := session fixtureNetworkResult: original.
+      { result == original. session lastResponse at: 'turnStatus'. session threadId }`, 'result-arrives-during-network-probe');
+    const recoveringTurn = await waitForHandoff();
+    await expireObservation();
+    await waitForGt('Smalltalk globals at: #LoomTestNetworkProbeStarted ifAbsent: [ nil ]', 'probe-is-still-running');
+    fs.writeFileSync(path.join(fixture, 'workspace', 'release-fixture-network-result'), '');
+    assert.deepEqual(await oldResult(), {ok: true, value: [true, 'completed', automaticThread]});
+    await gt('LoomTestNetworkGate signal. true', 'deliver-late-network-answer');
+    const nextBinding = await gt("LoomSessions show: 'handoff-fixture'", 'keep-binding-despite-late-probe');
+    assert.equal(nextBinding.threadId, automaticThread);
+    assert.equal(nextBinding.threads.length, 3);
+    const recoveredReceipt = read(path.join(ipc, 'codex-responses', recoveringTurn.call.requestId + '.json'));
+    assert.equal(recoveredReceipt.handoffRequested, undefined);
     await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;

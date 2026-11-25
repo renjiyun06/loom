@@ -14,7 +14,7 @@ public static class FakeCodexAppServer {
 | selector input prompt action staged gate deadline result attempts previous original |
 selector := loomMessage selector.
 input := loomMessage arguments first.
-(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: fixtureSilentResult: continue:after:) includes: selector) ifTrue: [
+(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: continue:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
     [ #fixtureCommitted: ] -> [ loomReturn value: input. 'fail-after-return' ].
@@ -22,6 +22,7 @@ input := loomMessage arguments first.
     [ #fixtureHandoff: ] -> [ 'hold-for-handoff' ].
     [ #fixtureHeldResult: ] -> [ loomReturn value: input. 'hold-with-result' ].
     [ #fixtureSilentResult: ] -> [ loomReturn value: input. 'hold-with-silent-result' ].
+    [ #fixtureNetworkResult: ] -> [ 'hold-for-network-result' ].
     [ #continue:after: ] -> [
       attempts := input attempts.
       previous := loomMessage arguments second.
@@ -101,6 +102,16 @@ true ]";
         else
             Event("turn/completed", new {threadId,turn=new {id=turnId,status,items=new object[0]}});
     }
+    static void AfterRelease(string path, Action action) {
+        var release = new System.Threading.Thread(() => {
+            for (int attempt=0; attempt<600; ++attempt) {
+                if (File.Exists(path)) { action(); return; }
+                System.Threading.Thread.Sleep(50);
+            }
+        });
+        release.IsBackground=true;
+        release.Start();
+    }
     static void CompleteTool(Dictionary<string,object> result) {
         if (!Object.Equals(result["success"],true)) {
             Finish("object callback failed","failed");
@@ -126,6 +137,17 @@ true ]";
                 waitForSilenceRelease=action=="hold-with-silent-result";
                 Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
                     phase="commentary",text="Fixture ready for handoff"}}); break;
+            case "hold-for-network-result":
+                var waitingThread=threadId;
+                var waitingTurn=turnId;
+                Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
+                    phase="commentary",text="Fixture ready for handoff"}});
+                AfterRelease("release-fixture-network-result", () => {
+                    var callId="network-tool-"+waitingTurn;
+                    Send(new {id=callId,method="item/tool/call",@params=new {threadId=waitingThread,turnId=waitingTurn,callId,
+                        tool="runtime_eval",arguments=new {code="loomReturn value: loomMessage arguments first. true"}}});
+                });
+                break;
             default:
                 Finish("object callback completed","completed"); break;
         }
@@ -189,22 +211,14 @@ true ]";
                     if (waitForHandoffRelease || silent) {
                         waitForHandoffRelease=false;
                         string endedThread=threadId, endedTurn=turnId;
-                        var release=new System.Threading.Thread(() => {
-                            for (int attempt=0; attempt<600; ++attempt) {
-                                if (File.Exists(silent ? "release-fixture-silence" : "release-fixture-handoff")) {
-                                    if (silent) {
-                                        Reply(id,new {});
-                                        waitForSilenceRelease=false;
-                                    }
-                                    Event("turn/completed",new {threadId=endedThread,
-                                        turn=new {id=endedTurn,status="interrupted"}});
-                                    return;
-                                }
-                                System.Threading.Thread.Sleep(50);
+                        AfterRelease(silent ? "release-fixture-silence" : "release-fixture-handoff", () => {
+                            if (silent) {
+                                Reply(id,new {});
+                                waitForSilenceRelease=false;
                             }
+                            Event("turn/completed",new {threadId=endedThread,
+                                turn=new {id=endedTurn,status="interrupted"}});
                         });
-                        release.IsBackground=true;
-                        release.Start();
                     } else Finish("","interrupted");
                     break;
                 default:

@@ -53,6 +53,16 @@ registry compile: 'recordTurnSilence: current stage: stage seconds: seconds
    at: ''turnId'' put: (current at: ''turnId''); at: ''silentSeconds'' put: seconds;
    at: ''lastStage'' put: stage; at: ''at'' put: self now; yourself)
    call: (current at: ''requestId'') item: ''turn-silence-'', UUID new asString on: db ]'.
+registry compile: 'recordNetworkWait: id during: current title: title status: status
+ | call |
+ call := current at: ''requestId''.
+ self database: [ :db |
+  | row |
+  row := self entryFor: id call: call type: ''loomActivity'' at: self now on: db.
+  row at: ''phase'' put: ''turnNetworkWait''; at: ''title'' put: title; at: ''status'' put: status;
+   at: ''turnId'' put: (current at: ''turnId''); at: ''text'' put: (status = ''inProgress''
+    ifTrue: [ ''每 15 秒重试，原 Codex 轮次继续运行'' ] ifFalse: [ ''本次网络等待已结束'' ]).
+  self putActivity: row call: call item: id on: db ]'.
 registry compile: 'finishActivity: call ok: ok on: db
  ok ifFalse: [
  self interruptActivity: call on: db.

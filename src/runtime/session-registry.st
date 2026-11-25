@@ -174,7 +174,7 @@ registry compile: 'beginCall: request
   request at: ''replacesRequestId'' ifPresent: [ :id | self prepareHandoffFrom: id for: request on: db ].
   request at: ''originalRequestId'' ifPresent: [ :original |
    self beginRecoveryActivity: original switching: (request includesKey: ''replacesRequestId'') on: db ] ] ]'.
-registry compile: 'recordHandoffRequest: id turn: turn key: key thread: thread
+registry compile: 'recordHandoffRequest: id turn: turn key: key thread: thread automatic: automatic
  self database: [ :db | db transaction: [
   | request binding row original |
   request := self record: ''SELECT request_json FROM calls WHERE request_id=? AND state=?''
@@ -182,10 +182,13 @@ registry compile: 'recordHandoffRequest: id turn: turn key: key thread: thread
   binding := self binding: key on: db.
   (request notNil and: [ binding notNil and: [ (request at: ''clientKey'') = key and: [
    (binding at: ''threadId'') = thread ] ] ]) ifFalse: [ self error: ''当前调用或 Codex 会话已变更'' ].
-  self log: key event: ''stall-handoff-requested'' generation: (binding at: ''generation'') thread: thread request: id on: db.
+  self log: key event: (automatic ifTrue: [ ''stall-handoff-automatic'' ] ifFalse: [ ''stall-handoff-requested'' ])
+   generation: (binding at: ''generation'') thread: thread request: id on: db.
   original := request at: ''originalRequestId'' ifAbsent: [ id ].
   row := self recoveryRowFor: original on: db.
-  row at: ''lastError'' put: (''已请求中断旧轮次 '', turn).
+  row at: ''lastError'' put: ((automatic
+   ifTrue: [ ''轮次静默且 Google 探测可达，已自动请求中断旧轮次 '' ]
+   ifFalse: [ ''已请求中断旧轮次 '' ]), turn).
   self putRecoveryActivity: row title: ''等待旧轮次结束后接手'' status: ''recovering'' call: original on: db ] ]'.
 registry compile: 'prepareHandoffFrom: previous for: request on: db
  | old receipt binding key original generation |

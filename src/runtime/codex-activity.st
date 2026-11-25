@@ -10,7 +10,7 @@ registry compile: 'activitySource
  (SELECT e.client_key FROM events e WHERE e.event IN (''''initialize'''',''''bound'''')
   AND e.thread_id=json_extract(c.result_json,''''$.threadId'''') ORDER BY e.id LIMIT 1))'''.
 registry compile: 'activityTypes
- ^ #(''agentMessage'' ''reasoning'' ''plan'' ''dynamicToolCall'' ''mcpToolCall'' ''commandExecution'' ''fileChange'' ''webSearch'')'.
+ ^ #(''agentMessage'' ''reasoning'' ''contextCompaction'' ''plan'' ''dynamicToolCall'' ''mcpToolCall'' ''commandExecution'' ''fileChange'' ''webSearch'')'.
 registry compile: 'masked: value
  value isDictionary ifTrue: [
  | copy |
@@ -29,7 +29,7 @@ type = ''agentMessage'' ifTrue: [
   [ ''commentary'' ] -> [ true ].
   [ ''final_answer'' ] -> [ (row at: ''text'') isNotEmpty ] }
   otherwise: [ false ] ].
-(#(''reasoning'' ''plan'') includes: type) ifTrue: [ ^ (row at: ''text'') isNotEmpty ].
+type = ''plan'' ifTrue: [ ^ (row at: ''text'') isNotEmpty ].
 ^ true'.
 registry compile: 'entryFor: item call: call type: type at: at on: db
  ^ (self record: ''SELECT data FROM loom_activities WHERE call_id=? AND item_id=?'' values: {call. item} on: db)

@@ -230,4 +230,44 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  verify value: (((prior at: 'items') first at: 'seq') = sequence)
   value: 'request-scoped paging retains the cursor for stored tool details'
 ] value.
+[ | call current transport entries view reasoning savedRevision migrated compacting compacted reopened |
+ call := UUID new asString.
+ registry beginCall: (Dictionary new at: 'id' put: call; at: 'clientKey' put: (roster at: 'clientKey');
+  at: 'action' put: 'ask'; yourself).
+ current := Dictionary new at: 'requestId' put: call; at: 'threadId' put: 'fixture-thread';
+  at: 'turnId' put: 'activity-turn'; at: 'messages' put: OrderedDictionary new; yourself.
+ transport := LMNativeCodexTransport new.
+ transport instVarNamed: #registry put: registry; instVarNamed: #active put: current.
+ entries := [ :store | (store activitySummariesForCall: call before: nil limit: 10) at: 'items' ].
+ transport receive: (STONJSON fromString: '{"method":"item/started","params":{"threadId":"fixture-thread","turnId":"activity-turn","item":{"id":"thinking","type":"reasoning","summary":[],"content":["private reasoning"]}}}').
+ reasoning := (entries value: registry) first.
+ view := LMConversationActivityView new descriptor: reasoning; yourself.
+ verify value: ((reasoning at: 'visible') = 1 and: [ (reasoning at: 'text') isEmpty and: [
+  view actionTitle = '思考中' and: [ view hasDetails not ] ] ]) value: 'empty reasoning appears without a detail expander'.
+ transport receive: (STONJSON fromString: '{"method":"item/completed","params":{"threadId":"fixture-thread","turnId":"activity-turn","item":{"id":"thinking","type":"reasoning","summary":[],"content":["private reasoning"]}}}').
+ view descriptor: (entries value: registry) first.
+ verify value: view actionTitle = '思考已结束' value: 'an empty completed reasoning row retains its status'.
+ verify value: ((((registry activityDetailAt: (reasoning at: 'seq')) at: 'data') includesKey: 'content') not)
+  value: 'reasoning internals are not copied into activity storage'.
+ registry database: [ :db |
+  db execute: 'UPDATE loom_activities SET visible=0 WHERE seq=?' values: { reasoning at: 'seq' }.
+  db execute: 'PRAGMA user_version=6' ].
+ savedRevision := registry revision.
+ registry upgradeActivityTracking.
+ migrated := (registry activityChangesAfter: savedRevision from: nil session: 'Fixture-1' managedOnly: true) second first.
+ verify value: ((migrated at: 'seq') = (reasoning at: 'seq') and: [ (migrated at: 'visible') = 1 ])
+  value: 'schema upgrade reveals an old empty reasoning row at its original sequence'.
+ transport receive: (STONJSON fromString: '{"method":"item/started","params":{"threadId":"fixture-thread","turnId":"activity-turn","item":{"id":"compaction","type":"contextCompaction"}}}').
+ compacting := (entries value: registry) last.
+ view descriptor: compacting.
+ verify value: ((compacting at: 'status') = 'inProgress' and: [ (compacting at: 'visible') = 1 and: [
+  view actionTitle = '正在压缩上下文' ] ]) value: 'a compaction start is stored and shown as running'.
+ transport receive: (STONJSON fromString: '{"method":"item/completed","params":{"threadId":"fixture-thread","turnId":"activity-turn","item":{"id":"compaction","type":"contextCompaction"}}}').
+ reopened := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
+ compacted := (entries value: reopened) last.
+ view descriptor: compacted.
+ verify value: ((entries value: reopened) size = 2 and: [ (compacted at: 'seq') = (compacting at: 'seq') and: [
+  (compacted at: 'status') = 'completed' and: [ view actionTitle = '上下文压缩已结束' ] ] ])
+  value: 'the same compaction row shows completion after reopening the activity store'
+] value.
 'GT Codex contract passed'

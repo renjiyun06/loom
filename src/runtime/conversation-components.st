@@ -742,7 +742,13 @@ cls compile: 'actionTitle
  (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption | ^ caption ].
  type := descriptor at: ''type''.
  type = ''agentMessage'' ifTrue: [ ^ self shorten: (descriptor at: ''text'') limit: 44 ].
- type = ''reasoning'' ifTrue: [ ^ ''思考摘要'' ].
+ type = ''reasoning'' ifTrue: [
+  (descriptor at: ''text'') notEmpty ifTrue: [ ^ ''思考摘要'' ].
+  self isInterrupted ifTrue: [ ^ ''思考已中断'' ].
+  ^ self isRunning ifTrue: [ ''思考中'' ] ifFalse: [ ''思考已结束'' ] ].
+ type = ''contextCompaction'' ifTrue: [
+  self isInterrupted ifTrue: [ ^ ''上下文压缩已中断'' ].
+  ^ self isRunning ifTrue: [ ''正在压缩上下文'' ] ifFalse: [ ''上下文压缩已结束'' ] ].
  type = ''plan'' ifTrue: [ ^ ''计划'' ].
  type = ''commandExecution'' ifTrue: [ ^ ''执行命令'' ].
  type = ''fileChange'' ifTrue: [ ^ ''修改文件'' ].
@@ -876,6 +882,7 @@ cls compile: 'activityIconName
   [ ''webSearch'' ] -> [ ''search'' ].
   [ ''agentMessage'' ] -> [ ''message-square'' ].
   [ ''reasoning'' ] -> [ ''brain'' ].
+  [ ''contextCompaction'' ] -> [ ''shrink'' ].
   [ ''plan'' ] -> [ ''list-checks'' ].
   [ ''loomActivity'' ] -> [ ''activity'' ] } otherwise: [ ''wrench'' ]'.
 cls compile: 'toggle
@@ -884,7 +891,8 @@ cls compile: 'toggle
  controller ifNotNil: [ controller activityExpanded: expanded for: (descriptor at: ''id'') ]. self updateSummary.
  expanded ifTrue: [ self updateDetails ] ifFalse: [ details ifNotNil: [ details removeFromParent. details := nil ] ]'.
 cls compile: 'hasDetails
- ^ (descriptor at: ''type'') ~= ''loomActivity'' or: [ (descriptor at: ''text'' ifAbsent: [ '''' ]) notEmpty ]'.
+ ^ (#(''loomActivity'' ''reasoning'' ''contextCompaction'') includes: (descriptor at: ''type'')) not
+  or: [ (descriptor at: ''text'' ifAbsent: [ '''' ]) notEmpty ]'.
 cls compile: 'updateDetails
  | value text pane tabs editor height copy |
  value := self activityDetailText.

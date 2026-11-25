@@ -11,26 +11,35 @@ public static class FakeCodexAppServer {
     static volatile bool waitForSilenceRelease;
     static int serial;
     static readonly string ObjectInvocationCode = @"
-| selector input prompt action staged gate deadline result attempts previous original |
+| selector input prompt action staged gate deadline result attempts previous original entries tool context |
 selector := loomMessage selector.
 input := loomMessage arguments first.
-(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: continue:after:) includes: selector) ifTrue: [
+(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHandoff:usingContext: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: recover:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
     [ #fixtureCommitted: ] -> [ loomReturn value: input. 'fail-after-return' ].
     [ #fixtureInterrupted: ] -> [ 'interrupted' ].
     [ #fixtureHandoff: ] -> [ 'hold-for-handoff' ].
+    [ #fixtureHandoff:usingContext: ] -> [ 'hold-for-handoff' ].
     [ #fixtureHeldResult: ] -> [ loomReturn value: input. 'hold-with-result' ].
     [ #fixtureSilentResult: ] -> [ loomReturn value: input. 'hold-with-silent-result' ].
     [ #fixtureNetworkResult: ] -> [ 'hold-for-network-result' ].
-    [ #continue:after: ] -> [
+    [ #recover:after: ] -> [
       attempts := input attempts.
       previous := loomMessage arguments second.
       original := input message.
       ((attempts last at: 'id') = (previous at: 'id') and: [
-        loomCaller method selector = #continue:after: ])
+        loomCaller method selector = #recover:after: ])
        ifFalse: [ self error: 'wrong recovery invocation' ].
-      original selector = #fixtureHandoff:
+      entries := (LoomNativeCodexHost registry activitySummariesForCall: (previous at: 'id') before: nil limit: 20) at: 'items'.
+      tool := entries detect: [ :row | (row at: 'tool') = 'runtime_eval' ].
+      ((((LoomNativeCodexHost registry activityDetailAt: (tool at: 'seq')) at: 'data') at: 'result') at: 'ok')
+       ifFalse: [ self error: 'old tool result is missing' ].
+      original selector = #fixtureHandoff:usingContext: ifTrue: [
+        context := original arguments second.
+        ((context at: 'source') = 'mail' and: [ (context at: 'messageId') = 'fixture-source-message' ])
+         ifFalse: [ self error: 'original source context is missing' ] ].
+      (#(fixtureHandoff: fixtureHandoff:usingContext:) includes: original selector)
        ifTrue: [
         ((previous at: 'replaceCodexSession') = true and: [ (previous at: 'turnStatus') = 'interrupted' ])
          ifFalse: [ self error: 'missing handoff receipt' ].

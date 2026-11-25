@@ -381,7 +381,8 @@ try {
     const networkHandoff = await submitModel(`| session original result |
       session := LoomSessions session: 'handoff-fixture'.
       original := Object new.
-      result := session fixtureHandoff: original.
+      result := session fixtureHandoff: original usingContext: (Dictionary new
+       at: 'source' put: 'mail'; at: 'messageId' put: 'fixture-source-message'; yourself).
       { result == original. session threadId }`, 'automatic-handoff-after-network-recovers');
     const networkTurn = await waitForHandoff();
     await expireObservation();

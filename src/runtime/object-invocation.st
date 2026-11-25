@@ -60,7 +60,7 @@ LMCodexClient compile: 'doesNotUnderstand: message
    outcome := self objectAttempt: original for: original.
    receipt := outcome first.
    [ self shouldContinueAfter: receipt ] whileTrue: [
-    outcome := self continue: original after: receipt.
+    outcome := self recover: original after: receipt.
     receipt := outcome first ].
    (receipt at: ''ok'') ifFalse: [ self error: (receipt at: ''error'') ].
    outcome second result
@@ -82,13 +82,22 @@ LMCodexClient compile: 'shouldContinueAfter: receipt
  (receipt at: ''needsRecovery'' ifAbsent: [ false ]) ifFalse: [ ^ false ].
  host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
  ^ host notNil and: [ host isStopping not ]'.
-LMCodexClient compile: 'continue: originalInvocation after: failedAttempt
- "Resume the original Loom invocation. Read the original Message using originalInvocation message. Use its selector and arguments, and inspect originalInvocation caller for the original source and return contract. The second argument is the last failed Codex attempt. originalInvocation attempts has the receipts for all previous attempts. A receipt with replaceCodexSession means this attempt runs in a newly opened Codex session. Check prior tool results and side effects by their request IDs before repeating external actions. Return the result the original caller expects via loomReturn. This is another attempt within the original business call."
+LMCodexClient compile: 'recover: originalInvocation after: failedAttempt
+ "恢复原来尚未完成的 Loom 调用。两个实参分别是原调用和最近一轮的回执。回执的 replaceCodexSession 表示本轮使用新开的 Codex 会话。按以下顺序恢复现场。
+
+  1. 从 originalInvocation message 读取原始消息的选择器和实参，从 originalInvocation caller 查看业务入口、源代码及返回约定。对话、邮件和微信的原实参里有用户消息。回复上下文里的 source 和 messageId 标识原始入口和消息。其他调用按原业务调用现场处理。
+  2. 使用 LoomNativeCodexHost registry activitySummariesForCall: (failedAttempt at: ''id'') before: nil limit: 20 读取上一轮的活动摘要。需要更早的活动时，用当前页首条的 seq 作为 before。用 LoomNativeCodexHost registry activityDetailAt: sequence 读取条目详情及已保存的工具结果。originalInvocation attempts 包含各轮回执。核对已有进展，涉及发送或写入而结果不明的操作先查业务状态，再决定是否重试。
+  3. 需要补充前文时，沿用原调用的 historyLookupInstructions 和 historySources，按需查桌面对话、邮件或微信记录。
+
+  继续处理原任务，通过 loomReturn 交回原业务调用所需的对象。"
  | retry request |
- request := Message selector: #continue:after: arguments: { originalInvocation. failedAttempt }.
+ request := Message selector: #recover:after: arguments: { originalInvocation. failedAttempt }.
  retry := LMInvocation new message: request caller: thisContext;
   originalRequestId: originalInvocation originalRequestId; yourself.
  (failedAttempt at: ''replaceCodexSession'' ifAbsent: [ false ]) ifTrue: [
   retry replacesRequestId: (failedAttempt at: ''id'') ].
  ^ self objectAttempt: retry for: originalInvocation'.
+"An invocation stack from before this update can still send the previous selector."
+LMCodexClient compile: 'continue: originalInvocation after: failedAttempt
+ ^ self recover: originalInvocation after: failedAttempt'.
 'Loom object invocation installed'

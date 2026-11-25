@@ -216,4 +216,18 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  verify value: ((summaries value: reopened) size = 2)
   value: 'turn completion stops tracking and both silence events persist across a reopen'
 ] value.
+[ | anotherCall recent prior |
+ anotherCall := UUID new asString.
+ registry beginCall: (Dictionary new at: 'id' put: anotherCall; at: 'clientKey' put: (roster at: 'clientKey');
+  at: 'action' put: 'ask'; yourself).
+ registry acceptActivity: (STONJSON fromString:
+  '{"method":"item/tool/call","params":{"callId":"tool-1","tool":"runtime_eval","arguments":{"code":"an unrelated call"}}}')
+  call: anotherCall.
+ recent := registry activitySummariesForCall: requestId before: nil limit: 1.
+ verify value: ((recent at: 'older') and: [ ((recent at: 'items') first at: 'seq') = (answer at: 'seq') ])
+  value: 'request-scoped activities skip later entries from the same session'.
+ prior := registry activitySummariesForCall: requestId before: ((recent at: 'items') first at: 'seq') limit: 1.
+ verify value: (((prior at: 'items') first at: 'seq') = sequence)
+  value: 'request-scoped paging retains the cursor for stored tool details'
+] value.
 'GT Codex contract passed'

@@ -205,11 +205,16 @@ registry compile: 'activitySummariesWhere: where values: args on: db
   (item at: ''success'') ifNotNil: [ :value | item at: ''success'' put: value ~= 0 ].
   item ]'.
 registry compile: 'activitySummariesBefore: sequence limit: limit session: session managedOnly: managed
+ | scope |
+ scope := self activityScopeFor: session managedOnly: managed.
+ ^ self activitySummariesBefore: sequence limit: limit where: ''a.visible=1'', scope first values: scope second'.
+registry compile: 'activitySummariesForCall: requestId before: sequence limit: limit
+ ^ self activitySummariesBefore: sequence limit: limit where: ''a.call_id=?'' values: { requestId }'.
+registry compile: 'activitySummariesBefore: sequence limit: limit where: where values: values
  ^ self database: [ :db |
-  | scope predicate args rows |
-  scope := self activityScopeFor: session managedOnly: managed.
-  predicate := ''a.visible=1'', scope first.
-  args := scope second.
+  | predicate args rows |
+  predicate := where.
+  args := values.
   sequence ifNotNil: [ predicate := predicate, '' AND a.seq < ?''. args := args, { sequence } ].
   rows := self activitySummariesWhere: predicate, '' ORDER BY a.seq DESC LIMIT ?''
    values: args, { limit + 1 } on: db.

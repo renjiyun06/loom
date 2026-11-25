@@ -316,6 +316,50 @@ try {
     const afterHandoff = await gt("LoomSessions show: 'handoff-fixture'", 'handoff-session-history');
     assert.deepEqual(afterHandoff.threads.map(entry => [entry.threadId, entry.current]),
       [[oldHandoff.threadId, false], [replacementThread, true]]);
+    const silent = await submitModel(`| session original result receipt |
+      session := LoomSessions session: 'handoff-fixture'.
+      original := Object new.
+      result := session fixtureSilentResult: original.
+      receipt := session lastResponse.
+      { result == original. receipt at: 'partialFailure'. receipt at: 'releasedAfterSilence'. session threadId }`,
+    'release-persisted-result-on-silence');
+    const silentTurn = await waitForHandoff();
+    assert.equal(await gt(`| transport current |
+      transport := LoomNativeCodexHost instVarNamed: #transport.
+      current := transport active.
+      (current at: 'objectSaved') ifFalse: [ self error: 'Result was not checkpointed' ].
+      transport noteTurnProgress: '业务结果已保存，等待轮次结束'
+        at: Time millisecondClockValue - 1800000 during: current.
+      true`, 'expire-silent-period'), true);
+    const interrupt = path.join(fixture, 'workspace', 'fixture-silent-interrupt');
+    await until('automatic interrupt written to App Server', () => fs.existsSync(interrupt));
+    assert.deepEqual(await silent(), {ok: true, value: [true, true, true, replacementThread]});
+    const silentReceipt = path.join(ipc, 'codex-responses', silentTurn.call.requestId + '.json');
+    const delivered = read(silentReceipt);
+    assert.equal(delivered.turnStatus, undefined);
+    assert.equal(delivered.needsRecovery, undefined);
+    const silentDetail = await gt(`| registry |
+      registry := LoomNativeCodexHost registry.
+      registry database: [ :db | registry recoveryDetailFor: '${silentTurn.call.requestId}' summary: '' on: db ]`,
+    'silent-result-activity');
+    assert.match(silentDetail, /交付时轮次尚未确认结束/);
+    assert.deepEqual(fs.readFileSync(interrupt, 'utf8').trim().split('\n'), [replacementThread, silentTurn.call.turnId]);
+    const afterSilent = await gt("LoomSessions show: 'handoff-fixture'", 'silent-result-session');
+    assert.equal(afterSilent.runState, 'idle');
+    assert.deepEqual(afterSilent.threads, afterHandoff.threads);
+    const subsequentLabel = 'next-call-after-silent-result';
+    const subsequent = await submitModel("(LoomSessions session: 'handoff-fixture') ask: 'following turn'", subsequentLabel);
+    const nextDeadline = Date.now() + 30000;
+    for (;;) {
+      const state = await gt("LoomSessions show: 'handoff-fixture'", 'wait-for-next-turn-to-queue');
+      if (state.runState === 'queued') break;
+      if (Date.now() >= nextDeadline) throw Error('The following turn was not queued');
+      await sleep(100);
+    }
+    assert.equal(fs.existsSync(path.join(fixture, subsequentLabel + '.json')), false);
+    fs.writeFileSync(path.join(fixture, 'workspace', 'release-fixture-silence'), '');
+    assert.deepEqual(await subsequent(), {ok: true, value: 'following turn 回执'});
+    assert.deepEqual(read(silentReceipt), delivered);
     await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;

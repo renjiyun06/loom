@@ -8,18 +8,20 @@ public static class FakeCodexAppServer {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static string threadId, turnId, lateFailureTurn;
     static bool waitForHandoffRelease;
+    static volatile bool waitForSilenceRelease;
     static int serial;
     static readonly string ObjectInvocationCode = @"
 | selector input prompt action staged gate deadline result attempts previous original |
 selector := loomMessage selector.
 input := loomMessage arguments first.
-(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: continue:after:) includes: selector) ifTrue: [
+(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: fixtureSilentResult: continue:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
     [ #fixtureCommitted: ] -> [ loomReturn value: input. 'fail-after-return' ].
     [ #fixtureInterrupted: ] -> [ 'interrupted' ].
     [ #fixtureHandoff: ] -> [ 'hold-for-handoff' ].
     [ #fixtureHeldResult: ] -> [ loomReturn value: input. 'hold-with-result' ].
+    [ #fixtureSilentResult: ] -> [ loomReturn value: input. 'hold-with-silent-result' ].
     [ #continue:after: ] -> [
       attempts := input attempts.
       previous := loomMessage arguments second.
@@ -106,7 +108,8 @@ true ]";
         }
         var output = (Dictionary<string,object>)((System.Collections.IList)result["contentItems"])[0];
         var value = (Dictionary<string,object>)Json.DeserializeObject((string)output["text"]);
-        switch (value["value"] as string) {
+        var action = value["value"] as string;
+        switch (action) {
             case "fail-before-return":
                 lateFailureTurn=turnId;
                 Finish("","failed"); break;
@@ -119,6 +122,8 @@ true ]";
                 Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
                     phase="commentary",text="Fixture ready for handoff"}}); break;
             case "hold-with-result":
+            case "hold-with-silent-result":
+                waitForSilenceRelease=action=="hold-with-silent-result";
                 Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
                     phase="commentary",text="Fixture ready for handoff"}}); break;
             default:
@@ -156,6 +161,9 @@ true ]";
                 case "thread/name/set":
                     Reply(id,new { }); break;
                 case "turn/start":
+                    if (waitForSilenceRelease) {
+                        Send(new {id,error=new {code=-32600,message="Previous turn is still running"}}); break;
+                    }
                     threadId=(string)args["threadId"];
                     turnId="turn-"+(++serial);
                     if (lateFailureTurn != null) {
@@ -175,13 +183,19 @@ true ]";
                     } else Finish(text+" \u56de\u6267","completed");
                     break;
                 case "turn/interrupt":
-                    Reply(id,new {});
-                    if (waitForHandoffRelease) {
+                    bool silent=waitForSilenceRelease;
+                    if (silent) File.AppendAllText("fixture-silent-interrupt",threadId+"\n"+turnId+"\n");
+                    else Reply(id,new {});
+                    if (waitForHandoffRelease || silent) {
                         waitForHandoffRelease=false;
                         string endedThread=threadId, endedTurn=turnId;
                         var release=new System.Threading.Thread(() => {
                             for (int attempt=0; attempt<600; ++attempt) {
-                                if (File.Exists("release-fixture-handoff")) {
+                                if (File.Exists(silent ? "release-fixture-silence" : "release-fixture-handoff")) {
+                                    if (silent) {
+                                        Reply(id,new {});
+                                        waitForSilenceRelease=false;
+                                    }
                                     Event("turn/completed",new {threadId=endedThread,
                                         turn=new {id=endedTurn,status="interrupted"}});
                                     return;

@@ -21,7 +21,7 @@ current := transport active.
 (current notNil and: [ (current at: ''clientKey'') ~= (record at: ''clientKey'') ]) ifTrue: [ current := nil ].
 queued := (pending at: (record at: ''clientKey'') ifAbsent: [ #() ]) asArray.
 record at: ''queued'' put: queued.
-current ifNil: [
+(current isNil or: [ current at: ''releasedAfterSilence'' ifAbsent: [ false ] ]) ifTrue: [
  ^ record at: ''call'' put: nil; at: ''runState'' put: (queued ifEmpty: [ ''idle'' ] ifNotEmpty: [ ''queued'' ]); yourself ].
 ^ record at: ''runState'' put: ''running'';
  at: ''call'' put: (Dictionary new at: ''requestId'' put: (current at: ''requestId''); at: ''threadId'' put: (current at: ''threadId'');

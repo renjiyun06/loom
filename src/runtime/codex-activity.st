@@ -237,7 +237,9 @@ registry compile: 'recoveryDetailFor: call summary: summary on: db
    receipt := attempt at: ''receipt''.
    receipt ifNil: [ out nextPutAll: ''尚无轮次回执'' ] ifNotNil: [
     out nextPutAll: (receipt at: ''turnStatus'' ifAbsent: [
-     (receipt at: ''ok'') ifTrue: [ ''completed'' ] ifFalse: [ ''failed'' ] ]).
+     (receipt at: ''releasedAfterSilence'' ifAbsent: [ false ])
+      ifTrue: [ ''交付时轮次尚未确认结束'' ]
+      ifFalse: [ (receipt at: ''ok'') ifTrue: [ ''completed'' ] ifFalse: [ ''failed'' ] ] ]).
     (receipt at: ''threadId'' ifAbsent: [ nil ]) ifNotNil: [ :thread |
      out nextPut: Character lf; nextPutAll: ''Codex 会话 ''; nextPutAll: thread ].
     receipt at: ''error'' ifPresent: [ :reason | out nextPutAll: '' · ''; nextPutAll: reason ] ]

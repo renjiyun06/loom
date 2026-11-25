@@ -201,6 +201,8 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  first := (summaries value: registry) first.
  verify value: ((summaries value: registry) size = 1 and: [ (first at: 'text') = '最后观察到「思考中」' ])
   value: 'one historical event reports the last observed stage for each quiet period'.
+ verify value: ((current includesKey: 'interruptionSent') not and: [ (current includesKey: 'releasedAfterSilence') not ])
+  value: 'a silent turn without a saved result continues waiting'.
  transport receive: (STONJSON fromString: '{"method":"item/agentMessage/delta","params":{"threadId":"fixture-thread","turnId":"silent-turn","itemId":"body","delta":"actual progress"}}').
  progress := current at: 'lastTurnProgress'.
  transport recordTurnSilenceDuring: current at: progress first + 1800000.

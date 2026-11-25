@@ -54,13 +54,20 @@ LMCodexClient compile: 'doesNotUnderstand: message
  original := LMInvocation new message: message caller: thisContext sender; yourself.
  ^ mutex critical: [
   | outcome receipt |
-  outcome := self objectAttempt: original for: original.
-  receipt := outcome first.
-  [ self shouldContinueAfter: receipt ] whileTrue: [
-   outcome := self continue: original after: receipt.
-   receipt := outcome first ].
-  (receipt at: ''ok'') ifFalse: [ self error: (receipt at: ''error'') ].
-  outcome second result ]'.
+  [
+   outcome := self objectAttempt: original for: original.
+   receipt := outcome first.
+   [ self shouldContinueAfter: receipt ] whileTrue: [
+    outcome := self continue: original after: receipt.
+    receipt := outcome first ].
+   (receipt at: ''ok'') ifFalse: [ self error: (receipt at: ''error'') ].
+   outcome second result
+  ] on: Error do: [ :error |
+   original originalRequestId ifNotNil: [ :id |
+    (Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ]) ifNotNil: [ :host |
+     [ host registry endRecoveryActivity: id because: error messageText ]
+      on: Error do: [ :ignored | nil ] ] ].
+   error pass ] ]'.
 LMCodexClient compile: 'objectAttempt: invocation for: original
  | receipt |
  [

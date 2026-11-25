@@ -53,6 +53,50 @@ registry compile: 'finishActivity: call ok: ok on: db
  ^ self ].
 (self one: ''SELECT 1 FROM loom_activities WHERE call_id=? AND visible=1 LIMIT 1'' values: {call} on: db)
  ifNil: [ self recordActivity: call title: ''Codex 调用已完成'' on: db ]'.
+registry compile: 'recoveryRowFor: call on: db
+ ^ self entryFor: ''summary'' call: call type: ''loomActivity'' at: self now on: db'.
+registry compile: 'putRecoveryActivity: row title: title status: status call: call on: db
+ | count message |
+ count := row at: ''recoveryCount'' ifAbsent: [ 0 ].
+ message := row at: ''lastError'' ifAbsent: [ '''' ].
+ count > 0 ifTrue: [
+  message := ''恢复 '', count asString, '' 次'', (message ifEmpty: [ '''' ] ifNotEmpty: [ '' · '', message ]) ].
+ row at: ''phase'' put: ''callRecovery''; at: ''title'' put: title;
+  at: ''status'' put: status; at: ''text'' put: message.
+ self putActivity: row call: call item: ''summary'' on: db'.
+registry compile: 'beginRecoveryActivity: call on: db
+ | row |
+ row := self recoveryRowFor: call on: db.
+ row at: ''recoveryCount'' put: (row at: ''recoveryCount'' ifAbsent: [ 0 ]) + 1.
+ self putRecoveryActivity: row title: ''Codex 轮次失败，正在恢复'' status: ''recovering'' call: call on: db'.
+registry compile: 'finishCallActivity: call result: result on: db
+ | request original recovering partial ok row |
+ request := self record: ''SELECT request_json FROM calls WHERE request_id=?'' values: {call} on: db.
+ original := request at: ''originalRequestId'' ifAbsent: [ call ].
+ recovering := result at: ''needsRecovery'' ifAbsent: [ false ].
+ partial := result at: ''partialFailure'' ifAbsent: [ false ].
+ ok := result at: ''ok''.
+ ((request at: ''objectInvocation'' ifAbsent: [ false ]) and: [
+  ok not or: [ partial or: [ original ~= call ] ] ])
+  ifFalse: [ ^ self finishActivity: call ok: ok on: db ].
+ ok ifFalse: [ self interruptActivity: call on: db ].
+ row := self recoveryRowFor: original on: db.
+ result at: ''error'' ifPresent: [ :reason | row at: ''lastError'' put: reason ].
+ recovering ifTrue: [
+  ^ self putRecoveryActivity: row title: ''Codex 轮次失败，等待恢复'' status: ''recovering'' call: original on: db ].
+ partial ifTrue: [
+  ^ self putRecoveryActivity: row title: ''Codex 轮次异常，结果已交回'' status: ''warning'' call: original on: db ].
+ ok ifTrue: [
+  ^ self putRecoveryActivity: row title: ''Codex 调用已恢复'' status: ''completed'' call: original on: db ].
+ self putRecoveryActivity: row title: ''Codex 调用未完成'' status: ''failed'' call: original on: db'.
+registry compile: 'endRecoveryActivity: call because: reason on: db
+ | row |
+ row := self recoveryRowFor: call on: db.
+ (row at: ''status'') = ''recovering'' ifTrue: [
+  row at: ''lastError'' put: reason.
+  self putRecoveryActivity: row title: ''Codex 调用未完成'' status: ''failed'' call: call on: db ]'.
+registry compile: 'endRecoveryActivity: call because: reason
+ self database: [ :db | self endRecoveryActivity: call because: reason on: db ]'.
 registry compile: 'interruptActivity: call on: db
  (db execute: ''SELECT json_object(''''id'''',item_id,''''data'''',data) FROM loom_activities WHERE call_id=? ORDER BY seq'' values: {call}) do: [
  :line | | item data |
@@ -61,8 +105,13 @@ registry compile: 'interruptActivity: call on: db
  (#(''inProgress'' ''pending'' ''进行中'') includes: (data at: ''status'')) ifTrue: [
   self putActivity: (data at: ''status'' put: ''interrupted''; yourself) call: call item: (item at: ''id'') on: db ] ]'.
 registry compile: 'recoverActivities
- self database: [ :db |
- (db execute: ''SELECT request_id FROM calls WHERE state=''''started'''''') do: [ :id | self finishActivity: id ok: false on: db ] ]'.
+ self database: [ :db | db transaction: [
+  (db execute: ''SELECT request_id FROM calls WHERE state=''''started'''''') do: [ :id |
+   self finishCallActivity: id result: (self callResult: id on: db) on: db ].
+  (db execute: ''SELECT call_id FROM loom_activities WHERE item_id=?
+   AND json_extract(data,''''$.phase'''')=? AND json_extract(data,''''$.status'''')=?''
+   values: { ''summary''. ''callRecovery''. ''recovering'' }) do: [ :id |
+    self endRecoveryActivity: id because: ''Loom 已重启，之前的恢复未完成'' on: db ] ] ]'.
 registry compile: 'acceptActivity: event call: call
  self database: [ :db | self acceptActivity: event call: call at: self now on: db ]'.
 registry compile: 'acceptActivity: event call: call at: at on: db
@@ -154,8 +203,31 @@ registry compile: 'activityChangesAfter: previous from: first session: session m
   { revision. rows } ]'.
 registry compile: 'activityDetailAt: sequence
  ^ self database: [ :db |
-  self record: ''SELECT json_object(''''revision'''',change_revision,''''data'''',json(data)) FROM loom_activities WHERE seq=?''
-   values: { sequence } on: db ]'.
+  | entry row call |
+  entry := self record: ''SELECT json_object(''''revision'''',change_revision,''''data'''',json(data),''''callId'''',call_id)
+   FROM loom_activities WHERE seq=?'' values: { sequence } on: db.
+  entry ifNotNil: [
+   call := entry removeKey: ''callId''.
+   row := entry at: ''data''.
+   (row at: ''phase'' ifAbsent: [ nil ]) = ''callRecovery'' ifTrue: [
+    row at: ''text'' put: (self recoveryDetailFor: call summary: (row at: ''text'') on: db) ] ].
+  entry ]'.
+registry compile: 'recoveryDetailFor: call summary: summary on: db
+ | rows |
+ rows := db execute: ''SELECT json_object(''''id'''',request_id,''''receipt'''',json(result_json)) FROM calls
+  WHERE request_id=? OR json_extract(request_json,''''$.originalRequestId'''')=? ORDER BY rowid'' values: { call. call }.
+ ^ String streamContents: [ :out |
+  summary ifNotEmpty: [ out nextPutAll: summary; nextPut: Character lf; nextPut: Character lf ].
+  rows do: [ :line |
+   | attempt receipt |
+   attempt := STONJSON fromString: line.
+   out nextPutAll: ''请求 ID ''; nextPutAll: (attempt at: ''id''); nextPut: Character lf.
+   receipt := attempt at: ''receipt''.
+   receipt ifNil: [ out nextPutAll: ''尚无轮次回执'' ] ifNotNil: [
+    out nextPutAll: (receipt at: ''turnStatus'' ifAbsent: [
+     (receipt at: ''ok'') ifTrue: [ ''completed'' ] ifFalse: [ ''failed'' ] ]).
+    receipt at: ''error'' ifPresent: [ :reason | out nextPutAll: '' · ''; nextPutAll: reason ] ]
+  ] separatedBy: [ out nextPut: Character lf; nextPut: Character lf ] ]'.
 registry compile: 'activityAnswerFor: call
  ^ self database: [ :db |
   String lf join: (db execute: ''SELECT json_extract(data,''''$.text'''') FROM loom_activities WHERE call_id=?

@@ -169,11 +169,13 @@ registry compile: 'recoveredCalls
  (db execute: ''SELECT request_id FROM calls'') collect: [ :id | id -> (self callResult: id on: db) ] ]'.
 registry compile: 'beginCall: request
  self database: [ :db |
- db execute: ''INSERT INTO calls VALUES (?,''''started'''',?,NULL)'' values: {request at: ''id''. STONJSON toString: request} ]'.
+ db transaction: [
+  db execute: ''INSERT INTO calls VALUES (?,''''started'''',?,NULL)'' values: {request at: ''id''. STONJSON toString: request}.
+  request at: ''originalRequestId'' ifPresent: [ :original | self beginRecoveryActivity: original on: db ] ] ]'.
 registry compile: 'completeCall: id result: result
  self database: [ :db | db transaction: [
  db execute: ''UPDATE calls SET state=''''completed'''',result_json=? WHERE request_id=?'' values: {STONJSON toString: result. id}.
- self finishActivity: id ok: (result at: ''ok'') on: db ] ]'.
+ self finishCallActivity: id result: result on: db ] ]'.
 registry compile: 'reset: request
  | key id |
 key := request at: ''clientKey''.

@@ -131,4 +131,47 @@ protected := base / 'missing-registry'.
 LMPlatformTools writeJSON: (Dictionary new at: 'installationId' put: 'stale'; yourself) to: protected / 'registry.json'.
 verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on: Error do: [ :error | true ])
  value: 'a missing known database cannot silently create sessions'.
+[ | primary retry partial abandoned activeRequest makeRequest failure summary running completed warning reopened rows |
+ makeRequest := [ :id | Dictionary new at: 'id' put: id; at: 'clientKey' put: (roster at: 'clientKey');
+  at: 'action' put: 'ask'; at: 'objectInvocation' put: true; yourself ].
+ primary := UUID new asString.
+ retry := UUID new asString.
+ failure := Dictionary new at: 'ok' put: false; at: 'error' put: 'fixture failure';
+  at: 'turnStatus' put: 'failed'; at: 'needsRecovery' put: true; yourself.
+ registry beginCall: (makeRequest value: primary).
+ registry completeCall: primary result: failure.
+ summary := ((registry activitySummariesBefore: nil limit: 1 session: 'Fixture-1' managedOnly: true) at: 'items') first.
+ verify value: (summary at: 'title') = 'Codex 轮次失败，等待恢复' value: 'failure appears before the next attempt starts'.
+ registry beginCall: ((makeRequest value: retry) at: 'originalRequestId' put: primary; yourself).
+ running := ((registry activityChangesAfter: (summary at: 'revision') from: nil session: 'Fixture-1' managedOnly: true) second) first.
+ verify value: ((running at: 'title') = 'Codex 轮次失败，正在恢复' and: [
+  (running at: 'seq') = (summary at: 'seq') and: [ (running at: 'text') beginsWith: '恢复 1 次' ] ])
+  value: 'starting a retry updates one activity and its attempt count'.
+ registry completeCall: retry result: (Dictionary new at: 'ok' put: true; at: 'turnStatus' put: 'completed'; yourself).
+ completed := ((registry activityChangesAfter: (running at: 'revision') from: nil session: 'Fixture-1' managedOnly: true) second) first.
+ verify value: ((completed at: 'title') = 'Codex 调用已恢复' and: [ (completed at: 'seq') = (summary at: 'seq') ])
+  value: 'the original activity shows final recovery with stable identity'.
+ partial := UUID new asString.
+ registry beginCall: (makeRequest value: partial).
+ registry completeCall: partial result: (failure copy at: 'ok' put: true; at: 'needsRecovery' put: false;
+  at: 'partialFailure' put: true; yourself).
+ warning := ((registry activitySummariesBefore: nil limit: 1 session: 'Fixture-1' managedOnly: true) at: 'items') first.
+ verify value: ((warning at: 'title') = 'Codex 轮次异常，结果已交回' and: [
+  (LMConversationActivityView new descriptor: warning; yourself) activityIconName = 'triangle-alert' ])
+  value: 'a saved result with a failed turn has a warning activity'.
+ abandoned := UUID new asString.
+ activeRequest := UUID new asString.
+ registry beginCall: (makeRequest value: abandoned).
+ registry completeCall: abandoned result: failure.
+ registry beginCall: ((makeRequest value: activeRequest) at: 'originalRequestId' put: abandoned; yourself).
+ reopened := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
+ reopened recoverActivities.
+ rows := (reopened activitySummariesBefore: nil limit: 3 session: 'Fixture-1' managedOnly: true) at: 'items'.
+ verify value: ((rows collect: [ :item | item at: 'status' ]) = #('completed' 'warning' 'failed'))
+  value: 'reopening preserves completed alerts and settles the interrupted recovery'.
+ detail := ((reopened activityDetailAt: (completed at: 'seq')) at: 'data') at: 'text'.
+ verify value: ((detail includesSubstring: primary) and: [
+  (detail includesSubstring: retry) and: [ detail includesSubstring: 'fixture failure' ] ])
+  value: 'persisted details contain the linked request IDs and failure reason'
+] value.
 'GT Codex contract passed'

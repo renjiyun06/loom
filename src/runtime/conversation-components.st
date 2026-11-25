@@ -832,7 +832,7 @@ cls compile: 'isFailed
 cls compile: 'isInterrupted
  ^ (descriptor at: ''status'' ifAbsent: [ '''' ]) = ''interrupted'''.
 cls compile: 'isRunning
- ^ #(''inProgress'' ''pending'' ''进行中'') includes: (descriptor at: ''status'' ifAbsent: [ '''' ])'.
+ ^ #(''inProgress'' ''pending'' ''recovering'' ''进行中'') includes: (descriptor at: ''status'' ifAbsent: [ '''' ])'.
 cls compile: 'isTool
  ^ #(''dynamicToolCall'' ''mcpToolCall'' ''commandExecution'' ''webSearch'' ''fileChange'') includes: (descriptor at: ''type'')'.
 cls compile: 'progressParts
@@ -868,6 +868,7 @@ cls compile: 'showRenderingError: error descriptor: value
 cls compile: 'activityIconName
  self isInterrupted ifTrue: [ ^ ''circle-minus'' ].
  self isFailed ifTrue: [ ^ ''circle-alert'' ].
+ (descriptor at: ''status'' ifAbsent: [ nil ]) = ''warning'' ifTrue: [ ^ ''triangle-alert'' ].
  self isRunning ifTrue: [ ^ ''loader-circle'' ].
  ^ (descriptor at: ''type'') caseOf: {
   [ ''commandExecution'' ] -> [ ''terminal'' ].
@@ -926,7 +927,8 @@ cls compile: 'updateSummary
  icon := self activityIconName.
  (mark userData at: #iconName ifAbsent: [ nil ]) = icon ifFalse: [
   mark userData at: #iconName put: icon.
-  mark removeChildren; addChild: (LMIcons iconNamed: icon size: 15 color: (Color gray: 0.45)) ].
+  mark removeChildren; addChild: (LMIcons iconNamed: icon size: 15 color:
+   (icon = ''triangle-alert'' ifTrue: [ Color r: 0.65 g: 0.43 b: 0.12 ] ifFalse: [ Color gray: 0.45 ])) ].
  tool visibility: (self isTool ifTrue: [ BlVisibility visible ] ifFalse: [ BlVisibility gone ]).
  tool text: ((descriptor at: ''tool'' ifAbsent: [ '''' ]) asRopedText fontName: ''Consolas''; fontSize: 12; foreground: (Color gray: 0.58); yourself).
  statusColor := Color gray: 0.55.

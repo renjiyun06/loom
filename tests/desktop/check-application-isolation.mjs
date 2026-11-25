@@ -264,6 +264,58 @@ try {
     const interruptedObject = await submitModel(
       "(LoomSessions session: 'recovery-fixture') fixtureInterrupted: true", 'interrupted-object');
     assert.deepEqual(await interruptedObject(), {ok: false, error: 'Codex turn interrupted'});
+    const primeHandoff = await submitModel(
+      "(LoomSessions session: 'handoff-fixture') fixtureCall: 'prime'", 'handoff-bind-old-session');
+    assert.equal((await primeHandoff()).ok, true);
+    const handoff = await submitModel(`| session original result |
+      session := LoomSessions session: 'handoff-fixture'.
+      original := Object new.
+      result := session requireThread: session threadId during: [ session fixtureHandoff: original ].
+      { result == original. session lastResponse at: 'id'. session threadId }`, 'handoff-original-call');
+    async function waitForHandoff() {
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        const record = await gt(`| record current |
+          record := LoomSessions show: 'handoff-fixture'.
+          current := (LoomNativeCodexHost instVarNamed: #transport) active.
+          (current notNil and: [ (current at: 'messages') values anySatisfy: [ :item |
+           (item at: 'text' ifAbsent: [ nil ]) = 'Fixture ready for handoff' ] ])
+            ifTrue: [ record ]`, 'wait-for-handoff');
+        if (record?.call?.canHandoff) return record;
+        if (Date.now() >= deadline) throw Error('The handoff fixture did not become ready');
+        await sleep(100);
+      }
+    }
+    const oldHandoff = await waitForHandoff();
+    assert.match(await gt(`[ LoomSessions recover: 'handoff-fixture' request: 'stale' ]
+      on: Error do: [ :error | error messageText ]`, 'reject-stale-handoff'), /当前轮次已变更/);
+    const acceptedHandoff = await gt(
+      `LoomSessions recover: 'handoff-fixture' request: '${oldHandoff.call.requestId}'`, 'request-handoff');
+    assert.equal(acceptedHandoff.call.handoffRequested, true);
+    assert.equal(acceptedHandoff.threadId, oldHandoff.threadId);
+    assert.equal(acceptedHandoff.threads.length, 1);
+    const releaseHandoff = path.join(fixture, 'workspace', 'release-fixture-handoff');
+    fs.writeFileSync(releaseHandoff, '');
+    const continuation = await handoff();
+    fs.unlinkSync(releaseHandoff);
+    assert.equal(continuation.ok, true, JSON.stringify(continuation));
+    const [sameHandoffObject, replacementId, replacementThread] = continuation.value;
+    assert.equal(sameHandoffObject, true);
+    assert.notEqual(replacementThread, oldHandoff.threadId);
+    const replacementRequest = requestFor(replacementId);
+    assert.equal(replacementRequest.originalRequestId, oldHandoff.call.requestId);
+    assert.equal(replacementRequest.replacesRequestId, oldHandoff.call.requestId);
+    assert.equal(replacementRequest.prompt, 'Loom 调用了你。');
+    const held = await submitModel(`| session result |
+      session := LoomSessions session: 'handoff-fixture'.
+      result := session fixtureHeldResult: nil.
+      { result isNil. session lastResponse at: 'partialFailure'. session threadId }`, 'handoff-with-saved-result');
+    const heldTurn = await waitForHandoff();
+    await gt(`LoomSessions recover: 'handoff-fixture' request: '${heldTurn.call.requestId}'`, 'interrupt-saved-result');
+    assert.deepEqual(await held(), {ok: true, value: [true, true, replacementThread]});
+    const afterHandoff = await gt("LoomSessions show: 'handoff-fixture'", 'handoff-session-history');
+    assert.deepEqual(afterHandoff.threads.map(entry => [entry.threadId, entry.current]),
+      [[oldHandoff.threadId, false], [replacementThread, true]]);
     await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;

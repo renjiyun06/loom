@@ -19,6 +19,8 @@ manager class compile: 'normalizedId: identifier
 manager class compile: 'list ^ self command: ''list'' for: nil'.
 manager class compile: 'show: id ^ self command: ''show'' for: (self normalizedId: id)'.
 manager class compile: 'register: id ^ self command: ''register'' for: (self normalizedId: id)'.
+manager class compile: 'recover: identifier request: requestId
+ ^ self command: ''recover'' for: (self normalizedId: identifier) request: requestId'.
 manager class compile: 'rotate: identifier
  | id record client |
  id := self normalizedId: identifier.
@@ -29,6 +31,8 @@ manager class compile: 'rotate: identifier
  ^ record'.
 (manager class includesSelector: #stop:) ifTrue: [ manager class removeSelector: #stop: ].
 manager class compile: 'command: action for: sessionId
+ ^ self command: action for: sessionId request: nil'.
+manager class compile: 'command: action for: sessionId request: requestId
  | state instance name temporary responseFile deadline response |
  state := STONJSON fromString: (LoomIPC / ''runtime-status.json'') contents.
  instance := state at: ''sessionControl'' ifAbsent: [ nil ].
@@ -39,7 +43,8 @@ manager class compile: 'command: action for: sessionId
  responseFile := LoomIPC / ''session-responses'' / (name, ''.json'').
  temporary writeStreamDo: [ :stream |
   stream nextPutAll: (STONJSON toString: (Dictionary new
-   at: ''instance'' put: instance; at: ''action'' put: action; at: ''sessionId'' put: sessionId; yourself)) ].
+   at: ''instance'' put: instance; at: ''action'' put: action; at: ''sessionId'' put: sessionId;
+   at: ''requestId'' put: requestId; yourself)) ].
  temporary renameTo: responseFile basename.
  deadline := DateAndTime now + 10 seconds.
  [ responseFile exists ] whileFalse: [

@@ -72,11 +72,12 @@ registry compile: 'putRecoveryActivity: row title: title status: status call: ca
  row at: ''phase'' put: ''callRecovery''; at: ''title'' put: title;
   at: ''status'' put: status; at: ''text'' put: message.
  self putActivity: row call: call item: ''summary'' on: db'.
-registry compile: 'beginRecoveryActivity: call on: db
- | row |
+registry compile: 'beginRecoveryActivity: call switching: switching on: db
+ | row title |
  row := self recoveryRowFor: call on: db.
  row at: ''recoveryCount'' put: (row at: ''recoveryCount'' ifAbsent: [ 0 ]) + 1.
- self putRecoveryActivity: row title: ''Codex 轮次失败，正在恢复'' status: ''recovering'' call: call on: db'.
+ title := switching ifTrue: [ ''正在新开 Codex 会话接手'' ] ifFalse: [ ''Codex 轮次失败，正在恢复'' ].
+ self putRecoveryActivity: row title: title status: ''recovering'' call: call on: db'.
 registry compile: 'finishCallActivity: call result: result on: db
  | request original recovering partial ok row |
  request := self record: ''SELECT request_json FROM calls WHERE request_id=?'' values: {call} on: db.
@@ -85,17 +86,20 @@ registry compile: 'finishCallActivity: call result: result on: db
  partial := result at: ''partialFailure'' ifAbsent: [ false ].
  ok := result at: ''ok''.
  ((request at: ''objectInvocation'' ifAbsent: [ false ]) and: [
-  ok not or: [ partial or: [ original ~= call ] ] ])
+  ok not or: [ partial or: [ original ~= call or: [ result at: ''handoffRequested'' ifAbsent: [ false ] ] ] ] ])
   ifFalse: [ ^ self finishActivity: call ok: ok on: db ].
  ok ifFalse: [ self interruptActivity: call on: db ].
  row := self recoveryRowFor: original on: db.
  result at: ''error'' ifPresent: [ :reason | row at: ''lastError'' put: reason ].
  recovering ifTrue: [
-  ^ self putRecoveryActivity: row title: ''Codex 轮次失败，等待恢复'' status: ''recovering'' call: original on: db ].
+  ^ self putRecoveryActivity: row title: ((result at: ''replaceCodexSession'' ifAbsent: [ false ])
+  ifTrue: [ ''旧轮次已结束，等待新 Codex 会话接手'' ] ifFalse: [ ''Codex 轮次失败，等待恢复'' ])
+  status: ''recovering'' call: original on: db ].
  partial ifTrue: [
   ^ self putRecoveryActivity: row title: ''Codex 轮次异常，结果已交回'' status: ''warning'' call: original on: db ].
  ok ifTrue: [
-  ^ self putRecoveryActivity: row title: ''Codex 调用已恢复'' status: ''completed'' call: original on: db ].
+  ^ self putRecoveryActivity: row title: (original = call
+   ifTrue: [ ''旧轮次已正常完成'' ] ifFalse: [ ''Codex 调用已恢复'' ]) status: ''completed'' call: original on: db ].
  self putRecoveryActivity: row title: ''Codex 调用未完成'' status: ''failed'' call: original on: db'.
 registry compile: 'endRecoveryActivity: call because: reason on: db
  | row |
@@ -234,6 +238,8 @@ registry compile: 'recoveryDetailFor: call summary: summary on: db
    receipt ifNil: [ out nextPutAll: ''尚无轮次回执'' ] ifNotNil: [
     out nextPutAll: (receipt at: ''turnStatus'' ifAbsent: [
      (receipt at: ''ok'') ifTrue: [ ''completed'' ] ifFalse: [ ''failed'' ] ]).
+    (receipt at: ''threadId'' ifAbsent: [ nil ]) ifNotNil: [ :thread |
+     out nextPut: Character lf; nextPutAll: ''Codex 会话 ''; nextPutAll: thread ].
     receipt at: ''error'' ifPresent: [ :reason | out nextPutAll: '' · ''; nextPutAll: reason ] ]
   ] separatedBy: [ out nextPut: Character lf; nextPut: Character lf ] ]'.
 registry compile: 'activityAnswerFor: call

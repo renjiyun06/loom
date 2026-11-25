@@ -7,32 +7,41 @@ using System.Web.Script.Serialization;
 public static class FakeCodexAppServer {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static string threadId, turnId, lateFailureTurn;
+    static bool waitForHandoffRelease;
     static int serial;
     static readonly string ObjectInvocationCode = @"
 | selector input prompt action staged gate deadline result attempts previous original |
 selector := loomMessage selector.
 input := loomMessage arguments first.
-(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: continue:after:) includes: selector) ifTrue: [
+(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHeldResult: continue:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
     [ #fixtureCommitted: ] -> [ loomReturn value: input. 'fail-after-return' ].
     [ #fixtureInterrupted: ] -> [ 'interrupted' ].
+    [ #fixtureHandoff: ] -> [ 'hold-for-handoff' ].
+    [ #fixtureHeldResult: ] -> [ loomReturn value: input. 'hold-with-result' ].
     [ #continue:after: ] -> [
       attempts := input attempts.
       previous := loomMessage arguments second.
       original := input message.
-      (original selector = #fixtureRecovery: and: [
-       (attempts last at: 'id') = (previous at: 'id') and: [
-        loomCaller method selector = #continue:after: ] ])
+      ((attempts last at: 'id') = (previous at: 'id') and: [
+        loomCaller method selector = #continue:after: ])
        ifFalse: [ self error: 'wrong recovery invocation' ].
-      attempts size = 1
+      original selector = #fixtureHandoff:
        ifTrue: [
-        (previous at: 'turnStatus') = 'failed' ifFalse: [ self error: 'missing failure receipt' ].
-        'complete-without-return' ]
+        ((previous at: 'replaceCodexSession') = true and: [ (previous at: 'turnStatus') = 'interrupted' ])
+         ifFalse: [ self error: 'missing handoff receipt' ].
+        loomReturn value: original arguments first ]
        ifFalse: [
-        (attempts size = 2 and: [ (previous at: 'turnStatus') = 'completed' ])
-         ifFalse: [ self error: 'wrong recovery attempt count' ].
-        loomReturn value: original arguments first ] ] }
+        original selector = #fixtureRecovery: ifFalse: [ self error: 'wrong original selector' ].
+        attempts size = 1
+         ifTrue: [
+          (previous at: 'turnStatus') = 'failed' ifFalse: [ self error: 'missing failure receipt' ].
+          'complete-without-return' ]
+         ifFalse: [
+          (attempts size = 2 and: [ (previous at: 'turnStatus') = 'completed' ])
+           ifFalse: [ self error: 'wrong recovery attempt count' ].
+          loomReturn value: original arguments first ] ] ] }
 ] ifFalse: [
 selector = #closeBrowserUsedFor: ifTrue: [
     staged := LoomConversation storage: 'staged-browser-reply' options:
@@ -105,6 +114,13 @@ true ]";
                 Finish("","failed"); break;
             case "interrupted":
                 Finish("","interrupted"); break;
+            case "hold-for-handoff":
+                waitForHandoffRelease=true;
+                Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
+                    phase="commentary",text="Fixture ready for handoff"}}); break;
+            case "hold-with-result":
+                Event("item/completed",new {threadId,turnId,item=new {id="handoff-"+turnId,type="agentMessage",
+                    phase="commentary",text="Fixture ready for handoff"}}); break;
             default:
                 Finish("object callback completed","completed"); break;
         }
@@ -160,7 +176,22 @@ true ]";
                     break;
                 case "turn/interrupt":
                     Reply(id,new {});
-                    Finish("","interrupted");
+                    if (waitForHandoffRelease) {
+                        waitForHandoffRelease=false;
+                        string endedThread=threadId, endedTurn=turnId;
+                        var release=new System.Threading.Thread(() => {
+                            for (int attempt=0; attempt<600; ++attempt) {
+                                if (File.Exists("release-fixture-handoff")) {
+                                    Event("turn/completed",new {threadId=endedThread,
+                                        turn=new {id=endedTurn,status="interrupted"}});
+                                    return;
+                                }
+                                System.Threading.Thread.Sleep(50);
+                            }
+                        });
+                        release.IsBackground=true;
+                        release.Start();
+                    } else Finish("","interrupted");
                     break;
                 default:
                     Send(new {id,error=new {code=-32601,message="Unexpected request "+method}}); break;

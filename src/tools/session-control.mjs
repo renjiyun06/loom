@@ -6,12 +6,12 @@ import {atomicJSON} from './atomic-files.mjs';
 const controlTimeout=10000;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
-export async function sessionCommand(directory,action,sessionId) {
+export async function sessionCommand(directory,action,sessionId,requestId) {
   const status=JSON.parse(fs.readFileSync(path.join(directory,'runtime-status.json'),'utf8'));
   if(status.status!=='ready'||!status.sessionControl)throw new Error('Loom session management is not ready');
   const name=randomUUID()+'.json';
   const receipt=path.join(directory,'session-responses',name);
-  atomicJSON(path.join(directory,'session-requests',name),{instance:status.sessionControl,action,sessionId});
+  atomicJSON(path.join(directory,'session-requests',name),{instance:status.sessionControl,action,sessionId,requestId});
   const deadline=Date.now()+controlTimeout;
   while(!fs.existsSync(receipt)) {
     if(Date.now()>deadline)throw new Error('Loom session command timed out');

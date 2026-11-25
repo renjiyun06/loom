@@ -25,7 +25,9 @@ current ifNil: [
  ^ record at: ''call'' put: nil; at: ''runState'' put: (queued ifEmpty: [ ''idle'' ] ifNotEmpty: [ ''queued'' ]); yourself ].
 ^ record at: ''runState'' put: ''running'';
  at: ''call'' put: (Dictionary new at: ''requestId'' put: (current at: ''requestId''); at: ''threadId'' put: (current at: ''threadId'');
-  at: ''turnId'' put: (current at: ''turnId''); yourself); yourself'.
+  at: ''turnId'' put: (current at: ''turnId'');
+  at: ''canHandoff'' put: (transport canHandoffDuring: current);
+  at: ''handoffRequested'' put: (current at: ''handoffRequested'' ifAbsent: [ false ]); yourself); yourself'.
 host compile: 'control: request id: id
  | kind sessionId pending record |
 (request at: ''instance'') = session ifFalse: [ self error: ''Loom restarted before handling this command'' ].
@@ -38,6 +40,10 @@ record := registry session: sessionId.
 record ifNil: [ self error: ''Loom session does not exist: '', sessionId ].
 record := self runningStateFor: record pending: pending.
 kind = ''show'' ifTrue: [ ^ record ].
+kind = ''recover'' ifTrue: [
+ self isStopping ifTrue: [ self error: ''Loom 正在退出'' ].
+ transport requestHandoffFor: (record at: ''clientKey'') request: (request at: ''requestId'' ifAbsent: [ nil ]).
+ ^ self runningStateFor: (registry session: sessionId) pending: self pendingCalls ].
 kind = ''rotate'' ifTrue: [
  (record at: ''runState'') = ''idle'' ifFalse: [ self error: ''Wait for pending calls to finish before switching the Codex session'' ].
  registry reset: (Dictionary new at: ''id'' put: id; at: ''action'' put: ''newConversation''; at: ''clientKey'' put: (record at: ''clientKey''); yourself).

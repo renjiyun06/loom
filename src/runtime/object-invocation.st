@@ -1,7 +1,7 @@
 "An intercepted Smalltalk send. The arguments and result stay in this image."
 | invocation |
 invocation := (Object << #LMInvocation
- slots: #(message caller requestId submitted result attempts originalRequestId);
+ slots: #(message caller requestId submitted result attempts originalRequestId replacesRequestId);
  package: 'Loom-Codex') install.
 Smalltalk globals at: #LoomPendingInvocations ifAbsentPut: [ Dictionary new ].
 invocation class compile: 'pendingAt: id
@@ -20,6 +20,8 @@ invocation compile: 'recordAttempt: receipt
  attempts add: receipt copy'.
 invocation compile: 'originalRequestId ^ originalRequestId'.
 invocation compile: 'originalRequestId: id originalRequestId := id'.
+invocation compile: 'replacesRequestId ^ replacesRequestId'.
+invocation compile: 'replacesRequestId: id replacesRequestId := id'.
 invocation compile: 'attachTo: id
  requestId := id.
  LoomPendingInvocations at: id put: self'.
@@ -81,10 +83,12 @@ LMCodexClient compile: 'shouldContinueAfter: receipt
  host := Smalltalk globals at: #LoomNativeCodexHost ifAbsent: [ nil ].
  ^ host notNil and: [ host isStopping not ]'.
 LMCodexClient compile: 'continue: originalInvocation after: failedAttempt
- "Resume the original Loom invocation. Read the original Message using originalInvocation message. Use its selector and arguments, and inspect originalInvocation caller for the original source and return contract. The second argument is the last failed Codex attempt. originalInvocation attempts has the receipts for all previous attempts. Use their request IDs to check tool results and side effects as necessary. Return the result the original caller expects via loomReturn. This is another attempt within the original business call."
+ "Resume the original Loom invocation. Read the original Message using originalInvocation message. Use its selector and arguments, and inspect originalInvocation caller for the original source and return contract. The second argument is the last failed Codex attempt. originalInvocation attempts has the receipts for all previous attempts. A receipt with replaceCodexSession means this attempt runs in a newly opened Codex session. Check prior tool results and side effects by their request IDs before repeating external actions. Return the result the original caller expects via loomReturn. This is another attempt within the original business call."
  | retry request |
  request := Message selector: #continue:after: arguments: { originalInvocation. failedAttempt }.
  retry := LMInvocation new message: request caller: thisContext;
   originalRequestId: originalInvocation originalRequestId; yourself.
+ (failedAttempt at: ''replaceCodexSession'' ifAbsent: [ false ]) ifTrue: [
+  retry replacesRequestId: (failedAttempt at: ''id'') ].
  ^ self objectAttempt: retry for: originalInvocation'.
 'Loom object invocation installed'

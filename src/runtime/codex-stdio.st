@@ -320,11 +320,13 @@ transport compile: 'receiptFrom: current
  at: ''threadId'' put: (current at: ''threadId''); at: ''turnId'' put: (current at: ''turnId'');
  at: ''startedAt'' put: (current at: ''startedAt''); at: ''completedAt'' put: registry now; yourself'.
 transport compile: 'finishTurn: turn active: current model: model
- | receipt status objectCall saved error rows finals text messages |
+ | receipt status objectCall saved handoff error rows finals text messages |
 status := turn at: ''status''.
 receipt := self receiptFrom: current.
 receipt at: ''turnStatus'' put: status; at: ''model'' put: model.
 objectCall := current at: ''objectInvocation''.
+handoff := current at: ''handoffRequested'' ifAbsent: [ false ].
+handoff ifTrue: [ receipt at: ''handoffRequested'' put: true ].
 saved := objectCall and: [
  (self objectReturnLockDuring: current) critical: [ current at: ''objectSaved'' ifAbsent: [ false ] ] ].
 status = ''completed'' ifFalse: [
@@ -333,12 +335,13 @@ status = ''completed'' ifFalse: [
  receipt at: ''error'' put: (error
   ifNil: [ ''Codex turn '', status ]
   ifNotNil: [ error at: ''message'' ifAbsent: [ ''Codex turn '', status ] ]).
- (objectCall and: [ status = ''failed'' ]) ifFalse: [ ^ receipt at: ''ok'' put: false; yourself ].
- saved ifFalse: [ ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true; yourself ].
+ (objectCall and: [ status = ''failed'' or: [ handoff and: [ status = ''interrupted'' ] ] ])
+  ifFalse: [ ^ receipt at: ''ok'' put: false; yourself ].
+ saved ifFalse: [ ^ self recoveryReceipt: receipt handoff: handoff ].
  receipt at: ''partialFailure'' put: true ].
 (objectCall and: [ saved not ]) ifTrue: [
- ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true;
-  at: ''error'' put: ''Codex completed without returning a GT object''; yourself ].
+ receipt at: ''error'' put: ''Codex completed without returning a GT object''.
+ ^ self recoveryReceipt: receipt handoff: handoff ].
 messages := current at: ''messages''.
 (turn at: ''items'' ifAbsent: [ #() ]) do: [ :item |
  (item at: ''type'') = ''agentMessage'' ifTrue: [ messages at: (item at: ''id'') put: item ] ].
@@ -348,10 +351,31 @@ text := String lf join: ((finals ifEmpty: [ rows ]) collect: [ :item | item at: 
 (objectCall not and: [ text isEmpty ]) ifTrue: [
  ^ receipt at: ''ok'' put: false; at: ''error'' put: ''Completed Codex turn did not contain an assistant answer''; yourself ].
 ^ receipt at: ''ok'' put: true; at: ''text'' put: text; yourself'.
+transport compile: 'recoveryReceipt: receipt handoff: handoff
+ handoff ifTrue: [ receipt at: ''replaceCodexSession'' put: true ].
+ ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true; yourself'.
+transport compile: 'canHandoffDuring: current
+ ^ current notNil and: [ active == current and: [
+  (current at: ''objectInvocation'') and: [ (current at: ''turnId'') notNil and: [
+  (current at: ''turnProgressEnded'' ifAbsent: [ false ]) not and: [
+  (current includesKey: ''completed'') not and: [
+  (current at: ''handoffRequested'' ifAbsent: [ false ]) not and: [
+  (current at: ''interruptionSent'' ifAbsent: [ false ]) not ] ] ] ] ] ] ]'.
+transport compile: 'requestHandoffFor: key request: requestId
+ | current |
+ current := active.
+ (current notNil and: [ (current at: ''clientKey'') = key and: [
+  (current at: ''requestId'') = requestId ] ]) ifFalse: [ self error: ''当前轮次已变更，请刷新后重试'' ].
+ (self turnProgressLockDuring: current) critical: [
+  (self canHandoffDuring: current) ifFalse: [ self error: ''当前轮次无法请求接手'' ].
+  registry recordHandoffRequest: requestId turn: (current at: ''turnId'') key: key thread: (current at: ''threadId'').
+  current at: ''handoffRequested'' put: true ].
+ self interruptDuring: current'.
 transport compile: 'interrupt
- | current turn |
-current := active.
-current ifNil: [ ^ self ].
+ ^ self interruptDuring: active'.
+transport compile: 'interruptDuring: current
+ | turn |
+(current isNil or: [ active ~~ current or: [ current includesKey: ''completed'' ] ]) ifTrue: [ ^ self ].
 turn := current at: ''turnId''.
 turn ifNil: [ ^ self ].
 (current at: ''interruptionSent'' ifAbsent: [ false ]) ifTrue: [ ^ self ].

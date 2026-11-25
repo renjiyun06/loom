@@ -171,7 +171,41 @@ registry compile: 'beginCall: request
  self database: [ :db |
  db transaction: [
   db execute: ''INSERT INTO calls VALUES (?,''''started'''',?,NULL)'' values: {request at: ''id''. STONJSON toString: request}.
-  request at: ''originalRequestId'' ifPresent: [ :original | self beginRecoveryActivity: original on: db ] ] ]'.
+  request at: ''replacesRequestId'' ifPresent: [ :id | self prepareHandoffFrom: id for: request on: db ].
+  request at: ''originalRequestId'' ifPresent: [ :original |
+   self beginRecoveryActivity: original switching: (request includesKey: ''replacesRequestId'') on: db ] ] ]'.
+registry compile: 'recordHandoffRequest: id turn: turn key: key thread: thread
+ self database: [ :db | db transaction: [
+  | request binding row original |
+  request := self record: ''SELECT request_json FROM calls WHERE request_id=? AND state=?''
+   values: { id. ''started'' } on: db.
+  binding := self binding: key on: db.
+  (request notNil and: [ binding notNil and: [ (request at: ''clientKey'') = key and: [
+   (binding at: ''threadId'') = thread ] ] ]) ifFalse: [ self error: ''当前调用或 Codex 会话已变更'' ].
+  self log: key event: ''stall-handoff-requested'' generation: (binding at: ''generation'') thread: thread request: id on: db.
+  original := request at: ''originalRequestId'' ifAbsent: [ id ].
+  row := self recoveryRowFor: original on: db.
+  row at: ''lastError'' put: (''已请求中断旧轮次 '', turn).
+  self putRecoveryActivity: row title: ''等待旧轮次结束后接手'' status: ''recovering'' call: original on: db ] ]'.
+registry compile: 'prepareHandoffFrom: previous for: request on: db
+ | old receipt binding key original generation |
+ old := self record: ''SELECT request_json FROM calls WHERE request_id=? AND state=?''
+  values: { previous. ''completed'' } on: db.
+ receipt := self callResult: previous on: db.
+ key := request at: ''clientKey''.
+ original := request at: ''originalRequestId''.
+ binding := self binding: key on: db.
+ (old notNil and: [ receipt notNil and: [ binding notNil and: [
+  (receipt at: ''replaceCodexSession'' ifAbsent: [ false ]) and: [
+  (old at: ''clientKey'') = key and: [
+  (old at: ''originalRequestId'' ifAbsent: [ previous ]) = original and: [
+  (binding at: ''state'') = ''bound'' and: [ (binding at: ''threadId'') = (receipt at: ''threadId'') ] ] ] ] ] ] ])
+  ifFalse: [ self error: ''旧轮次未确认结束或 Codex 会话已变更，无法接手'' ].
+ generation := (binding at: ''generation'') + 1.
+ self log: key event: ''stall-handoff-retired'' generation: generation
+  thread: (binding at: ''threadId'') request: (request at: ''id'') on: db.
+ db execute: ''UPDATE bindings SET generation=?,state=''''unbound'''',thread_id=NULL,request_id=?,updated_at=? WHERE client_key=?''
+  values: { generation. request at: ''id''. self now. key }'.
 registry compile: 'completeCall: id result: result
  self database: [ :db | db transaction: [
  db execute: ''UPDATE calls SET state=''''completed'''',result_json=? WHERE request_id=?'' values: {STONJSON toString: result. id}.

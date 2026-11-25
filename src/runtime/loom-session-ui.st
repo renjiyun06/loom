@@ -111,7 +111,13 @@ ui compile: 'renderDetail
  running := record at: ''runState''.
  detail addChild: (LMChatStyle label: (self labelForState: running) size: 13).
  (record at: ''call'') ifNotNil: [ :call |
-  detail addChild: (LMChatStyle label: ''当前调用  '', (call at: ''requestId'') size: 12) ].
+  detail addChild: (LMChatStyle label: ''当前调用  '', (call at: ''requestId'') size: 12).
+  (call at: ''canHandoff'' ifAbsent: [ false ]) ifTrue: [
+   detail addChild: ((LMChatStyle button: ''新开 Codex 会话继续''
+    action: [ self recover: (record at: ''id'') request: (call at: ''requestId'') ])
+    id: #loomRecoverSession; yourself) ].
+  (call at: ''handoffRequested'' ifAbsent: [ false ]) ifTrue: [
+   detail addChild: (LMChatStyle label: ''已请求接手，等待旧轮次结束'' size: 12) ] ].
  queued := record at: ''queued''.
  queued ifNotEmpty: [
   detail addChild: (LMChatStyle label: ''排队调用  '', queued size asString size: 12) ].
@@ -145,6 +151,8 @@ ui compile: 'register
   notice text: ''会话已登记'' ]'.
 ui compile: 'rotate: id
  self run: [ LoomSessions rotate: id ] completed: [ notice text: ''已切换，下一次调用会创建新会话'' ]'.
+ui compile: 'recover: id request: requestId
+ self run: [ LoomSessions recover: id request: requestId ] completed: [ notice text: ''已提交接手请求'' ]'.
 ui compile: 'run: operation completed: completed
  busy = true ifTrue: [ ^ self ].
  busy := true.

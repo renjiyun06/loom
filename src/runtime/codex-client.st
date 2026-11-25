@@ -37,6 +37,11 @@ clientClass compile: 'requireThread: expected during: operation
 clientClass compile: 'performRequest: prompt action: action
  ^ self performRequest: prompt action: action invocation: nil'.
 clientClass compile: 'performRequest: prompt action: action invocation: invocation
+ | receipt |
+ receipt := self requestReceipt: prompt action: action invocation: invocation.
+ (receipt at: ''ok'') ifFalse: [ self error: (receipt at: ''error'') ].
+ ^ receipt at: ''text'''.
+clientClass compile: 'requestReceipt: prompt action: action invocation: invocation
  | id request outgoing responseFile ready |
  self assertIndependentProcess.
  ready := LoomIPC / ''runtime-status.json''.
@@ -62,6 +67,7 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
  requiredThreadId ifNotNil: [ request at: ''requiredThreadId'' put: requiredThreadId ].
  invocation ifNotNil: [
   invocation attachTo: id.
+  invocation originalRequestId ifNotNil: [ :original | request at: ''originalRequestId'' put: original ].
   request at: ''objectInvocation'' put: true ].
  LMExecution checkpoint.
  (LoomIPC / ''codex-requests'' / (id , ''.json'')) exists ifFalse: [
@@ -73,8 +79,7 @@ clientClass compile: 'performRequest: prompt action: action invocation: invocati
   (Delay forMilliseconds: 30) wait ].
  lastResponse := STONJSON fromString: responseFile contents.
  (lastResponse includesKey: ''threadId'') ifTrue: [ threadId := lastResponse at: ''threadId'' ].
- (lastResponse at: ''ok'') ifFalse: [ self error: (lastResponse at: ''error'') ].
- ^ lastResponse at: ''text'''.
+ ^ lastResponse'.
 clientClass compile: 'activeRequestId ^ activeRequestId'.
 clientClass compile: 'assertIndependentProcess
  | host |

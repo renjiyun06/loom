@@ -6,12 +6,34 @@ using System.Web.Script.Serialization;
 
 public static class FakeCodexAppServer {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
-    static string threadId, turnId;
+    static string threadId, turnId, lateFailureTurn;
     static int serial;
     static readonly string ObjectInvocationCode = @"
-| selector input prompt action staged gate deadline result |
+| selector input prompt action staged gate deadline result attempts previous original |
 selector := loomMessage selector.
 input := loomMessage arguments first.
+(#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: continue:after:) includes: selector) ifTrue: [
+  selector caseOf: {
+    [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
+    [ #fixtureCommitted: ] -> [ loomReturn value: input. 'fail-after-return' ].
+    [ #fixtureInterrupted: ] -> [ 'interrupted' ].
+    [ #continue:after: ] -> [
+      attempts := input attempts.
+      previous := loomMessage arguments second.
+      original := input message.
+      (original selector = #fixtureRecovery: and: [
+       (attempts last at: 'id') = (previous at: 'id') and: [
+        loomCaller method selector = #continue:after: ] ])
+       ifFalse: [ self error: 'wrong recovery invocation' ].
+      attempts size = 1
+       ifTrue: [
+        (previous at: 'turnStatus') = 'failed' ifFalse: [ self error: 'missing failure receipt' ].
+        'complete-without-return' ]
+       ifFalse: [
+        (attempts size = 2 and: [ (previous at: 'turnStatus') = 'completed' ])
+         ifFalse: [ self error: 'wrong recovery attempt count' ].
+        loomReturn value: original arguments first ] ] }
+] ifFalse: [
 selector = #closeBrowserUsedFor: ifTrue: [
     staged := LoomConversation storage: 'staged-browser-reply' options:
       (Dictionary new at: 'id' put: (LoomConversation records last at: 'id'); yourself).
@@ -47,7 +69,7 @@ selector = #closeBrowserUsedFor: ifTrue: [
           ] ifFalse: [ loomReturn value: (input at: 'text'), ' reply' ]
         ] ifFalse: [
           loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ] ].
-true";
+true ]";
 
     static void Send(object value) {
         Console.WriteLine(Json.Serialize(value));
@@ -62,7 +84,30 @@ true";
     static void Finish(string text, string status) {
         if (status == "completed") Event("item/completed", new {threadId, turnId,
             item = new {id="answer-"+turnId,type="agentMessage",phase="final_answer",text}});
-        Event("turn/completed", new {threadId,turn=new {id=turnId,status,items=new object[0]}});
+        if (status == "failed")
+            Event("turn/completed", new {threadId,turn=new {id=turnId,status,items=new object[0],
+                error=new { message="fixture failure", codexErrorInfo="fixtureError" }}});
+        else
+            Event("turn/completed", new {threadId,turn=new {id=turnId,status,items=new object[0]}});
+    }
+    static void CompleteTool(Dictionary<string,object> result) {
+        if (!Object.Equals(result["success"],true)) {
+            Finish("object callback failed","failed");
+            return;
+        }
+        var output = (Dictionary<string,object>)((System.Collections.IList)result["contentItems"])[0];
+        var value = (Dictionary<string,object>)Json.DeserializeObject((string)output["text"]);
+        switch (value["value"] as string) {
+            case "fail-before-return":
+                lateFailureTurn=turnId;
+                Finish("","failed"); break;
+            case "fail-after-return":
+                Finish("","failed"); break;
+            case "interrupted":
+                Finish("","interrupted"); break;
+            default:
+                Finish("object callback completed","completed"); break;
+        }
     }
     public static int Main() {
         Console.InputEncoding = new UTF8Encoding(false);
@@ -73,9 +118,7 @@ true";
             object id, offered;
             query.TryGetValue("id", out id);
             if (!query.TryGetValue("method", out offered)) {
-                var result = (Dictionary<string,object>)query["result"];
-                Finish(Object.Equals(result["success"],true)?"object callback completed":"object callback failed",
-                    Object.Equals(result["success"],true)?"completed":"failed");
+                CompleteTool((Dictionary<string,object>)query["result"]);
                 continue;
             }
             var method = (string)offered;
@@ -99,6 +142,10 @@ true";
                 case "turn/start":
                     threadId=(string)args["threadId"];
                     turnId="turn-"+(++serial);
+                    if (lateFailureTurn != null) {
+                        Event("turn/completed",new {threadId,turn=new {id=lateFailureTurn,status="failed"}});
+                        lateFailureTurn=null;
+                    }
                     Reply(id,new {turn=new {id=turnId,status="inProgress"}});
                     var input=(Dictionary<string,object>)((System.Collections.IList)args["input"])[0];
                     var text=(string)input["text"];

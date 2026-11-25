@@ -231,6 +231,39 @@ try {
       ['dynamicToolCall', null, ''],
       ['agentMessage', 'final_answer', 'object callback completed'],
     ]);
+    const recovery = await submitModel(`| session original result receipt |
+      session := LoomSessions session: 'recovery-fixture'.
+      original := Object new.
+      result := session fixtureRecovery: original.
+      receipt := session lastResponse.
+      { result == original. receipt at: 'threadId'. receipt at: 'id' }`, 'object-recovery');
+    const recovered = await recovery();
+    assert.equal(recovered.ok, true, JSON.stringify(recovered));
+    const [sameObject, recoveryThread, recoveryId] = recovered.value;
+    assert.equal(sameObject, true);
+    const requestFor = id => read(path.join(ipc, 'codex-requests', id + '.json'));
+    const recoveryRequests = await gt(`LoomNativeCodexHost registry database: [ :db |
+      (db execute: 'SELECT request_id FROM calls WHERE json_extract(result_json, ''$.threadId'') = ?
+        ORDER BY rowid' values: { '${recoveryThread}' }) asArray ]`, 'recovery-attempt-ids');
+    assert.equal(recoveryRequests.length, 3);
+    assert.equal(recoveryRequests[2], recoveryId);
+    assert.ok(recoveryRequests.every(id => requestFor(id).prompt === 'Loom 调用了你。'));
+    assert.deepEqual(recoveryRequests.map(id => requestFor(id).originalRequestId),
+      [undefined, recoveryRequests[0], recoveryRequests[0]]);
+    const recoveryReceipts = recoveryRequests.map(id => read(path.join(ipc, 'codex-responses', id + '.json')));
+    assert.deepEqual(recoveryReceipts.map(receipt => [receipt.turnStatus, receipt.ok, receipt.needsRecovery]),
+      [['failed', false, true], ['completed', false, true], ['completed', true, undefined]]);
+    assert.equal(recoveryReceipts[0].turnError.codexErrorInfo, 'fixtureError');
+    const partial = await submitModel(`| session result receipt |
+      session := LoomSessions session: 'recovery-fixture'.
+      result := session fixtureCommitted: nil.
+      receipt := session lastResponse.
+      { result isNil. receipt at: 'ok'. receipt at: 'turnStatus'. receipt at: 'partialFailure'.
+        receipt at: 'error' }`, 'object-partial-failure');
+    assert.deepEqual(await partial(), {ok: true, value: [true, true, 'failed', true, 'fixture failure']});
+    const interruptedObject = await submitModel(
+      "(LoomSessions session: 'recovery-fixture') fixtureInterrupted: true", 'interrupted-object');
+    assert.deepEqual(await interruptedObject(), {ok: false, error: 'Codex turn interrupted'});
     await submitModel("(LoomSessions session: 'isolation-check') ask: 'mock-active'", 'active-at-shutdown');
     const deadline = Date.now() + 90000;
     let running;

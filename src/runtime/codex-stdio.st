@@ -68,6 +68,8 @@ transport compile: 'rpc: method params: arguments
 transport compile: 'rpc: method params: arguments timeout: seconds
  | id deadline result |
 writeMutex critical: [ serial := serial + 1. id := serial. pending at: id put: nil ].
+method = ''turn/start'' ifTrue: [
+ active at: ''startRpcId'' put: id; at: ''earlyTurnEvents'' put: OrderedCollection new ].
 [
  self send: (Dictionary new at: ''id'' put: id; at: ''method'' put: method; at: ''params'' put: arguments; yourself).
  deadline := DateAndTime now + (Duration seconds: seconds).
@@ -96,29 +98,44 @@ transport compile: 'readMessages
    self error: ''Codex App Server exited'' ].
   (Delay forMilliseconds: 15) wait ]
 ] on: Error do: [ :error | failure := error messageText ]'.
+transport compile: 'receiveRPC: message id: id
+ | current turn events |
+ (id notNil and: [ pending includesKey: id ]) ifFalse: [ ^ self ].
+ current := active.
+ (current notNil and: [ (current at: ''startRpcId'' ifAbsent: [ nil ]) = id ]) ifTrue: [
+  (message at: ''result'' ifAbsent: [ nil ]) ifNotNil: [ :response |
+   turn := response at: ''turn''.
+   current at: ''turnId'' put: (turn at: ''id'').
+   events := current removeKey: ''earlyTurnEvents''.
+   events do: [ :event | self receive: event ] ] ].
+ pending at: id put: message'.
 transport compile: 'receive: message
  | id method params current turnId |
 id := message at: ''id'' ifAbsent: [ nil ].
 method := message at: ''method'' ifAbsent: [ nil ].
-method ifNil: [
- (id notNil and: [ pending includesKey: id ]) ifTrue: [ pending at: id put: message ].
- ^ self ].
+method ifNil: [ ^ self receiveRPC: message id: id ].
 params := message at: ''params'' ifAbsent: [ Dictionary new ].
+current := active.
+turnId := params at: ''turnId'' ifAbsent: [ (params at: ''turn'' ifAbsent: [ Dictionary new ]) at: ''id'' ifAbsent: [ nil ] ].
+(current notNil and: [ turnId notNil and: [ (current at: ''turnId'') isNil and: [
+ (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') ] ] ]) ifTrue: [
+ (current at: ''earlyTurnEvents'' ifAbsent: [ nil ]) ifNotNil: [ :events |
+  events add: message.
+  ^ self ] ].
 usage ifNotNil: [
  [ method = ''thread/tokenUsage/updated'' ifTrue: [ usage acceptTokenUsage: params ].
    method = ''account/updated'' ifTrue: [ usage resetAccount ].
    method = ''account/rateLimits/updated'' ifTrue: [ usage refreshRates ]
  ] on: Error do: [ :ignored | nil ] ].
-current := active.
 (current notNil and: [ (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') ]) ifTrue: [
- turnId := params at: ''turnId'' ifAbsent: [ (params at: ''turn'' ifAbsent: [ Dictionary new ]) at: ''id'' ifAbsent: [ nil ] ].
- (turnId isNil or: [ (current at: ''turnId'') isNil or: [ turnId = (current at: ''turnId'') ] ]) ifTrue: [
+ (turnId isNil or: [ turnId = (current at: ''turnId'') ]) ifTrue: [
   registry acceptActivity: message call: (current at: ''requestId'').
   method = ''item/completed'' ifTrue: [
    | item |
    item := params at: ''item''.
    (item at: ''type'') = ''agentMessage'' ifTrue: [ (current at: ''messages'') at: (item at: ''id'') put: item ] ].
-  method = ''turn/completed'' ifTrue: [ current at: ''completed'' put: (params at: ''turn'') ] ] ].
+  (method = ''turn/completed'' and: [ turnId notNil ]) ifTrue: [
+   current at: ''completed'' ifAbsentPut: [ params at: ''turn'' ] ] ] ].
 id ifNotNil: [
  [
   [ self respond: id method: method params: params active: current ]
@@ -149,14 +166,14 @@ toolProcesses add: task.
   at: ''success'' put: (result at: ''ok''); at: ''contentItems'' put: {content}; yourself); yourself)
 ] ensure: [ toolProcesses remove: task ifAbsent: [ ] ]'.
 transport compile: 'permitsTool: params during: current
- ^ current notNil and: [ active == current and: [ (current at: ''threadId'') notNil and: [
+ ^ current notNil and: [ active == current and: [ (current at: ''turnId'') notNil and: [
  (params at: ''tool'' ifAbsent: [ nil ]) = ''runtime_eval'' and: [
  (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') and: [
  | turn |
  turn := params at: ''turnId'' ifAbsent: [ nil ].
- turn isNil or: [ (current at: ''turnId'') isNil or: [ turn = (current at: ''turnId'') ] ] ] ] ] ] ]'.
+ turn isNil or: [ turn = (current at: ''turnId'') ] ] ] ] ] ]'.
 transport compile: 'evaluateTool: raw during: current
- | arguments source value sessionId block evaluated |
+ | arguments source value sessionId block invocation |
 arguments := raw isString ifTrue: [ STONJSON fromString: raw ] ifFalse: [ raw ].
 source := arguments at: ''code''.
 source isString ifFalse: [ self error: ''Expected Smalltalk source in code'' ].
@@ -166,14 +183,24 @@ source isString ifFalse: [ self error: ''Expected Smalltalk source in code'' ].
   sessionId := registry sessionIdFor: (current at: ''clientKey'').
   block := Smalltalk compiler evaluate:
    (''[ :loomCaller :loomMessage :loomSessionId :loomReturn |'', String cr, source, String cr, '']'').
-  evaluated := (LMInvocation pendingAt: (current at: ''requestId'')) evaluate: block sessionId: sessionId.
-  evaluated first ifTrue: [
-   (current at: ''objectSaved'' ifAbsent: [ false ]) ifFalse: [
-    LMExecution checkpoint.
-    current at: ''objectSaved'' put: true ] ].
-  value := evaluated second ].
+  invocation := LMInvocation pendingAt: (current at: ''requestId'').
+  value := invocation evaluate: block sessionId: sessionId returning: [ :object |
+   self saveObject: object from: invocation during: current ] ].
 STONJSON toString: value.
 ^ Dictionary new at: ''ok'' put: true; at: ''value'' put: value; yourself'.
+transport compile: 'objectReturnLockDuring: current
+ ^ current at: ''objectReturnLock'' ifAbsentPut: [ Mutex new ]'.
+transport compile: 'saveObject: object from: invocation during: current
+ ^ (self objectReturnLockDuring: current) critical: [
+  (active == current and: [ (current includesKey: ''completed'') not ])
+   ifFalse: [ self error: ''This Codex turn has already ended'' ].
+  invocation return: object.
+  (current at: ''objectSaved'' ifAbsent: [ false ]) ifFalse: [
+   [ LMExecution checkpoint ] on: Error do: [ :error |
+    invocation discardUnsavedResult.
+    error pass ].
+   current at: ''objectSaved'' put: true ].
+  true ]'.
 transport compile: 'threadOptions: workspace
  ^ Dictionary new at: ''cwd'' put: workspace; at: ''approvalPolicy'' put: ''never'';
  at: ''sandbox'' put: ''danger-full-access''; yourself'.
@@ -218,13 +245,12 @@ current := Dictionary new at: ''requestId'' put: (request at: ''id''); at: ''cli
 active := current.
 [
  result := [
-  | thread turn response params |
+  | thread turn params |
   thread := self openThreadFor: current request: request in: workspace.
   params := settings copy at: ''threadId'' put: thread;
    at: ''input'' put: {Dictionary new at: ''type'' put: ''text''; at: ''text'' put: (request at: ''prompt'');
     at: ''text_elements'' put: #(); yourself}; yourself.
-  response := self rpc: ''turn/start'' params: params.
-  current at: ''turnId'' put: ((response at: ''turn'') at: ''id'').
+  self rpc: ''turn/start'' params: params.
   [ (turn := current at: ''completed'' ifAbsent: [ nil ]) isNil ] whileTrue: [
    self checkAlive.
    (Delay forMilliseconds: 25) wait ].
@@ -239,20 +265,34 @@ transport compile: 'receiptFrom: current
  at: ''threadId'' put: (current at: ''threadId''); at: ''turnId'' put: (current at: ''turnId'');
  at: ''startedAt'' put: (current at: ''startedAt''); at: ''completedAt'' put: registry now; yourself'.
 transport compile: 'finishTurn: turn active: current model: model
- | rows finals text messages |
+ | receipt status objectCall saved error rows finals text messages |
+status := turn at: ''status''.
+receipt := self receiptFrom: current.
+receipt at: ''turnStatus'' put: status; at: ''model'' put: model.
+objectCall := current at: ''objectInvocation''.
+saved := objectCall and: [
+ (self objectReturnLockDuring: current) critical: [ current at: ''objectSaved'' ifAbsent: [ false ] ] ].
+status = ''completed'' ifFalse: [
+ error := turn at: ''error'' ifAbsent: [ nil ].
+ error ifNotNil: [ receipt at: ''turnError'' put: error ].
+ receipt at: ''error'' put: (error
+  ifNil: [ ''Codex turn '', status ]
+  ifNotNil: [ error at: ''message'' ifAbsent: [ ''Codex turn '', status ] ]).
+ (objectCall and: [ status = ''failed'' ]) ifFalse: [ ^ receipt at: ''ok'' put: false; yourself ].
+ saved ifFalse: [ ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true; yourself ].
+ receipt at: ''partialFailure'' put: true ].
+(objectCall and: [ saved not ]) ifTrue: [
+ ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true;
+  at: ''error'' put: ''Codex completed without returning a GT object''; yourself ].
 messages := current at: ''messages''.
 (turn at: ''items'' ifAbsent: [ #() ]) do: [ :item |
  (item at: ''type'') = ''agentMessage'' ifTrue: [ messages at: (item at: ''id'') put: item ] ].
-(turn at: ''status'') = ''completed'' ifFalse: [
- self error: ((turn at: ''error'' ifAbsent: [ nil ])
-  ifNil: [ ''Codex turn '', (turn at: ''status'') ] ifNotNil: [ :error | error at: ''message'' ]) ].
 rows := messages values.
 finals := rows select: [ :item | (item at: ''phase'' ifAbsent: [ nil ]) = ''final_answer'' ].
 text := String lf join: ((finals ifEmpty: [ rows ]) collect: [ :item | item at: ''text'' ifAbsent: [ '''' ] ] thenSelect: #isNotEmpty).
-(current at: ''objectInvocation'')
- ifTrue: [ (current at: ''objectSaved'' ifAbsent: [ false ]) ifFalse: [ self error: ''Codex completed without returning a GT object'' ] ]
- ifFalse: [ text ifEmpty: [ self error: ''Completed Codex turn did not contain an assistant answer'' ] ].
-^ (self receiptFrom: current) at: ''ok'' put: true; at: ''text'' put: text; at: ''model'' put: model; yourself'.
+(objectCall not and: [ text isEmpty ]) ifTrue: [
+ ^ receipt at: ''ok'' put: false; at: ''error'' put: ''Completed Codex turn did not contain an assistant answer''; yourself ].
+^ receipt at: ''ok'' put: true; at: ''text'' put: text; yourself'.
 transport compile: 'interrupt
  | current turn |
 current := active.

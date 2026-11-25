@@ -147,6 +147,7 @@ host compile: 'runControls
     Smalltalk globals at: #LoomNativeControlError put: error messageText ] ].
   (Delay forMilliseconds: 80) wait ]
 ] on: Error do: [ :error | self fatal: error messageText ]'.
+host compile: 'isStopping ^ stopping = true'.
 host compile: 'fatal: message
  self isCurrent ifFalse: [ ^ self ].
 status ifNotNil: [ status at: ''error'' put: message. self publishStatus: ''failed'' ].

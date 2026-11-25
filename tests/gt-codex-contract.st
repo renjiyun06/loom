@@ -174,4 +174,44 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
   (detail includesSubstring: retry) and: [ detail includesSubstring: 'fixture failure' ] ])
   value: 'persisted details contain the linked request IDs and failure reason'
 ] value.
+[ | transport current call event progress summaries first second reopened |
+ transport := LMNativeCodexTransport new.
+ transport instVarNamed: #registry put: registry.
+ call := UUID new asString.
+ registry beginCall: (Dictionary new at: 'id' put: call; at: 'clientKey' put: (roster at: 'clientKey');
+  at: 'action' put: 'ask'; yourself).
+ current := Dictionary new at: 'requestId' put: call; at: 'threadId' put: 'fixture-thread';
+  at: 'turnId' put: 'silent-turn'; at: 'messages' put: OrderedDictionary new; yourself.
+ transport instVarNamed: #active put: current.
+ summaries := [ :store | ((store activitySummariesBefore: nil limit: 30 session: 'Fixture-1' managedOnly: true)
+  at: 'items') select: [ :item | (item at: 'phase') = 'turnSilence' ] ].
+ transport noteTurnProgress: '轮次已开始' at: 100 during: current.
+ event := STONJSON fromString: '{"method":"item/started","params":{"threadId":"fixture-thread","turnId":"silent-turn","item":{"id":"thinking","type":"reasoning"}}}'.
+ transport receive: event.
+ progress := current at: 'lastTurnProgress'.
+ transport receive: event.
+ transport receive: (STONJSON fromString: '{"method":"item/agentMessage/delta","params":{"threadId":"fixture-thread","turnId":"other-turn","delta":"unrelated"}}').
+ transport receive: (STONJSON fromString: '{"method":"item/commandExecution/outputDelta","params":{"threadId":"fixture-thread","turnId":"silent-turn","delta":"tool log"}}').
+ verify value: ((current at: 'lastTurnProgress') == progress and: [ progress second = '思考中' ])
+  value: 'duplicate, unrelated, and tool output events do not reset the turn clock'.
+ transport recordTurnSilenceDuring: current at: progress first + 1799999.
+ verify value: (summaries value: registry) isEmpty value: 'no silence event is logged before thirty minutes'.
+ transport recordTurnSilenceDuring: current at: progress first + 1800000.
+ transport recordTurnSilenceDuring: current at: progress first + 3600000.
+ first := (summaries value: registry) first.
+ verify value: ((summaries value: registry) size = 1 and: [ (first at: 'text') = '最后观察到「思考中」' ])
+  value: 'one historical event reports the last observed stage for each quiet period'.
+ transport receive: (STONJSON fromString: '{"method":"item/agentMessage/delta","params":{"threadId":"fixture-thread","turnId":"silent-turn","itemId":"body","delta":"actual progress"}}').
+ progress := current at: 'lastTurnProgress'.
+ transport recordTurnSilenceDuring: current at: progress first + 1800000.
+ second := (summaries value: registry) last.
+ verify value: ((second at: 'text') = '最后观察到「正在输出文字」' and: [ (second at: 'seq') > (first at: 'seq') ])
+  value: 'new progress starts another quiet period and keeps the original history'.
+ transport receive: (STONJSON fromString: '{"method":"turn/completed","params":{"threadId":"fixture-thread","turn":{"id":"silent-turn","status":"completed"}}}').
+ transport noteTurnProgress: '不应记录' at: 100 during: current.
+ transport recordTurnSilenceDuring: current at: progress first + 3600000.
+ reopened := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
+ verify value: ((summaries value: reopened) size = 2)
+  value: 'turn completion stops tracking and both silence events persist across a reopen'
+] value.
 'GT Codex contract passed'

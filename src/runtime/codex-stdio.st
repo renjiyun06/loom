@@ -106,6 +106,7 @@ transport compile: 'receiveRPC: message id: id
   (message at: ''result'' ifAbsent: [ nil ]) ifNotNil: [ :response |
    turn := response at: ''turn''.
    current at: ''turnId'' put: (turn at: ''id'').
+   self noteTurnProgress: ''轮次已开始'' at: Time millisecondClockValue during: current.
    events := current removeKey: ''earlyTurnEvents''.
    events do: [ :event | self receive: event ] ] ].
  pending at: id put: message'.
@@ -129,6 +130,7 @@ usage ifNotNil: [
  ] on: Error do: [ :ignored | nil ] ].
 (current notNil and: [ (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') ]) ifTrue: [
  (turnId isNil or: [ turnId = (current at: ''turnId'') ]) ifTrue: [
+  turnId ifNotNil: [ self observeTurnEvent: method params: params during: current ].
   registry acceptActivity: message call: (current at: ''requestId'').
   method = ''item/completed'' ifTrue: [
    | item |
@@ -165,6 +167,57 @@ toolProcesses add: task.
  self send: (Dictionary new at: ''id'' put: id; at: ''result'' put: (Dictionary new
   at: ''success'' put: (result at: ''ok''); at: ''contentItems'' put: {content}; yourself); yourself)
 ] ensure: [ toolProcesses remove: task ifAbsent: [ ] ]'.
+transport compile: 'turnProgressLockDuring: current
+ ^ current at: ''turnProgressLock'' ifAbsentPut: [ Mutex new ]'.
+transport compile: 'noteTurnProgress: stage at: tick during: current
+ (self turnProgressLockDuring: current) critical: [
+  (current at: ''turnProgressEnded'' ifAbsent: [ false ]) ifFalse: [
+   current at: ''lastTurnProgress'' put: { tick. stage } ] ]'.
+transport compile: 'observeTurnEvent: method params: params during: current
+ | stage |
+ method = ''turn/completed'' ifTrue: [
+  ^ (self turnProgressLockDuring: current) critical: [ current at: ''turnProgressEnded'' put: true ] ].
+ stage := self progressStageFor: method params: params during: current.
+ stage ifNotNil: [ self noteTurnProgress: stage at: Time millisecondClockValue during: current ]'.
+transport compile: 'progressStageFor: method params: params during: current
+ | item id seen started type stage delta |
+ (#(''item/started'' ''item/completed'') includes: method) ifTrue: [
+  item := params at: ''item'' ifAbsent: [ ^ nil ].
+  id := item at: ''id'' ifAbsent: [ ^ nil ].
+  seen := current at: ''turnItemTransitions'' ifAbsentPut: [ Set new ].
+  (seen includes: { method. id }) ifTrue: [ ^ nil ].
+  seen add: { method. id }.
+  started := method = ''item/started''.
+  type := item at: ''type'' ifAbsent: [ nil ].
+  (#(''commandExecution'' ''dynamicToolCall'' ''mcpToolCall'' ''webSearch'') includes: type) ifTrue: [
+   ^ started ifTrue: [ ''工具活动已开始'' ] ifFalse: [ ''工具活动已结束'' ] ].
+  ^ type caseOf: {
+   [ ''reasoning'' ] -> [ started ifTrue: [ ''思考中'' ] ifFalse: [ ''思考已结束'' ] ].
+   [ ''agentMessage'' ] -> [ started ifTrue: [ ''正在输出文字'' ] ifFalse: [ ''文字输出已结束'' ] ].
+   [ ''plan'' ] -> [ ''计划更新'' ].
+   [ ''contextCompaction'' ] -> [ started ifTrue: [ ''正在压缩上下文'' ] ifFalse: [ ''上下文压缩已结束'' ] ] }
+   otherwise: [ started ifTrue: [ ''活动已开始'' ] ifFalse: [ ''活动已结束'' ] ] ].
+ method = ''turn/plan/updated'' ifTrue: [ ^ ''计划更新'' ].
+ stage := method caseOf: {
+  [ ''item/reasoning/summaryTextDelta'' ] -> [ ''思考中'' ].
+  [ ''item/reasoning/textDelta'' ] -> [ ''思考中'' ].
+  [ ''item/agentMessage/delta'' ] -> [ ''正在输出文字'' ].
+  [ ''item/plan/delta'' ] -> [ ''计划更新'' ] }
+  otherwise: [ ^ nil ].
+ delta := params at: ''delta'' ifAbsent: [ ^ nil ].
+ ^ ((delta isString) and: [ delta notEmpty ]) ifTrue: [ stage ] ifFalse: [ nil ]'.
+transport compile: 'recordTurnSilenceDuring: current at: tick
+ | progress elapsed |
+ progress := current at: ''lastTurnProgress'' ifAbsent: [ ^ self ].
+ (current at: ''reportedTurnSilence'' ifAbsent: [ nil ]) == progress ifTrue: [ ^ self ].
+ elapsed := Time milliseconds: tick since: progress first.
+ elapsed < 1800000 ifTrue: [ ^ self ].
+ (self turnProgressLockDuring: current) critical: [
+  ((current at: ''lastTurnProgress'') == progress and: [
+   (current at: ''turnProgressEnded'' ifAbsent: [ false ]) not ]) ifTrue: [
+    current at: ''reportedTurnSilence'' put: progress.
+    [ registry recordTurnSilence: current stage: progress second seconds: elapsed // 1000 ]
+      on: Error do: [ :error | Smalltalk globals at: #LoomActivityWriteError put: error messageText ] ] ]'.
 transport compile: 'permitsTool: params during: current
  ^ current notNil and: [ active == current and: [ (current at: ''turnId'') notNil and: [
  (params at: ''tool'' ifAbsent: [ nil ]) = ''runtime_eval'' and: [
@@ -199,7 +252,8 @@ transport compile: 'saveObject: object from: invocation during: current
    [ LMExecution checkpoint ] on: Error do: [ :error |
     invocation discardUnsavedResult.
     error pass ].
-   current at: ''objectSaved'' put: true ].
+   current at: ''objectSaved'' put: true.
+   self noteTurnProgress: ''业务结果已保存，等待轮次结束'' at: Time millisecondClockValue during: current ].
   true ]'.
 transport compile: 'threadOptions: workspace
  ^ Dictionary new at: ''cwd'' put: workspace; at: ''approvalPolicy'' put: ''never'';
@@ -253,6 +307,7 @@ active := current.
   self rpc: ''turn/start'' params: params.
   [ (turn := current at: ''completed'' ifAbsent: [ nil ]) isNil ] whileTrue: [
    self checkAlive.
+   self recordTurnSilenceDuring: current at: Time millisecondClockValue.
    (Delay forMilliseconds: 25) wait ].
   self finishTurn: turn active: current model: (settings at: ''model'' ifAbsent: [ models at: thread ifAbsent: [ nil ] ])
  ] on: Error do: [ :error |

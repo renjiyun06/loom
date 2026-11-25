@@ -45,6 +45,14 @@ registry compile: 'recordActivity: call title: title on: db
  self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''title'' put: title;
  at: ''text'' put: ''''; at: ''status'' put: ''completed''; at: ''at'' put: self now; yourself)
  call: call item: ''summary'' on: db'.
+registry compile: 'recordTurnSilence: current stage: stage seconds: seconds
+ self database: [ :db |
+  self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''phase'' put: ''turnSilence'';
+   at: ''title'' put: (''Codex 轮次已 '', (seconds // 60) asString, '' 分钟未收到新进展'');
+   at: ''text'' put: (''最后观察到「'', stage, ''」''); at: ''status'' put: ''completed'';
+   at: ''turnId'' put: (current at: ''turnId''); at: ''silentSeconds'' put: seconds;
+   at: ''lastStage'' put: stage; at: ''at'' put: self now; yourself)
+   call: (current at: ''requestId'') item: ''turn-silence-'', UUID new asString on: db ]'.
 registry compile: 'finishActivity: call ok: ok on: db
  ok ifFalse: [
  self interruptActivity: call on: db.

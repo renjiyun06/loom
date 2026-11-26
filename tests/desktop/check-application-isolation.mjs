@@ -96,6 +96,7 @@ try {
   fs.mkdirSync(path.join(fixture, 'tests'));
   fs.copyFileSync(path.join(root, 'tests/gt-voice-recovery.st'), path.join(fixture, 'tests/gt-voice-recovery.st'));
   fs.copyFileSync(path.join(root, 'tests/gt-codex-contract.st'), path.join(fixture, 'tests/gt-codex-contract.st'));
+  fs.copyFileSync(path.join(root, 'tests/gt-scheduler.st'), path.join(fixture, 'tests/gt-scheduler.st'));
   fs.mkdirSync(path.join(fixture, 'config'));
   fs.mkdirSync(path.join(fixture, 'runtime'));
   fs.mkdirSync(codexHome);
@@ -130,6 +131,10 @@ try {
   await waitForApplication('conversation', 'failed');
   await waitForApplication('voice', 'ready');
   await waitForApplication('conversation-view', 'ready');
+  await waitForApplication('scheduler', 'ready');
+  assert.equal(await gt('LoomScheduler isRunning and: [ LoomScheduler tasks isEmpty ]', 'empty-live-scheduler'), true);
+  assert.equal(await gt("Smalltalk compiler evaluate: (ExperimentRoot / 'tests' / 'gt-scheduler.st') contents",
+    'scheduler-contract'), 'GT scheduler contract passed');
   const text = await gt("(LMConversationUI new build collectUpdate) at: 'status'", 'conversation-error-status');
   assert.match(text, /对话存储不可用/);
   const named = await gt("LoomSessions register: 'isolation-check'", 'independent-session');
@@ -498,6 +503,8 @@ try {
     [ipc, 'Loom-Codex']);
   await waitForApplication('conversation', 'ready');
   await waitForApplication('voice', 'ready');
+  await waitForApplication('scheduler', 'ready');
+  assert.equal(await gt('LoomScheduler isRunning and: [ LoomScheduler tasks isEmpty ]', 'restored-empty-scheduler'), true);
   assert.equal(await gt('LMConversation includesSelector: #restartFixtureMarker', 'conversation-source-after-restart'), true);
   const restored = await gt(`{
    LoomConversation records size.

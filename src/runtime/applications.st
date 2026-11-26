@@ -52,6 +52,7 @@ applications class compile: 'attempt: name during: operation
      at: ''errorAt'' put: error signalerContext printString; yourself).
     false ]'.
 applications class compile: 'resetAfterRuntimeRestart
+ (Smalltalk globals removeKey: #LoomScheduler ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals removeKey: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals removeKey: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #retire.
  (Smalltalk globals removeKey: #LoomGtWeixin ifAbsent: [ nil ]) ifNotNil: #retire.
@@ -62,6 +63,7 @@ applications class compile: 'resetAfterRuntimeRestart
  Smalltalk globals at: #LoomApplicationLoadMutex put: Mutex new.
  Smalltalk globals at: #LoomApplicationSession put: LoomRuntimeSessionId'.
 applications class compile: 'prepareShutdown
+ (Smalltalk globals at: #LoomScheduler ifAbsent: [ nil ]) ifNotNil: #close.
  (Smalltalk globals at: #LoomGtMail ifAbsent: [ nil ]) ifNotNil: #close.
  (Smalltalk globals at: #LoomGtWeixin ifAbsent: [ nil ]) ifNotNil: #close.
  (Smalltalk globals at: #LoomGtVoice ifAbsent: [ nil ]) ifNotNil: #close'.
@@ -103,10 +105,18 @@ applications class compile: 'install
   ifFalse: [ self statuses at: ''conversation'' put: (self statusFor: ''conversation-model'') ].
  self initializeMail.
  self initializeWeixin.
+ self initializeScheduler.
  gui ifTrue: [
   self attempt: ''session-view'' during: [ self load: ''loom-session-ui.st'' ].
   self attempt: ''activity-view'' during: [ self load: ''loom-activity-ui.st'' ] ].
  ^ self statuses copy'.
+applications class compile: 'initializeScheduler
+ self attempt: ''scheduler'' during: [
+  | scheduler |
+  self load: ''scheduler.st''.
+  scheduler := Smalltalk globals at: #LoomScheduler ifAbsentPut: [
+   (Smalltalk globals at: #LMScheduler) new initializeAt: ExperimentRoot / ''state'' / ''schedules''; yourself ].
+  scheduler start ]'.
 applications class compile: 'initializeConversationStorage
  | store |
  store := Smalltalk globals at: #LoomConversationStore ifAbsent: [ nil ].

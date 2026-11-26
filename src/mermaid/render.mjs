@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -114,7 +115,8 @@ export async function openRenderer() {
           clip: { x: 0, y: 0, width, height, scale },
           captureBeyondViewport: true,
         });
-        return { ok: true, width, height, diagramType, png };
+        const sha256 = createHash('sha256').update(png, 'base64').digest('hex');
+        return { ok: true, width, height, diagramType, png, sha256 };
       },
       close: () => browser.close(),
     };

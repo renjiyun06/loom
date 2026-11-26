@@ -11,31 +11,38 @@ cls class compile: 'current
 cls compile: 'initialize
  super initialize.
  lock := Mutex new.
- cache := LRUCache new computeWeight: [ :value | value first bits byteSize ];
-  maximumWeight: 64 * 1024 * 1024; yourself'.
+ cache := LRUCache new computeWeight: [ :value | self cacheWeightOf: value ];
+  maximumWeight: self maximumCacheWeight; yourself'.
+cls compile: 'maximumCacheWeight ^ 64 * 1024 * 1024'.
+cls compile: 'cacheWeightOf: result
+ ^ result first bits byteSize + result fourth value size'.
 cls compile: 'render: source ifNeeded: required
+ | result |
  ^ lock critical: [
   required value ifFalse: [ ^ nil ].
-  cache at: source ifAbsentPut: [ self renderUncached: source ] ]'.
+  (cache includesKey: source) ifTrue: [ ^ cache at: source ].
+  result := self renderUncached: source.
+  (self cacheWeightOf: result) < self maximumCacheWeight ifTrue: [ cache at: source put: result ].
+  result ]'.
 cls compile: 'renderUncached: source
- | node program payload reply image |
+ | node program payload reply image bytes |
  node := ExperimentRoot / ''runtime'' / ''node'' / ''node.exe''.
  program := ExperimentRoot / ''src'' / ''mermaid'' / ''render.mjs''.
  payload := (STONJSON toString: (Dictionary new at: ''source'' put: source; yourself)), String lf.
  reply := STONJSON fromString: (LMPlatformTools run: node arguments: { program fullName }
   input: payload timeout: 35).
  (reply at: ''ok'') ifFalse: [ self error: (reply at: ''error'') ].
- image := ImageReadWriter formFromStream: (ZnBase64Encoder new decode: (reply at: ''png'')) readStream.
- ^ { image. reply at: ''width''. reply at: ''height'' }'.
-cls compile: 'imageFileFor: form
- | bytes folder target temporary |
- bytes := ByteArray streamContents: [ :stream | PNGReadWriter putForm: form onStream: stream ].
+ bytes := ZnBase64Encoder new decode: (reply at: ''png'').
+ image := ImageReadWriter formFromStream: bytes readStream.
+ ^ { image. reply at: ''width''. reply at: ''height''. (reply at: ''sha256'') -> bytes }'.
+cls compile: 'imageFileForPng: png
+ | folder target temporary |
  folder := ExperimentRoot / ''state'' / ''conversation'' / ''mermaid-images''.
  folder ensureCreateDirectory.
- target := folder / (''Mermaid-'', (SHA256 hashMessage: bytes) hex, ''.png'').
+ target := folder / (''Mermaid-'', png key, ''.png'').
  target isFile ifTrue: [ ^ target ].
  temporary := folder / (UUID new asString, ''.tmp'').
- [ temporary binaryWriteStreamDo: [ :out | out nextPutAll: bytes ].
+ [ temporary binaryWriteStreamDo: [ :out | out nextPutAll: png value ].
    ((LMPlatformTools move: temporary to: target) = 0 and: [ target isFile not ])
     ifTrue: [ self error: ''无法保存 Mermaid 图片'' ]
  ] ensure: [ temporary ensureDelete ].
@@ -70,13 +77,16 @@ cls compile: 'startRendering
  ] forkAt: Processor userBackgroundPriority'.
 cls compile: 'showDiagram: result
  | notice |
+ "A reply already rendering during a live reload may have the old result shape."
+ result size = 3 ifTrue: [ state := nil. self startRendering. ^ self ].
  notice := (self statusLabel: '''') id: #loomMermaidOpenStatus; visibility: BlVisibility gone; yourself.
  self removeChildren; addChildren: { self previewFor: result notice: notice. notice }.
  state := #complete.
  fallback := nil'.
 cls compile: 'previewFor: result notice: notice
- | card toolbar imageRow image openButton size preferredWidth lastWidth resize |
+ | card toolbar imageRow image openButton size png preferredWidth lastWidth resize |
  size := result second @ result third.
+ png := result fourth.
  preferredWidth := ((size x * ((160 / size y) min: 1)) ceiling max: 112) min: 360.
  card := BrVerticalPane new id: #loomMermaidPreview; vFitContent;
   background: Color white; border: (BlBorder paint: (Color gray: 0.88) width: 1);
@@ -88,7 +98,7 @@ cls compile: 'previewFor: result notice: notice
  imageRow := BrHorizontalPane new hMatchParent; vFitContent; alignCenter; addChild: image; yourself.
  openButton := (Smalltalk globals at: #LMChatStyle)
   replyAction: #loomMermaidOpenImage icon: ''external-link''
-  action: [ self openImage: result first with: openButton notice: notice ].
+  action: [ self openPng: png with: openButton notice: notice ].
  openButton label: ''用默认图片应用打开''; mouseCursor: BlHandCursor new.
  openButton addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [
   self statusLabel: ''用默认图片应用打开'' ]).
@@ -105,7 +115,7 @@ cls compile: 'previewFor: result notice: notice
  self when: BlElementExtentChangedEvent do: [ resize value ].
  resize value.
  ^ card'.
-cls compile: 'openImage: form with: button notice: notice
+cls compile: 'openPng: png with: button notice: notice
  | cached owner |
  cached := button userData at: #loomMermaidImageFile ifAbsent: [ nil ].
  owner := 0.
@@ -115,7 +125,7 @@ cls compile: 'openImage: form with: button notice: notice
  notice text: ''正在打开图片…''; visibility: BlVisibility visible.
  [ | file failure |
   [ file := (cached notNil and: [ cached isFile ])
-    ifTrue: [ cached ] ifFalse: [ LMChatMermaidRenderer current imageFileFor: form ].
+    ifTrue: [ cached ] ifFalse: [ LMChatMermaidRenderer current imageFileForPng: png ].
    LMPlatformTools openWithDefaultApplication: file owner: owner
   ] on: Error do: [ :error | failure := error messageText ].
   self enqueueTask: (BlTaskAction new action: [

@@ -67,7 +67,7 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   check value: (view children first isKindOf: LMChatMermaidBlock) value: 'tilde Mermaid fences can use a longer closing fence' ] value.
  [ | tall diagram block card scripter thumbnail openButton |
   tall := Form extent: 80 @ 320 depth: 32.
-  diagram := { tall. 320. 1280 }.
+  diagram := { tall. 320. 1280. nil }.
   block := LMChatMermaidBlock new hExact: 224; vFitContent; yourself.
   block showDiagram: diagram.
   scripter := BlDevScripter new element: block; yourself.

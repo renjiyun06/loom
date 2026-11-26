@@ -69,6 +69,62 @@ class WeixinQueueTest(unittest.TestCase):
         self.assertEqual(transport.report_status(self.db)["counts"], {"delivery_unknown": 1})
         self.assertIsNone(transport.take(self.db, self.account, "reply_ready", "sending"))
 
+    def test_sends_notification_to_bound_chat_and_reuses_receipt_for_same_id(self):
+        transport.save_updates(self.db, self.account, {"msgs": [self.text()]})
+        transport.save_updates(self.db, self.account, {"msgs": [
+            dict(self.text(), message_id=10, context_token="latest-context")
+        ]})
+        self.db.execute("UPDATE messages SET bot = 'older-bot' WHERE remote_id = ?", (str(2**63 + 5),))
+        response_id = 2**63 + 21
+        with patch.object(transport, "account_client") as available:
+            available.return_value.return_value = {"message_id": response_id}
+            first = transport.send_notification(self.db, "test-notification", "在桌面处理时发来的通知")
+            repeated = transport.send_notification(self.db, "test-notification", "在桌面处理时发来的通知")
+            with self.assertRaises(transport.TransportError):
+                transport.send_notification(self.db, "test-notification", "不同正文")
+            available.return_value.assert_called_once_with("sendmessage", {"msg": {
+                "from_user_id": "", "to_user_id": "owner", "context_token": "latest-context",
+                "client_id": "loom-notify-test-notification", "message_type": 2, "message_state": 2,
+                "item_list": [{"type": 1, "text_item": {"text": "在桌面处理时发来的通知"}}],
+            }})
+        self.assertEqual(first, repeated)
+        self.assertEqual(first["phase"], "accepted")
+        self.assertEqual(first["serverReplyId"], str(response_id))
+        self.assertEqual({row[0] for row in self.db.execute("SELECT phase FROM messages")}, {"pending"})
+        with closing(transport.open_database(self.root)) as reopened:
+            self.assertEqual(transport.notification_receipt(reopened, "test-notification"), first)
+
+    def test_notification_requires_context_from_current_binding(self):
+        transport.save_updates(self.db, self.account, {"msgs": [self.text()]})
+        self.db.execute("UPDATE messages SET bot = 'older-bot'")
+        with patch.object(transport, "account_client") as available:
+            receipt = transport.send_notification(self.db, "needs-context", "你好")
+            available.assert_not_called()
+        self.assertEqual(receipt["phase"], "missing_context")
+        self.assertEqual(transport.notification_receipt(self.db, "needs-context")["phase"], "not_found")
+
+    def test_uncertain_notification_is_recorded_without_replay(self):
+        transport.save_updates(self.db, self.account, {"msgs": [self.text()]})
+        with patch.object(transport, "account_client") as available:
+            available.return_value.side_effect = TimeoutError()
+            receipt = transport.send_notification(self.db, "timed-out", "你好")
+            self.assertEqual(receipt["phase"], "delivery_unknown")
+            self.assertEqual(transport.send_notification(self.db, "timed-out", "你好"), receipt)
+            available.return_value.assert_called_once()
+        self.db.execute("UPDATE notifications SET phase = 'sending' WHERE id = 'timed-out'")
+        transport.recover(self.db)
+        self.assertEqual(transport.notification_receipt(self.db, "timed-out")["phase"], "delivery_unknown")
+
+    def test_notification_distinguishes_unconfirmed_and_rejected_delivery(self):
+        transport.save_updates(self.db, self.account, {"msgs": [self.text()]})
+        with patch.object(transport, "account_client") as available:
+            available.return_value.side_effect = [{}, transport.Rejected("sendmessage", -14)]
+            self.assertEqual(transport.send_notification(self.db, "no-server-id", "你好")["phase"],
+                             "delivery_unconfirmed")
+            self.assertEqual(transport.send_notification(self.db, "expired-binding", "你好")["phase"],
+                             "awaiting_binding")
+        self.assertTrue(transport.account_at(self.db)["needs_binding"])
+
     def test_stale_binding_pauses_without_losing_ready_reply(self):
         self.pending_reply("答复")
         with patch.object(transport, "account_client", return_value=self.stale_client):

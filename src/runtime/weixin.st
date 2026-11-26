@@ -1,4 +1,4 @@
-"Receive personal Weixin messages and deliver replies from the main Loom session."
+"Receive personal Weixin messages and deliver replies and notifications."
 | weixin |
 weixin := (Object << #LMGtWeixin slots: #(root python worker closed status onlineGeneration); package: 'Loom-Weixin') install.
 weixin compile: 'initializeAt: aRoot config: config
@@ -16,8 +16,23 @@ weixin compile: 'queueStatus
 weixin compile: 'recentHistory
  ^ (self transport: ''history'' arguments: #()) at: ''messages'''.
 weixin compile: 'databaseFile
- "For custom read-only history queries. Match messages for the bound owner. created_ms is Unix time in milliseconds. Inbound attachments join on message_id and keep the raw transcript and corrected_transcript. The accepted and partial phases identify replies with an accepted delivery."
+ "For custom read-only history queries. Match messages for the bound owner. created_ms is Unix time in milliseconds. Inbound attachments join on message_id and keep the raw transcript and corrected_transcript. The accepted and partial phases identify replies with an accepted delivery. The notifications table records independently sent text and delivery receipts."
  ^ ((self transport: ''database-file'' arguments: #()) at: ''path'') asFileReference'.
+weixin compile: 'sendNotification: text
+ "Send an explicitly requested text notification to the bound Weixin chat. Returns the delivery receipt. For a retry or handoff, use sendNotification:id: with a stable ID."
+ ^ self sendNotification: text id: UUID new asString'.
+weixin compile: 'sendNotification: text id: notificationId
+ "Send independently of any incoming reply. Reusing the ID with the same text returns the recorded outcome of any earlier attempt."
+ | file message |
+ closed ifTrue: [ self error: ''微信入口已关闭'' ].
+ file := root / ''ipc'' / ''weixin'' / (''notification-'', UUID new asString, ''.json'').
+ message := Dictionary new at: ''id'' put: notificationId; at: ''text'' put: text; yourself.
+ [
+  LMPlatformTools writeJSON: message to: file.
+  ^ self transport: ''notify'' arguments: { file fullName }
+ ] ensure: [ file ensureDelete ]'.
+weixin compile: 'notificationReceiptAt: notificationId
+ ^ self transport: ''notification-receipt'' arguments: { ''--''. notificationId }'.
 weixin compile: 'start
  (worker isNotNil and: [ worker isTerminated not ]) ifTrue: [ ^ self ].
  self transport: ''recover'' arguments: #().

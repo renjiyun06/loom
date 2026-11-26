@@ -7,6 +7,7 @@ import ctypes
 from ctypes import wintypes
 import json
 from pathlib import Path
+import re
 import secrets
 import shutil
 import sqlite3
@@ -24,6 +25,7 @@ BASE = "https://ilinkai.weixin.qq.com"
 # iLink compatibility version, with Loom identified as the implementation.
 VERSION = (2, 4, 10)
 BASE_INFO = {"channel_version": "2.4.10/loom-1.0.0", "bot_agent": "Loom/1.0.0"}
+TEXT_PART_LIMIT = 1900
 
 
 class TransportError(Exception):
@@ -149,6 +151,11 @@ def open_database(root):
             UNIQUE (message_id, direction, position)
         );
         CREATE INDEX IF NOT EXISTS attachment_queue ON attachments (phase, message_id);
+        CREATE TABLE IF NOT EXISTS notifications (
+            id TEXT PRIMARY KEY, bot TEXT NOT NULL, owner TEXT NOT NULL, text TEXT NOT NULL,
+            created_ms INTEGER NOT NULL, phase TEXT NOT NULL,
+            server_reply_id TEXT, error TEXT
+        );
         """)
     if missing_attachment_columns(database):
         with transaction(database):
@@ -387,6 +394,14 @@ def upload_part(db, root, account, client, item, parts, attachment):
     return {"phase": "reply_ready"}
 
 
+def send_message(client, owner, context, client_id, item):
+    return client("sendmessage", {"msg": {
+        "from_user_id": "", "to_user_id": owner, "context_token": context,
+        "client_id": client_id, "message_type": 2, "message_state": 2,
+        "item_list": [item],
+    }})
+
+
 def post_part(db, account, client, item, root):
     parts = json.loads(item["parts"])
     part = item["next_part"]
@@ -409,11 +424,7 @@ def post_part(db, account, client, item, root):
         if attachment:
             db.execute("UPDATE attachments SET phase = 'sending' WHERE id = ?", (attachment["id"],))
     try:
-        result = client("sendmessage", {"msg": {
-            "from_user_id": "", "to_user_id": account["owner"], "context_token": item["context"],
-            "client_id": f"loom-{item['id']}-{part}", "message_type": 2, "message_state": 2,
-            "item_list": [outgoing],
-        }})
+        result = send_message(client, account["owner"], item["context"], f"loom-{item['id']}-{part}", outgoing)
     except Rejected as error:
         if attachment and error.code != -14:
             return advance_reply(db, item, parts, attachment, "send_failed", error=str(error))
@@ -433,6 +444,57 @@ def post_part(db, account, client, item, root):
     response_id = result.get("message_id")
     phase = "accepted" if response_id else "delivery_unconfirmed"
     return advance_reply(db, item, parts, attachment, phase, str(response_id) if response_id else None)
+
+
+def notification_receipt(db, notification_id):
+    row = db.execute("""SELECT id, phase, created_ms AS createdAtMs, server_reply_id AS serverReplyId, error
+                         FROM notifications WHERE id = ?""", (notification_id,)).fetchone()
+    return dict(row) if row else {"id": notification_id, "phase": "not_found"}
+
+
+def send_notification(db, notification_id, text):
+    if not isinstance(notification_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", notification_id):
+        raise TransportError("Invalid Weixin notification ID")
+    body = text.strip() if isinstance(text, str) else ""
+    if not body or len(body) > TEXT_PART_LIMIT:
+        raise TransportError(f"微信通知需要 1 到 {TEXT_PART_LIMIT} 个字符的正文")
+    with transaction(db):
+        previous = db.execute("SELECT text FROM notifications WHERE id = ?", (notification_id,)).fetchone()
+        if previous:
+            if previous["text"] != body:
+                raise TransportError("微信通知标识已用于其他正文")
+            return notification_receipt(db, notification_id)
+        account = account_at(db)
+        if not account or account["needs_binding"]:
+            return {"id": notification_id, "phase": "awaiting_binding", "error": "请先绑定微信"}
+        row = db.execute("""SELECT context FROM messages
+                            WHERE bot = ? AND owner = ? AND context != ''
+                            ORDER BY sequence DESC LIMIT 1""", (account["bot"], account["owner"])).fetchone()
+        if not row:
+            return {"id": notification_id, "phase": "missing_context", "error": "请先在绑定的微信聊天里发一条消息"}
+        client = account_client(account)
+        db.execute("""INSERT INTO notifications(id, bot, owner, text, created_ms, phase)
+                      VALUES (?, ?, ?, ?, ?, 'sending')""",
+                   (notification_id, account["bot"], account["owner"], body, int(time.time() * 1000)))
+    response_id = None
+    error = None
+    try:
+        result = send_message(client, account["owner"], row["context"], f"loom-notify-{notification_id}",
+                              {"type": 1, "text_item": {"text": body}})
+        response_id = result.get("message_id")
+        phase = "accepted" if response_id else "delivery_unconfirmed"
+    except Rejected as failure:
+        phase = "awaiting_binding" if failure.code == -14 else "send_failed"
+        error = str(failure)
+    except (TransportError, TimeoutError) as failure:
+        phase = "delivery_unknown"
+        error = str(failure) or "iLink sendmessage timed out"
+    with transaction(db):
+        if phase == "awaiting_binding":
+            db.execute("UPDATE account SET needs_binding = 1 WHERE generation = ?", (account["generation"],))
+        db.execute("UPDATE notifications SET phase = ?, server_reply_id = ?, error = ? WHERE id = ?",
+                   (phase, str(response_id) if response_id else None, error, notification_id))
+        return notification_receipt(db, notification_id)
 
 
 def poll(db, online_generation, root):
@@ -482,7 +544,7 @@ def stage_reply(db, message_id, text, root, attachments=(), corrected_transcript
     if not body and not attachments:
         raise TransportError("The Weixin reply is empty")
     # Keep each part under the client limit, including surrogate pairs on UTF-16 clients.
-    parts = [body[index:index + 1900] for index in range(0, len(body), 1900)]
+    parts = [body[index:index + TEXT_PART_LIMIT] for index in range(0, len(body), TEXT_PART_LIMIT)]
     copies = []
     try:
         with transaction(db):
@@ -561,6 +623,7 @@ def recover(db):
         db.execute("UPDATE messages SET phase = 'delivery_unknown' WHERE phase = 'sending'")
         db.execute("UPDATE attachments SET phase = 'delivery_unknown', reference = NULL WHERE phase = 'sending'")
         db.execute("UPDATE messages SET phase = 'reply_ready' WHERE phase = 'preparing_reply'")
+        db.execute("UPDATE notifications SET phase = 'delivery_unknown' WHERE phase = 'sending'")
 
 
 def report_status(db):
@@ -590,7 +653,8 @@ def history(db, root):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
-    parser.add_argument("command", choices=("poll", "reply", "fail", "recover", "status", "history", "offline", "database-file"))
+    parser.add_argument("command", choices=("poll", "reply", "fail", "recover", "status", "history", "offline",
+                                            "database-file", "notify", "notification-receipt"))
     parser.add_argument("value", nargs="?")
     args = parser.parse_args()
     root = args.root.resolve()
@@ -605,6 +669,11 @@ def main():
             message = json.loads(Path(args.value).read_text(encoding="utf-8-sig"))
             stage_reply(db, message["id"], message["text"], root,
                         message.get("attachments", []), message.get("correctedTranscripts", []))
+        elif args.command == "notify":
+            message = json.loads(Path(args.value).read_text(encoding="utf-8-sig"))
+            result = send_notification(db, message["id"], message["text"])
+        elif args.command == "notification-receipt":
+            result = notification_receipt(db, args.value)
         elif args.command == "fail":
             db.execute("UPDATE messages SET phase = 'answer_failed' WHERE id = ? AND phase = 'answering'", (args.value,))
         elif args.command == "recover":

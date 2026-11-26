@@ -58,6 +58,15 @@ encoded := ZnBase64Encoder new encode:
   script do: [ :character | codec nextPut: character toStream: bytes ] ]).
 stdout := self run: executable arguments: #(''-NoProfile'' ''-STA'' ''-EncodedCommand''), {encoded} timeout: seconds.
 ^ STONJSON fromString: stdout'.
+cls class compile: 'openWithDefaultApplication: file
+ | path |
+ path := ZnBase64Encoder new encode: file fullName utf8Encoded.
+ ^ self powerShellJSON: ''$start = New-Object System.Diagnostics.ProcessStartInfo
+$start.FileName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("'', path, ''"))
+$start.UseShellExecute = $true
+$process = [System.Diagnostics.Process]::Start($start)
+if ($null -ne $process) { $process.Dispose() }
+$true | ConvertTo-Json -Compress'' timeout: 15'.
 cls class compile: 'clipboardAttachmentRequest
  | sequence png |
  sequence := self clipboardSequence.

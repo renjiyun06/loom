@@ -1,4 +1,4 @@
-"Render closed Mermaid fences outside the GT process and open diagrams in a native GT viewer."
+"Render closed Mermaid fences outside the GT process and show complete previews with a Windows image-opening action."
 | cls |
 cls := (Object << #LMChatMermaidRenderer slots: #(lock cache); package: 'Loom-Interface') install.
 cls class compile: 'current
@@ -27,52 +27,20 @@ cls compile: 'renderUncached: source
  (reply at: ''ok'') ifFalse: [ self error: (reply at: ''error'') ].
  image := ImageReadWriter formFromStream: (ZnBase64Encoder new decode: (reply at: ''png'')) readStream.
  ^ { image. reply at: ''width''. reply at: ''height'' }'.
-cls := (BrVerticalPane << #LMChatMermaidViewer slots: #(form image viewport extent zoom fitWidth percentage imageSession); package: 'Loom-Interface') install.
-cls compile: 'diagram: result
- | toolbar |
- form := result first.
- extent := result second @ result third.
- image := BlSkiaImageElement new.
- fitWidth := true.
- viewport := BrScrollPane new aptitude: BrScrollPaneAptitude new
-  + BrGlamorousWithVerticalScrollbarAptitude new + BrGlamorousWithHorizontalScrollbarAptitude new;
-  content: image; yourself.
- viewport when: BlElementExtentChangedEvent do: [ fitWidth ifTrue: [ self fitToWidth ] ].
- percentage := BrLabel new aptitude: (BrGlamorousLabelAptitude new fontName: ''Segoe UI'';
-  fontSize: 12; yourself); yourself.
- toolbar := BrHorizontalPane new hMatchParent; vFitContent; alignCenterLeft;
-  padding: (BlInsets top: 6 left: 8 bottom: 6 right: 8); yourself.
- toolbar layout cellSpacing: 8.
- toolbar addChildren: {
-  self zoomButton: ''−'' action: [ self zoomBy: 0.8 ].
-  percentage.
-  self zoomButton: ''+'' action: [ self zoomBy: 1.25 ].
-  self zoomButton: ''适合宽度'' action: [ self fitToWidth ] }.
- self matchParent; padding: (BlInsets all: 8).
- self applyZoom: 1.
- self addChildren: { toolbar. viewport }'.
-cls compile: 'onAddedToSceneGraph
- super onAddedToSceneGraph.
- imageSession == Smalltalk session ifTrue: [ ^ self ].
- image image: (SkiaImage fromForm: form).
- image invalidate.
- imageSession := Smalltalk session'.
-cls compile: 'zoomButton: title action: action
- ^ BrButton new aptitude: (BrGlamorousButtonWithLabelAptitude new fontName: ''Microsoft YaHei UI'';
-  fontSize: 12; yourself); label: title; action: action; yourself'.
-cls compile: 'fitToWidth
- | available |
- fitWidth := true.
- available := viewport width - 16.
- available > 0 ifTrue: [ self applyZoom: ((available / extent x) min: 1) ]'.
-cls compile: 'zoomBy: multiplier
- fitWidth := false.
- self applyZoom: (((zoom * multiplier) max: 0.1) min: 4)'.
-cls compile: 'applyZoom: scale
- zoom = scale ifTrue: [ ^ self ].
- zoom := scale.
- image size: (extent * zoom) ceiling.
- percentage text: (zoom * 100) rounded asString, ''%'''.
+cls compile: 'imageFileFor: form
+ | bytes folder target temporary |
+ bytes := ByteArray streamContents: [ :stream | PNGReadWriter putForm: form onStream: stream ].
+ folder := ExperimentRoot / ''state'' / ''conversation'' / ''mermaid-images''.
+ folder ensureCreateDirectory.
+ target := folder / (''Mermaid-'', (SHA256 hashMessage: bytes) hex, ''.png'').
+ target isFile ifTrue: [ ^ target ].
+ temporary := folder / (UUID new asString, ''.tmp'').
+ [ temporary binaryWriteStreamDo: [ :out | out nextPutAll: bytes ].
+   ((LMPlatformTools move: temporary to: target) = 0 and: [ target isFile not ])
+    ifTrue: [ self error: ''无法保存 Mermaid 图片'' ]
+ ] ensure: [ temporary ensureDelete ].
+ ^ target'.
+
 cls := (BrVerticalPane << #LMChatMermaidBlock slots: #(source fallback state); package: 'Loom-Interface') install.
 cls compile: 'source: text fallback: codeBlock
  source := text.
@@ -105,50 +73,51 @@ cls compile: 'showDiagram: result
  state := #complete.
  fallback := nil'.
 cls compile: 'previewFor: result
- | card preview image caption size preferredWidth lastWidth resize |
+ | card toolbar imageRow image openButton notice size preferredWidth lastWidth resize |
  size := result second @ result third.
- preferredWidth := (size x max: 140) min: 360.
- image := BlSkiaImageElement new image: (SkiaImage fromForm: result first); yourself.
- preview := BlElement new layout: BlBasicLayout new; clipChildren: true;
-  background: Color white; yourself.
- preview addChild: image.
- caption := (self statusLabel: ''查看完整图'') margin: (BlInsets top: 5 bottom: 5); yourself.
- card := BrButton new id: #loomMermaidPreview; aptitude: BrGlamorousButtonLayoutAptitude new;
-  label: ''查看完整图''; beFocusable; vFitContent;
-  layout: (BlLinearLayout vertical horizontalAlignment: BlElementAlignment horizontal center);
-  geometry: (BlRoundedRectangleGeometry cornerRadius: 6); clipChildren: true;
-  mouseCursor: BlHandCursor new;
-  action: [ self openDiagram: result from: card ]; yourself.
- card addAptitude: (BrStyleCommonAptitude new
-  default: [ :style | style background: (Color gray: 0.965); border: (BlBorder paint: (Color gray: 0.88) width: 1) ];
-  hovered: [ :style | style background: (Color gray: 0.93) ];
-  focused: [ :style | style border: (BlBorder paint: (Color gray: 0.55) width: 1) ]).
- card addChildren: { preview. caption }.
- resize := [ | width imageWidth imageHeight |
+ preferredWidth := ((size x * ((160 / size y) min: 1)) ceiling max: 112) min: 360.
+ card := BrVerticalPane new id: #loomMermaidPreview; vFitContent;
+  background: Color white; border: (BlBorder paint: (Color gray: 0.88) width: 1);
+  geometry: (BlRoundedRectangleGeometry cornerRadius: 6); yourself.
+ toolbar := BrHorizontalPane new id: #loomMermaidPreviewToolbar; hMatchParent; vExact: 28;
+  padding: (BlInsets left: 2 right: 2); alignCenterRight; yourself.
+ image := BlSkiaImageElement new id: #loomMermaidThumbnail;
+  image: (SkiaImage fromForm: result first); yourself.
+ imageRow := BrHorizontalPane new hMatchParent; vFitContent; alignCenter; addChild: image; yourself.
+ notice := (self statusLabel: '''') visibility: BlVisibility gone; yourself.
+ openButton := (Smalltalk globals at: #LMChatStyle)
+  replyAction: #loomMermaidOpenImage icon: ''external-link''
+  action: [ self openImage: result first with: openButton notice: notice ].
+ openButton label: ''用默认图片应用打开''; mouseCursor: BlHandCursor new.
+ openButton addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [
+  self statusLabel: ''用默认图片应用打开'' ]).
+ toolbar addChild: openButton.
+ card addChildren: { toolbar. imageRow. notice }.
+ resize := [ | width scale scaled |
   width := self width > 0 ifTrue: [ self width min: preferredWidth ] ifFalse: [ preferredWidth ].
   width = lastWidth ifFalse: [
    lastWidth := width.
-   imageWidth := size x min: width.
-   imageHeight := (size y * (imageWidth / size x)) ceiling.
+   scale := (1 min: (width / size x)) min: (160 / size y).
+   scaled := (size * scale) floor.
    card hExact: width.
-   preview size: width @ (imageHeight min: 160).
-   image size: imageWidth @ imageHeight; relocate: ((width - imageWidth) / 2) @ 0 ] ].
+   image size: ((scaled x max: 1) @ (scaled y max: 1)) ] ].
  self when: BlElementExtentChangedEvent do: [ resize value ].
  resize value.
  ^ card'.
-cls compile: 'openDiagram: result from: card
- | world viewer tab token |
- world := self space.
- token := card userData at: #loomMermaidViewerToken ifAbsentPut: [ Object new ].
- (world isKindOf: GtWorld) ifTrue: [
-  tab := world tabGroup tabs detect: [ :each | (each model isKindOf: BlSpace) and: [
-   (each model root userData at: #loomMermaidViewerToken ifAbsent: [ nil ]) == token ] ]
-   ifNone: [ nil ].
-  tab ifNotNil: [ tab select. ^ self ] ].
- viewer := BlSpace new title: ''Mermaid 图''; extent: 1000 @ 740; yourself.
- viewer root userData at: #loomMermaidViewerToken put: token.
- viewer root addChild: (LMChatMermaidViewer new diagram: result; yourself).
- (world isKindOf: GtWorld) ifTrue: [ world showSpace: viewer ] ifFalse: [ self showSpace: viewer ]'.
+cls compile: 'openImage: form with: button notice: notice
+ button enabled: false.
+ notice visibility: BlVisibility gone.
+ [ | failure |
+  [ | file |
+   file := LMChatMermaidRenderer current imageFileFor: form.
+   LMPlatformTools openWithDefaultApplication: file
+  ] on: Error do: [ :error | failure := error messageText ].
+  self enqueueTask: (BlTaskAction new action: [
+   button enabled: true.
+   failure ifNotNil: [
+    notice text: ''无法打开图片 · '', (failure truncateTo: 140); visibility: BlVisibility visible ] ])
+ ] forkAt: Processor userBackgroundPriority'.
+
 cls compile: 'showFailure: message
  state := #complete.
  self removeChildren.

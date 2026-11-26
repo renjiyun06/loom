@@ -65,7 +65,7 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   tilde := String cr join: { '~~~Mermaid'. 'flowchart LR'. 'A --> B'. '~~~~' }.
   view text: tilde.
   check value: (view children first isKindOf: LMChatMermaidBlock) value: 'tilde Mermaid fences can use a longer closing fence' ] value.
- [ | tall diagram frame block card scripter viewer viewport scrollable initialZoom |
+ [ | tall diagram block card scripter thumbnail openButton |
   tall := Form extent: 80 @ 320 depth: 32.
   diagram := { tall. 320. 1280 }.
   block := LMChatMermaidBlock new hExact: 224; vFitContent; yourself.
@@ -73,20 +73,17 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   scripter := BlDevScripter new element: block; yourself.
   scripter pulse.
   card := block childNamed: #loomMermaidPreview.
-  check value: (card width = 224 and: [ card children first height = 160 and: [ card height < 200 ] ])
-   value: 'tall Mermaid preview is compact and fits the message width'.
-  viewer := LMChatMermaidViewer new diagram: diagram; yourself.
-  frame := BrVerticalPane new exact: 300 @ 300; addChild: viewer; yourself.
-  scripter := BlDevScripter new element: frame; yourself.
+  thumbnail := card childNamed: #loomMermaidThumbnail.
+  openButton := card childNamed: #loomMermaidOpenImage.
+  check value: (thumbnail extent = (40 @ 160) and: [ card height < 200 ])
+   value: 'tall Mermaid preview scales the entire diagram proportionally'.
+  check value: (openButton parent == (card childNamed: #loomMermaidPreviewToolbar)
+    and: [ openButton isKindOf: BrButton ])
+   value: 'Mermaid uses a separate open button in its toolbar'.
+  block hExact: 82.
   scripter pulse; pulse.
-  viewport := viewer instVarNamed: 'viewport'.
-  scrollable := viewport childNamed: #scrollable.
-  check value: scrollable canScrollVertically value: 'full Mermaid view scrolls independently'.
-  initialZoom := viewer instVarNamed: 'zoom'.
-  viewer zoomBy: 1.25.
-  check value: (viewer instVarNamed: 'zoom') > initialZoom value: 'full Mermaid view zooms in'.
-  viewer fitToWidth.
-  check value: (viewer instVarNamed: 'zoom') = initialZoom value: 'full Mermaid view restores fit width' ] value.
+  check value: (card width = 82 and: [ thumbnail extent = (40 @ 160) ])
+   value: 'Mermaid preview fits a narrow message without cropping' ] value.
  check value: (LMChatStyle tableCells: '| a || b |') = #('a' '' 'b') value: 'empty table cells keep their columns'.
  check value: (LMChatStyle tableCells: '| a\|b | c |') = #('a|b' 'c') value: 'escaped pipes stay inside table cells'.
  check value: (LMChatStyle tableCells: '| D:\Loom | 路径 |') = #('D:\Loom' '路径') value: 'Windows paths retain backslashes inside tables'.

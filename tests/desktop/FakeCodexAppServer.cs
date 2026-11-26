@@ -11,7 +11,7 @@ public static class FakeCodexAppServer {
     static volatile bool waitForSilenceRelease;
     static int serial;
     static readonly string ObjectInvocationCode = @"
-| selector input prompt action staged gate deadline result attempts previous original entries tool context |
+| selector input prompt action staged gate deadline result attempts previous original entries tool context activities |
 selector := loomMessage selector.
 input := loomMessage arguments first.
 (#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHandoff:usingContext: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: recover:after:) includes: selector) ifTrue: [
@@ -31,13 +31,15 @@ input := loomMessage arguments first.
       ((attempts last at: 'id') = (previous at: 'id') and: [
         loomCaller method selector = #recover:after: ])
        ifFalse: [ self error: 'wrong recovery invocation' ].
-      entries := (LoomNativeCodexHost registry activitySummariesForCall: (previous at: 'id') before: nil limit: 20) at: 'items'.
+      activities := input activities.
+      entries := (activities activitySummariesForCall: (previous at: 'id') before: nil limit: 20) at: 'items'.
       tool := entries detect: [ :row | (row at: 'tool') = 'runtime_eval' ].
-      ((((LoomNativeCodexHost registry activityDetailAt: (tool at: 'seq')) at: 'data') at: 'result') at: 'ok')
+      ((((activities activityDetailAt: (tool at: 'seq')) at: 'data') at: 'result') at: 'ok')
        ifFalse: [ self error: 'old tool result is missing' ].
       original selector = #fixtureHandoff:usingContext: ifTrue: [
         context := original arguments second.
-        ((context at: 'source') = 'mail' and: [ (context at: 'messageId') = 'fixture-source-message' ])
+        (context source = 'mail' and: [ context messageId = 'fixture-source-message' and: [
+         context threadId = 'fixture-mail-thread' and: [ context activities == activities ] ] ])
          ifFalse: [ self error: 'original source context is missing' ] ].
       (#(fixtureHandoff: fixtureHandoff:usingContext:) includes: original selector)
        ifTrue: [
@@ -71,6 +73,10 @@ selector = #closeBrowserUsedFor: ifTrue: [
 ] ifFalse: [
     selector = #correctSpeechTranscript: ifTrue: [ loomReturn value: input, ' corrected' ] ifFalse: [
       selector = #replyTo:usingContext: ifTrue: [
+        context := loomMessage arguments second.
+        (context source = 'conversation' and: [ context messageId = (input at: 'id') and: [
+         context conversation == LoomConversation and: [ context activities == LoomNativeCodexHost registry ] ] ])
+          ifFalse: [ self error: 'wrong desktop invocation context' ].
         prompt := input at: 'text'.
         (prompt beginsWith: 'browser fixture ') ifTrue: [
           action := (prompt endsWith: 'close-failed') ifTrue: [ 'close' ] ifFalse: [ prompt allButFirst: 16 ].
@@ -78,7 +84,7 @@ selector = #closeBrowserUsedFor: ifTrue: [
         ] ifFalse: [ loomReturn value: prompt, ' reply' ]
       ] ifFalse: [
         (#(replyToWeixin:usingContext: replyToWeixinVoiceAndReturnCorrectedTranscripts:usingContext:) includes: selector) ifTrue: [
-          ((loomMessage arguments second at: 'source') = 'weixin' and: [ loomSessionId = 'main' ])
+          (loomMessage arguments second source = 'weixin' and: [ loomSessionId = 'main' ])
             ifFalse: [ self error: 'wrong Weixin invocation context' ].
           selector = #replyToWeixinVoiceAndReturnCorrectedTranscripts:usingContext: ifTrue: [
             (((input at: 'attachments') first at: 'transcript') = 'fixture transcript')

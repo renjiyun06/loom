@@ -9,10 +9,13 @@ mutex := Mutex new.
 revision := UUID new asString.'.
 store compile: 'revision
  ^ revision'.
+store compile: 'databaseFile
+ "For read-only history queries. messages and replies join by id, and attachments by message_id. The message and reply text are in their JSON data columns. For recordings, the corrected text is in LMConversation>>speechCorrectionFile:."
+ ^ directory / ''conversation.sqlite'''.
 store compile: 'database: operation
  ^ mutex critical: [
  LMExecution nativeStateCritical: [
-  LMSqliteDatabase new during: operation on: directory / ''conversation.sqlite'' ] ]'.
+  LMSqliteDatabase new during: operation on: self databaseFile ] ]'.
 store compile: 'initializeStorage
  directory ensureCreateDirectory.
 self database: [ :db |

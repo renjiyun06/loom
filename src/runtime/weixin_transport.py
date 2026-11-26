@@ -114,10 +114,14 @@ def dpapi(value, protect):
         free(output.data)
 
 
+def database_file(root):
+    return root / "state" / "weixin" / "weixin.sqlite"
+
+
 def open_database(root):
-    directory = root / "state" / "weixin"
-    directory.mkdir(parents=True, exist_ok=True)
-    database = sqlite3.connect(directory / "weixin.sqlite", isolation_level=None)
+    file = database_file(root)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    database = sqlite3.connect(file, isolation_level=None)
     database.row_factory = sqlite3.Row
     database.executescript("""
         CREATE TABLE IF NOT EXISTS account (
@@ -586,10 +590,13 @@ def history(db, root):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
-    parser.add_argument("command", choices=("poll", "reply", "fail", "recover", "status", "history", "offline"))
+    parser.add_argument("command", choices=("poll", "reply", "fail", "recover", "status", "history", "offline", "database-file"))
     parser.add_argument("value", nargs="?")
     args = parser.parse_args()
     root = args.root.resolve()
+    if args.command == "database-file":
+        print(json.dumps({"path": str(database_file(root))}))
+        return
     with closing(open_database(root)) as db:
         result = {"ok": True}
         if args.command == "poll":

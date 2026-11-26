@@ -381,8 +381,9 @@ try {
     const networkHandoff = await submitModel(`| session original result |
       session := LoomSessions session: 'handoff-fixture'.
       original := Object new.
-      result := session fixtureHandoff: original usingContext: (Dictionary new
-       at: 'source' put: 'mail'; at: 'messageId' put: 'fixture-source-message'; yourself).
+      result := session fixtureHandoff: original usingContext: (LoomApplications
+       replyContextFor: (Dictionary new at: 'id' put: 'fixture-source-message';
+        at: 'threadId' put: 'fixture-mail-thread'; yourself) from: 'mail').
       { result == original. session threadId }`, 'automatic-handoff-after-network-recovers');
     const networkTurn = await waitForHandoff();
     await expireObservation();
@@ -542,6 +543,12 @@ try {
     const resumed = await submitModel("(LoomSessions session: 'isolation-check') ask: '会话续接'", 'resumed-model-call');
     assert.deepEqual(await resumed(), {ok: true, value: '会话续接 回执'});
     assert.equal((await gt("LoomSessions show: 'isolation-check'", 'resumed-binding')).threadId, thread);
+    assert.deepEqual(await gt(`| context registry |
+     context := LoomApplications replyContextFor: (Dictionary new at: 'id' put: 'restart-context'; yourself)
+      from: 'conversation'.
+     registry := (Smalltalk globals at: #LoomNativeCodexHost) registry.
+     { context activities == registry. LMInvocation new activities == registry }`, 'context-registry-after-restart'),
+      [true, true]);
     const activityBeforeEcho = await gt(`| page |
      page := (Smalltalk globals at: #LoomNativeCodexHost) registry
       activitySummariesBefore: nil limit: 1 session: LoomSessions mainId managedOnly: false.

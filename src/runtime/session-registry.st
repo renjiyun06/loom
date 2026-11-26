@@ -8,7 +8,7 @@ directory ensureCreateDirectory.
 mutex := Mutex new.
 revision := 0.
 marker := directory / ''registry.json''.
-exists := (directory / ''sessions.sqlite'') exists.
+exists := self databaseFile exists.
 (marker exists and: [ exists not ]) ifTrue: [ self error: ''Session registry is missing; refusing to create replacement conversations'' ].
 self database: [ :db |
  db execute: ''PRAGMA journal_mode=WAL''.
@@ -21,9 +21,12 @@ marker exists ifTrue: [
  (data at: ''installationId'') = id ifFalse: [ self error: ''Session registry identity mismatch'' ]
 ] ifFalse: [
  LMPlatformTools writeJSON: (Dictionary new at: ''version'' put: 1; at: ''installationId'' put: id; yourself) to: marker ]'.
+registry compile: 'databaseFile
+ "For custom read-only activity queries. loom_activities.call_id joins calls.request_id. A recovery call keeps the first request id in request_json under originalRequestId. The activity payload is in loom_activities.data as JSON."
+ ^ directory / ''sessions.sqlite'''.
 registry compile: 'database: block
  ^ mutex critical: [
- LMExecution nativeStateCritical: [ LMSqliteDatabase new during: block on: directory / ''sessions.sqlite'' ] ]'.
+ LMExecution nativeStateCritical: [ LMSqliteDatabase new during: block on: self databaseFile ] ]'.
 registry compile: 'upgrade: db create: create
  | version |
 create ifTrue: [

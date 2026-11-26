@@ -48,6 +48,9 @@ conversation compile: 'waitForStorage
   (Delay forMilliseconds: 50) wait ]'.
 conversation compile: 'storage: action
  ^ self storage: action options: Dictionary new'.
+conversation compile: 'databaseFile
+ self waitForStorage.
+ ^ (Smalltalk globals at: #LoomConversationStore) databaseFile'.
 conversation compile: 'storageRevision
  ^ (Smalltalk globals at: #LoomConversationStore ifAbsent: [ nil ]) ifNotNil: #revision'.
 conversation compile: 'attachment: id

@@ -194,9 +194,13 @@ def mail_task(raw, key, sender, directory):
     }
 
 
+def database_file(directory):
+    return directory / "mail.sqlite"
+
+
 def open_database(directory, account):
     directory.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(directory / "mail.sqlite", timeout=5)
+    connection = sqlite3.connect(database_file(directory), timeout=5)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     with connection:
@@ -568,17 +572,19 @@ def deliver(db, account, sender, code, directory):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=Path)
-    parser.add_argument("operation", choices=("check", "poll", "reply", "status", "thread", "search"))
+    parser.add_argument("operation", choices=("check", "poll", "reply", "status", "thread", "search", "database-file"))
     parser.add_argument("argument", nargs="?")
     args = parser.parse_args()
     if args.operation in ("reply", "thread", "search") and args.argument is None:
         parser.error(f"{args.operation} requires an argument")
+    directory = args.config.resolve().parent.parent / "state" / "mail"
+    if args.operation == "database-file":
+        return {"path": str(database_file(directory))}
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     account = config["account"].strip().casefold()
     sender = config["sender"].strip().casefold()
-    directory = args.config.resolve().parent.parent / "state" / "mail"
     if args.operation in ("thread", "search"):
-        uri = (directory / "mail.sqlite").as_uri() + "?mode=ro"
+        uri = database_file(directory).as_uri() + "?mode=ro"
         with sqlite3.connect(uri, uri=True) as db:
             db.row_factory = sqlite3.Row
             messages = (thread_history(db, args.argument) if args.operation == "thread"

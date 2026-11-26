@@ -80,6 +80,8 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   check value: (openButton parent == (card childNamed: #loomMermaidPreviewToolbar)
     and: [ openButton isKindOf: BrButton ])
    value: 'Mermaid uses a separate open button in its toolbar'.
+  check value: ((block childNamed: #loomMermaidOpenStatus) visibility class = BlVisibility gone class)
+   value: 'Mermaid opening feedback is hidden before the button is used'.
   block hExact: 82.
   scripter pulse; pulse.
   check value: (card width = 82 and: [ thumbnail extent = (40 @ 160) ])

@@ -69,11 +69,13 @@ cls compile: 'startRendering
      self isAttachedToSceneGraph ifTrue: [ self startRendering ] ] ] ])
  ] forkAt: Processor userBackgroundPriority'.
 cls compile: 'showDiagram: result
- self removeChildren; addChild: (self previewFor: result).
+ | notice |
+ notice := (self statusLabel: '''') id: #loomMermaidOpenStatus; visibility: BlVisibility gone; yourself.
+ self removeChildren; addChildren: { self previewFor: result notice: notice. notice }.
  state := #complete.
  fallback := nil'.
-cls compile: 'previewFor: result
- | card toolbar imageRow image openButton notice size preferredWidth lastWidth resize |
+cls compile: 'previewFor: result notice: notice
+ | card toolbar imageRow image openButton size preferredWidth lastWidth resize |
  size := result second @ result third.
  preferredWidth := ((size x * ((160 / size y) min: 1)) ceiling max: 112) min: 360.
  card := BrVerticalPane new id: #loomMermaidPreview; vFitContent;
@@ -84,7 +86,6 @@ cls compile: 'previewFor: result
  image := BlSkiaImageElement new id: #loomMermaidThumbnail;
   image: (SkiaImage fromForm: result first); yourself.
  imageRow := BrHorizontalPane new hMatchParent; vFitContent; alignCenter; addChild: image; yourself.
- notice := (self statusLabel: '''') visibility: BlVisibility gone; yourself.
  openButton := (Smalltalk globals at: #LMChatStyle)
   replyAction: #loomMermaidOpenImage icon: ''external-link''
   action: [ self openImage: result first with: openButton notice: notice ].
@@ -92,7 +93,7 @@ cls compile: 'previewFor: result
  openButton addAptitude: (BrGlamorousWithExplicitTooltipAptitude new content: [
   self statusLabel: ''用默认图片应用打开'' ]).
  toolbar addChild: openButton.
- card addChildren: { toolbar. imageRow. notice }.
+ card addChildren: { toolbar. imageRow }.
  resize := [ | width scale scaled |
   width := self width > 0 ifTrue: [ self width min: preferredWidth ] ifFalse: [ preferredWidth ].
   width = lastWidth ifFalse: [
@@ -105,17 +106,23 @@ cls compile: 'previewFor: result
  resize value.
  ^ card'.
 cls compile: 'openImage: form with: button notice: notice
+ | cached owner |
+ cached := button userData at: #loomMermaidImageFile ifAbsent: [ nil ].
+ owner := 0.
+ self spaceDo: [ :space | (space host isKindOf: BlWinitHost) ifTrue: [
+  space hostSpaceDo: [ :host | owner := host window hwnd asInteger ] ] ].
  button enabled: false.
- notice visibility: BlVisibility gone.
- [ | failure |
-  [ | file |
-   file := LMChatMermaidRenderer current imageFileFor: form.
-   LMPlatformTools openWithDefaultApplication: file
+ notice text: ''正在打开图片…''; visibility: BlVisibility visible.
+ [ | file failure |
+  [ file := (cached notNil and: [ cached isFile ])
+    ifTrue: [ cached ] ifFalse: [ LMChatMermaidRenderer current imageFileFor: form ].
+   LMPlatformTools openWithDefaultApplication: file owner: owner
   ] on: Error do: [ :error | failure := error messageText ].
   self enqueueTask: (BlTaskAction new action: [
+   file ifNotNil: [ button userData at: #loomMermaidImageFile put: file ].
    button enabled: true.
-   failure ifNotNil: [
-    notice text: ''无法打开图片 · '', (failure truncateTo: 140); visibility: BlVisibility visible ] ])
+   notice text: (failure ifNil: [ ''已交给 Windows 默认图片应用'' ]
+    ifNotNil: [ ''无法打开图片 · '', (failure truncateTo: 140) ]) ])
  ] forkAt: Processor userBackgroundPriority'.
 
 cls compile: 'showFailure: message

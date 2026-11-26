@@ -58,15 +58,16 @@ encoded := ZnBase64Encoder new encode:
   script do: [ :character | codec nextPut: character toStream: bytes ] ]).
 stdout := self run: executable arguments: #(''-NoProfile'' ''-STA'' ''-EncodedCommand''), {encoded} timeout: seconds.
 ^ STONJSON fromString: stdout'.
-cls class compile: 'openWithDefaultApplication: file
- | path |
- path := ZnBase64Encoder new encode: file fullName utf8Encoded.
- ^ self powerShellJSON: ''$start = New-Object System.Diagnostics.ProcessStartInfo
-$start.FileName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("'', path, ''"))
-$start.UseShellExecute = $true
-$process = [System.Diagnostics.Process]::Start($start)
-if ($null -ne $process) { $process.Dispose() }
-$true | ConvertTo-Json -Compress'' timeout: 15'.
+cls class compile: 'openWithDefaultApplication: file owner: hwnd
+ | result |
+ result := self shellOpen: (Win32WideString fromString: file fullName) owner: hwnd.
+ result > 32 ifFalse: [
+  result = 31 ifTrue: [ self error: ''Windows 尚未为 PNG 设置默认应用'' ].
+  self error: ''Windows 无法打开文件（'', result asString, ''）'' ].
+ ^ true'.
+cls class compile: 'shellOpen: path owner: hwnd
+ ^ self ffiCall: #(uint64 ShellExecuteW(uint64 hwnd, uint64 0, Win32WideString path,
+  uint64 0, uint64 0, int 1)) module: ''shell32.dll'''.
 cls class compile: 'clipboardAttachmentRequest
  | sequence png |
  sequence := self clipboardSequence.

@@ -5,16 +5,26 @@ cls class compile: 'builderFor: program arguments: arguments
  ^ (GtExternalProcessBuilder new: program asFileReference fullName)
  arguments: arguments; yourself'.
 cls class compile: 'run: program arguments: arguments timeout: seconds
- | child timer output timedOut |
+ ^ self run: program arguments: arguments input: nil timeout: seconds'.
+cls class compile: 'run: program arguments: arguments input: input timeout: seconds
+ | builder child timer output timedOut |
 timedOut := false.
-child := (self builderFor: program arguments: arguments) nullStdin; pipeStdout; pipeStderr; spawn.
+builder := self builderFor: program arguments: arguments.
+input ifNil: [ builder nullStdin ] ifNotNil: [ builder pipeStdin ].
+child := builder pipeStdout; pipeStderr; spawn.
 child terminateOnShutdown.
 timer := [
  (Delay forSeconds: seconds) wait.
  timedOut := true.
  [ child terminate ] on: Error do: [ :error | nil ]
 ] fork.
-[ output := child waitAsyncWithOutput ] ensure: [ timer terminate ].
+[
+ [ input ifNotNil: [ [ child stdin nextPutAll: input ] ensure: [ child stdin close ] ].
+   output := child waitAsyncWithOutput ]
+  on: Error do: [ :error |
+   [ child terminate ] on: Error do: [ :ignored | nil ].
+   error pass ]
+] ensure: [ timer terminate ].
 timedOut ifTrue: [ self error: ''本地工具执行超时'' ].
 output status isSuccess ifFalse: [ self error: (output stderrStringLossy trimBoth ifEmpty: [ ''本地工具执行失败'' ]) ].
 ^ output stdoutString'.

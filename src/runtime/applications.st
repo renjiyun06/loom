@@ -99,6 +99,7 @@ applications class compile: 'install
    self attempt: ''conversation-view'' during: [
     self load: ''conversation-stream.st''.
     self load: ''activity-timeline.st''.
+    self load: ''conversation-mermaid.st''.
     self load: ''conversation-components.st''.
     self load: ''conversation-ui.st'' ].
    ((self statusFor: ''conversation'') at: ''phase'') = ''ready'' ifTrue: [ LoomConversation start ] ]

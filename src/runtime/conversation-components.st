@@ -296,6 +296,9 @@ cls := (BrVerticalPane << #LMMarkdownView slots: #(#source #specs #views); packa
 cls compile: 'blockView: spec
  | kind text editor row bar |
  kind := spec first.
+ kind = #mermaid ifTrue: [ ^ LMChatMermaidBlock new
+  source: spec third fallback: [ LMChatStyle codePanel: spec third language: spec second ];
+  margin: (BlInsets top: 8 bottom: 8); yourself ].
  kind = #code ifTrue: [ ^ (LMChatStyle codePanel: spec third language: spec second)
   margin: (BlInsets top: 8 bottom: 8); yourself ].
  kind = #table ifTrue: [ ^ (LMChatStyle table: spec)
@@ -401,11 +404,10 @@ cls compile: 'copyReplySelection
  GtClipboard clipboardText: (String lf join: parts).
  ^ true'.
 cls compile: 'isBoundary: lines at: index
- | line fence |
+ | line |
  line := (lines at: index) trimBoth.
  line ifEmpty: [ ^ true ].
- fence := String new: 3 withAll: (Character value: 96).
- ^ (line beginsWith: fence) or: [
+ ^ (self codeFenceIn: line) notNil or: [
   (#(''# '' ''## '' ''### '' ''#### '' ''##### '' ''###### '') anySatisfy: [ :prefix | line beginsWith: prefix ])
    or: [ (line beginsWith: ''>'') or: [ (self listPrefix: line) notNil or: [
    index < lines size and: [ self isTableSeparator: (lines at: index + 1) ] ] ] ] ]'.
@@ -424,25 +426,39 @@ cls compile: 'listPrefix: line
  (dot > 1 and: [ dot < value size and: [ (value at: dot + 1) = Character space and: [
   (value first: dot - 1) allSatisfy: #isDigit ] ] ]) ifTrue: [ ^ value first: dot ].
  ^ nil'.
+cls compile: 'codeFenceIn: line
+ | marker length |
+ line size < 3 ifTrue: [ ^ nil ].
+ marker := line first.
+ (marker = (Character value: 96) or: [ marker = $~ ]) ifFalse: [ ^ nil ].
+ length := 1.
+ [ length < line size and: [ (line at: length + 1) = marker ] ] whileTrue: [ length := length + 1 ].
+ ^ length >= 3 ifTrue: [ line first: length ] ifFalse: [ nil ]'.
+cls compile: 'line: line closesFence: opening
+ | closing |
+ closing := line trimBoth.
+ ^ (closing beginsWith: opening) and: [ closing allSatisfy: [ :char | char = opening first ] ]'.
 cls compile: 'parseBlocks: markdown
- | lines result index line fence content language level prefix parts header rows |
+ | lines result index line fence content language closed level prefix parts header rows |
  lines := markdown lines asArray.
  result := OrderedCollection new. index := 1.
- fence := String new: 3 withAll: (Character value: 96).
  [ index <= lines size ] whileTrue: [
   line := (lines at: index) trimBoth.
   line isEmpty
    ifTrue: [ index := index + 1 ]
    ifFalse: [
-    (line beginsWith: fence)
+    fence := self codeFenceIn: line.
+    fence notNil
      ifTrue: [
-      language := (line allButFirst: 3) trimBoth.
+      language := (line allButFirst: fence size) trimBoth.
       parts := OrderedCollection new. index := index + 1.
-      [ index <= lines size and: [ ((lines at: index) trimBoth beginsWith: fence) not ] ]
+      [ index <= lines size and: [ (self line: (lines at: index) closesFence: fence) not ] ]
        whileTrue: [ parts add: (lines at: index). index := index + 1 ].
-      index <= lines size ifTrue: [ index := index + 1 ].
+      closed := index <= lines size.
+      closed ifTrue: [ index := index + 1 ].
       content := String streamContents: [ :out | parts doWithIndex: [ :part :n | n > 1 ifTrue: [ out cr ]. out nextPutAll: part ] ].
-      result add: { #code. language. content } ]
+      result add: { (closed and: [ language asLowercase = ''mermaid'' ])
+       ifTrue: [ #mermaid ] ifFalse: [ #code ]. language. content } ]
      ifFalse: [
       level := 0.
       [ level < line size and: [ level < 6 and: [ (line at: level + 1) = $# ] ] ] whileTrue: [ level := level + 1 ].

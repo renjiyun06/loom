@@ -54,6 +54,17 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  '- 第一项', String cr, '> 引用', String cr, String cr, fence, 'smalltalk', String cr, code.
  check value: ((view instVarNamed: 'specs') collect: #first) = #(#heading #table #list #quote #code) value: 'headings tables lists quotes and partial fences render'.
  check value: (Smalltalk globals includesKey: marker) not value: 'code blocks never execute Smalltalk'.
+ [ | partial sealed tilde |
+  partial := String cr join: { fence, 'mermaid'. 'sequenceDiagram'. 'A->>B: 你好' }.
+  view text: partial.
+  check value: (view children first isKindOf: LMChatMermaidBlock) not value: 'incomplete Mermaid remains a code block'.
+  sealed := partial, String cr, fence.
+  view text: sealed.
+  check value: ((view children first isKindOf: LMChatMermaidBlock) and: [ view source = sealed ])
+   value: 'closed Mermaid becomes a diagram and preserves the source'.
+  tilde := String cr join: { '~~~Mermaid'. 'flowchart LR'. 'A --> B'. '~~~~' }.
+  view text: tilde.
+  check value: (view children first isKindOf: LMChatMermaidBlock) value: 'tilde Mermaid fences can use a longer closing fence' ] value.
  check value: (LMChatStyle tableCells: '| a || b |') = #('a' '' 'b') value: 'empty table cells keep their columns'.
  check value: (LMChatStyle tableCells: '| a\|b | c |') = #('a|b' 'c') value: 'escaped pipes stay inside table cells'.
  check value: (LMChatStyle tableCells: '| D:\Loom | 路径 |') = #('D:\Loom' '路径') value: 'Windows paths retain backslashes inside tables'.

@@ -4,7 +4,7 @@
 (DynamicVariable << #LMBusinessProcess slots: #(); package: 'Loom-Codex') install.
 question := (Object << #LMBusinessQuestion slots: #(id origin invocation gate answer failure); package: 'Loom-Codex') install.
 scope := (Object << #LMBusinessScope slots: #(client threadId call parent record lock execution result completed closed toolLock); package: 'Loom-Codex') install.
-run := (Object << #LMBusinessRun slots: #(id scope worker events lock pending delivered cancelled toolCallId enclosing parent stagedAnswer explicitResult); package: 'Loom-Codex') install.
+run := (Object << #LMBusinessRun slots: #(id scope worker events lock pending delivered cancelled toolCallId enclosing parent stagedAnswer); package: 'Loom-Codex') install.
 question compile: 'initialize
  super initialize. id := UUID new asString. gate := Semaphore new'.
 question compile: 'id ^ id'.
@@ -91,13 +91,7 @@ run compile: 'enclosing ^ enclosing'.
 run compile: 'parent ^ parent'.
 run compile: 'questionOrigin
  ^ lock critical: [ pending origin ]'.
-run compile: 'result ^ explicitResult ifNil: [ scope result ] ifNotNil: [ explicitResult first ]'.
-run compile: 'start: aBlock
- "Compatibility with the explicit entry. Use the current execution and its identity."
- | object |
- object := aBlock value.
- explicitResult := { object }.
- ^ self completionFor: object'.
+run compile: 'result ^ scope result'.
 run compile: 'request: requestId
  enclosing ifNil: [ self error: ''No pending subrequest in this turn'' ].
  ^ (enclosing questionWithId: requestId) invocation'.
@@ -151,7 +145,7 @@ run compile: 'execute: aBlock
     [ LMBusinessProcess value: self during: [ | object feedback |
       object := aBlock value.
       feedback := self completionFor: object.
-      events nextPut: { #done. explicitResult ifNil: [ object ] ifNotNil: [ explicitResult first ]. feedback } ] ]
+      events nextPut: { #done. object. feedback } ] ]
      on: Error do: [ :error | events nextPut: { #failed. error messageText } ] ] newProcess.
    worker name: ''Loom business '', id.
    worker resume ] ]
@@ -179,4 +173,5 @@ run compile: 'cancel
  worker ifNotNil: [ worker isTerminated ifFalse: [ worker terminate ] ]'.
 #(start: request: answer:with: assertComplete execution) do: [ :selector |
  (scope includesSelector: selector) ifTrue: [ scope removeSelector: selector ] ].
+(run includesSelector: #start:) ifTrue: [ run removeSelector: #start: ].
 'Loom business executions installed'

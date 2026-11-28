@@ -293,9 +293,10 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
   verify value: ((feedback at: 'valueClass') = 'Object' and: [ scope result == original ]) value: 'result retains identity'.
   verify value: (((scope evaluate: [ :run | run answer: id with: nil ]) at: 'kind') = 'failed') value: 'one answer per question'.
   verify value: (((scope evaluate: [ :run | nil ]) at: 'value') isNil) value: 'nil is a completed value'.
-  feedback := scope evaluate: [ :run | run start: [ original ] ].
-  verify value: (((feedback at: 'value') at: 'valueClass') = 'Object' and: [ scope result == original ])
-   value: 'legacy explicit start keeps its feedback and live result'.
+  verify value: (LMBusinessRun canUnderstand: #start:) not value: 'tool runs expose no explicit start'.
+  scope evaluate: [ :run | original ].
+  verify value: ((scope evaluate: [ :run | run result == original ]) at: 'value')
+   value: 'the next evaluation can retrieve the original live result'.
   feedback := scope evaluate: [ :run | displayClass new client: client; yourself ].
   id := feedback at: 'requestId'.
   feedback := scope evaluate: [ :run | run answer: id with: 'serialized' ].

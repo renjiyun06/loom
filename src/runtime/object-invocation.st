@@ -52,6 +52,9 @@ invocation compile: 'result
  (invocation includesSelector: selector) ifTrue: [ invocation removeSelector: selector ] ].
 LMCodexClient compile: 'doesNotUnderstand: message
  | original |
+ LMBusinessProcess value ifNotNil: [ :run |
+  (run ancestorFor: self clientKey) ifNotNil: [ :destination |
+   ^ run ask: message caller: thisContext sender through: destination ] ].
  self assertIndependentProcess.
  BlWinitHost uiProcessDo: [ :process |
   process == Processor activeProcess ifTrue: [

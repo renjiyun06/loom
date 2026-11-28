@@ -2,13 +2,13 @@
 | host |
 host := LMNativeCodexHost.
 host compile: 'pendingCalls
- | listing current |
+ | listing running |
 listing := Dictionary new.
-current := transport active.
+running := transport activeCalls collect: [ :each | each at: ''requestId'' ].
 (self filesIn: ''codex-requests'') do: [ :file |
  | id request key |
  id := file basenameWithoutExtension.
- ((current isNil or: [ (current at: ''requestId'') ~= id ]) and: [
+ ((running includes: id) not and: [
   (LoomIPC / ''codex-responses'' / file basename) exists not ]) ifTrue: [
   request := [ STONJSON fromString: file contents ] on: Error do: [ :error | Dictionary new ].
   ((request at: ''id'' ifAbsent: [ nil ]) = id and: [ (request at: ''action'' ifAbsent: [ nil ]) = ''ask'' ]) ifTrue: [
@@ -17,8 +17,7 @@ current := transport active.
 ^ listing'.
 host compile: 'runningStateFor: record pending: pending
  | current queued |
-current := transport active.
-(current notNil and: [ (current at: ''clientKey'') ~= (record at: ''clientKey'') ]) ifTrue: [ current := nil ].
+current := transport activeForClient: (record at: ''clientKey'').
 queued := (pending at: (record at: ''clientKey'') ifAbsent: [ #() ]) asArray.
 record at: ''queued'' put: queued.
 (current isNil or: [ current at: ''releasedAfterSilence'' ifAbsent: [ false ] ]) ifTrue: [
@@ -135,8 +134,8 @@ host compile: 'shutdownSaving: save native: id
  | result deadline checkpoint |
 self publishStatus: ''stopping''.
 deadline := DateAndTime now + 8 seconds.
-[ transport active notNil and: [ DateAndTime now < deadline ] ] whileTrue: [ (Delay forMilliseconds: 40) wait ].
-transport active ifNotNil: [ transport stop. worker terminate ].
+[ self hasRunningRequests and: [ DateAndTime now < deadline ] ] whileTrue: [ (Delay forMilliseconds: 40) wait ].
+self hasRunningRequests ifTrue: [ transport stop. worker terminate. self retireRequestWorkers ].
 (Smalltalk globals at: #LoomApplications ifAbsent: [ nil ]) ifNotNil: [ :apps |
  [ apps prepareShutdown ] on: Error do: [ :error | Smalltalk globals at: #LoomApplicationLoadError put: error messageText ] ].
 checkpoint := save ifTrue: [ LMExecution checkpoint ] ifFalse: [ nil ].

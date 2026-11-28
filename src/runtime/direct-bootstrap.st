@@ -55,7 +55,7 @@ oldHost ifNotNil: #retire.
  (oldHost notNil or: [ previous notNil or: [ Smalltalk globals includesKey: #LMConversation ] ]) ifTrue: [
   "The opener can fall back to the current directory before the old stream closes."
   reopenChanges value ].
- #('execution.st' 'native-lifecycle.st' 'platform-tools.st' 'sqlite.st' 'codex-client.st'
+ #('execution.st' 'native-lifecycle.st' 'platform-tools.st' 'sqlite.st' 'business-run.st' 'codex-client.st'
    'session-registry.st' 'codex-activity.st' 'codex-settings.st' 'codex-usage.st' 'codex-stdio.st'
    'codex-host.st' 'codex-controls.st' 'applications.st') do: loader.
  host := (Smalltalk globals at: #LMNativeCodexHost) new.

@@ -45,6 +45,11 @@ registry compile: 'recordActivity: call title: title on: db
  self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''title'' put: title;
  at: ''text'' put: ''''; at: ''status'' put: ''completed''; at: ''at'' put: self now; yourself)
  call: call item: ''summary'' on: db'.
+registry compile: 'recordBusinessEvent: fields call: callId
+ | row |
+ row := fields copy at: ''type'' put: ''loomActivity''; at: ''status'' put: ''completed'';
+  at: ''title'' put: (''业务历程 · '', (fields at: ''phase'')); at: ''text'' put: ''''; at: ''at'' put: self now; yourself.
+ self database: [ :db | self putActivity: row call: callId item: (''business-'', UUID new asString) on: db ]'.
 registry compile: 'recordTurnSilence: current stage: stage seconds: seconds
  self database: [ :db |
   self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''phase'' put: ''turnSilence'';

@@ -4,7 +4,7 @@ previous := Smalltalk globals at: #LMNativeCodexHost ifAbsent: [ nil ].
 (previous notNil and: [ previous instVarNames includes: 'views' ]) ifTrue: [
  #(start pollActivity acceptView: publishView:channel:) do: [ :selector |
   (previous includesSelector: selector) ifTrue: [ previous removeSelector: selector ] ] ].
-host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping); package: 'Loom-Codex') install.
+host := (Object << #LMNativeCodexHost slots: #(#session #epoch #gui #options #status #settings #registry #transport #worker #monitor #checkpointWorker #nativeWorker #stopping #workers #workersLock); package: 'Loom-Codex') install.
 (host includesSelector: #refreshDailyUsage) ifTrue: [ host removeSelector: #refreshDailyUsage ].
 host compile: 'start
  | config pathConfig default identity state |
@@ -65,8 +65,8 @@ host compile: 'usageForMain
  usage := transport usage.
  usage ifNil: [ ^ Dictionary new ].
  thread := LoomCodex threadId.
- current := transport active.
- (current notNil and: [ (current at: ''clientKey'') = LoomCodex clientKey ]) ifTrue: [
+ current := transport activeForClient: LoomCodex clientKey.
+ current ifNotNil: [
   thread := current at: ''threadId'' ifAbsent: [ thread ] ].
  ^ usage snapshotFor: thread'.
 host compile: 'uuid: value
@@ -95,17 +95,36 @@ thread := request at: ''threadId'' ifAbsent: [ nil ].
  thread isNil or: [ thread isString ] ] ] ] ] ] ])
  ifFalse: [ self error: ''Invalid Codex request'' ].
 registry validate: key max: 128'.
+host compile: 'workersLock
+ ^ workersLock ifNil: [ workersLock := Mutex new ]'.
 host compile: 'performRequestFile: file
- | id result |
-id := file basenameWithoutExtension.
-(LoomIPC / ''codex-responses'' / file basename) exists ifTrue: [ ^ self ].
-result := [
- | request |
- request := STONJSON fromString: file contents.
- self validateRequest: request id: id.
- self performRequest: request
-] on: Error do: [ :error | self failed: error messageText request: id ].
-self isCurrent ifTrue: [ self reply: result for: id ]'.
+ | request id key |
+ id := file basenameWithoutExtension.
+ (LoomIPC / ''codex-responses'' / file basename) exists ifTrue: [ ^ self ].
+ request := [ | parsed |
+  parsed := STONJSON fromString: file contents.
+  self validateRequest: parsed id: id.
+  parsed ] on: Error do: [ :error | ^ self reply: (self failed: error messageText request: id) for: id ].
+ key := request at: ''clientKey''.
+ self workersLock critical: [
+  | process |
+  workers ifNil: [ workers := Dictionary new ].
+  (stopping = true or: [ (workers includesKey: key) or: [ (transport activeForClient: key) notNil ] ]) ifTrue: [ ^ self ].
+  (LoomIPC / ''codex-responses'' / file basename) exists ifTrue: [ ^ self ].
+  process := [
+   [ | result |
+    result := [ self performRequest: request ] on: Error do: [ :error | self failed: error messageText request: id ].
+    self isCurrent ifTrue: [ self reply: result for: id ] ]
+   ensure: [ self workersLock critical: [ workers removeKey: key ifAbsent: [ ] ] ] ] newProcess.
+  process name: ''Loom request '', id.
+  workers at: key put: process.
+  process resume ]'.
+host compile: 'hasRunningRequests
+ ^ transport active notNil or: [ self workersLock critical: [ workers notNil and: [ workers notEmpty ] ] ]'.
+host compile: 'retireRequestWorkers
+ | processes |
+ processes := self workersLock critical: [ workers ifNil: [ #() ] ifNotNil: [ workers values asArray ] ].
+ processes do: #terminate'.
 host compile: 'performRequest: request
  | id action key previous result |
 id := request at: ''id''.
@@ -134,14 +153,12 @@ host compile: 'runRequests
 host compile: 'runControls
  [
  [ self isCurrent ] whileTrue: [
-  | active |
   (transport failure notNil and: [ stopping ~= true ]) ifTrue: [ self fatal: transport failure ].
   (LoomIPC / ''stop.json'') exists ifTrue: [ self scheduleShutdownSaving: true native: nil ].
-  active := transport active.
-  active ifNotNil: [
-   (stopping = true
-    and: [ (active at: ''turnId'') notNil and: [ (active at: ''interruptionSent'' ifAbsent: [ false ]) not ] ]) ifTrue: [
-     [ [ transport interrupt ] on: Error do: [ :ignored | nil ] ] fork ] ].
+  stopping = true ifTrue: [
+   transport activeCalls do: [ :current |
+    ((current at: ''turnId'') notNil and: [ (current at: ''interruptionSent'' ifAbsent: [ false ]) not ])
+     ifTrue: [ [ [ transport interruptDuring: current ] on: Error do: [ :ignored | nil ] ] fork ] ] ].
   #(pollSessions pollNativeActions) do: [ :selector |
    [ self perform: selector ] on: Error do: [ :error |
     Smalltalk globals at: #LoomNativeControlError put: error messageText ] ].
@@ -154,6 +171,7 @@ status ifNotNil: [ status at: ''error'' put: message. self publishStatus: ''fail
 Smalltalk exitFailure'.
 host compile: 'retire
  worker ifNotNil: #terminate.
+self retireRequestWorkers.
 monitor ifNotNil: #terminate.
 checkpointWorker ifNotNil: #terminate.
 nativeWorker ifNotNil: #terminate.

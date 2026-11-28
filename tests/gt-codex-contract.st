@@ -270,4 +270,25 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
   (compacted at: 'status') = 'completed' and: [ view actionTitle = '上下文压缩已结束' ] ] ])
   value: 'the same compaction row shows completion after reopening the activity store'
 ] value.
+[ | scope other client original feedback id log newScope |
+ log := OrderedCollection new.
+ newScope := [ LMBusinessScope new client: 'fixture' call: 'root' parent: nil
+   events: [ :ignored :event | log add: event ]; yourself ].
+ scope := newScope value threadId: 'fixture-thread'; yourself. other := newScope value. original := Object new.
+ client := LMCodexClient new clientKey: 'fixture'; yourself.
+ [
+  feedback := scope start: [ client requireThread: 'fixture-thread' during: [ client fixtureOpinion: original ] ].
+  id := feedback at: 'requestId'.
+  verify value: (scope request: id) message arguments first == original value: 'question retains live input'.
+  verify value: ([ other answer: id with: nil. false ] on: Error do: [ :e | true ]) value: 'different scope cannot answer'.
+  verify value: ([ scope start: [ 1 ]. false ] on: Error do: [ :e | true ]) value: 'one outstanding execution per turn'.
+  verify value: ([ scope assertComplete. false ] on: Error do: [ :e | true ]) value: 'outer result waits for the execution'.
+  feedback := scope answer: id with: original.
+  verify value: ((feedback at: 'valueClass') = 'Object' and: [ scope result == original ]) value: 'result retains identity'.
+  verify value: ([ scope answer: id with: nil. false ] on: Error do: [ :e | true ]) value: 'one answer per question'.
+  verify value: ([ scope start: [ Error signal: 'fixture error' ]. false ] on: Error do: [ :e | e messageText = 'fixture error' ])
+   value: 'business failure releases the scope'.
+  verify value: ((scope start: [ nil ]) at: 'value') isNil value: 'nil is a completed value'
+ ] ensure: [ scope close. other close ]
+] value.
 'GT Codex contract passed'

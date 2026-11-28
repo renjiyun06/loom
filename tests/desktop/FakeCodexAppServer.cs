@@ -9,11 +9,28 @@ public static class FakeCodexAppServer {
     static string threadId, turnId, lateFailureTurn;
     static bool waitForHandoffRelease;
     static volatile bool waitForSilenceRelease;
-    static int serial;
+    static int serial, toolSerial;
+    static readonly Dictionary<string,Tuple<string,string>> toolOwners =
+        new Dictionary<string,Tuple<string,string>>();
+    static void Tool(string id, string source) {
+        toolOwners.Add(id,Tuple.Create(threadId,turnId));
+        Send(new {id,method="item/tool/call",@params=new {threadId,turnId,callId=id,
+            tool="runtime_eval",arguments=new {code=source}}});
+    }
     static readonly string ObjectInvocationCode = @"
 | selector input prompt action staged gate deadline result attempts previous original entries tool context activities |
 selector := loomMessage selector.
 input := loomMessage arguments first.
+selector = #fixtureBusiness: ifTrue: [
+ loomRun start: [
+  input caseOf: {
+   [ 'direct' ] -> [ nil ].
+   [ 'self' ] -> [ | first |
+     first := (LoomCodex session: loomSessionId) fixtureOpinion: 'one'.
+     {first. (LoomCodex session: loomSessionId) fixtureOpinion: 'two'} ].
+   [ 'A' ] -> [ {'A'. (LoomCodex session: 'debate-b') fixtureBusiness: 'B'} ].
+   [ 'B' ] -> [ {'B'. (LoomCodex session: 'debate-c') fixtureBusiness: 'C'} ].
+   [ 'C' ] -> [ {'C'. (LoomCodex session: 'debate-a') fixtureOpinion: 'rollback'} ] } ] ] ifFalse: [
 (#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHandoff:usingContext: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: recover:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
@@ -96,7 +113,7 @@ selector = #closeBrowserUsedFor: ifTrue: [
           ] ifFalse: [ loomReturn value: (input at: 'text'), ' reply' ]
         ] ifFalse: [
           loomReturn value: (Dictionary new at: 'session' put: loomSessionId; at: 'argument' put: input; yourself) ] ] ] ].
-true ]";
+true ] ]";
 
     static void Send(object value) {
         Console.WriteLine(Json.Serialize(value));
@@ -134,6 +151,18 @@ true ]";
         }
         var output = (Dictionary<string,object>)((System.Collections.IList)result["contentItems"])[0];
         var value = (Dictionary<string,object>)Json.DeserializeObject((string)output["text"]);
+        var business = value["value"] as Dictionary<string,object>;
+        if (business != null && business.ContainsKey("kind")) {
+            string source;
+            if (Object.Equals(business["kind"],"subrequest")) {
+                var requestId=Guid.Parse((string)business["requestId"]).ToString();
+                source="| sub | sub := loomRun request: '"+requestId+"'. "+
+                    "(sub message selector = #fixtureOpinion: and: [sub caller notNil]) ifFalse: [self error: 'wrong subrequest']. "+
+                    "loomRun answer: '"+requestId+"' with: (sub message arguments first, '-answered')";
+            } else source="loomReturn value: loomRun result. true";
+            Tool("business-"+(++toolSerial),source);
+            return;
+        }
         var action = value["value"] as string;
         switch (action) {
             case "fail-before-return":
@@ -176,6 +205,10 @@ true ]";
             object id, offered;
             query.TryGetValue("id", out id);
             if (!query.TryGetValue("method", out offered)) {
+                Tuple<string,string> owner;
+                if (toolOwners.TryGetValue((string)id,out owner)) {
+                    threadId=owner.Item1; turnId=owner.Item2; toolOwners.Remove((string)id);
+                }
                 CompleteTool((Dictionary<string,object>)query["result"]);
                 continue;
             }
@@ -215,8 +248,7 @@ true ]";
                     if(text=="mock-active") break;
                     if(text=="Loom \u8c03\u7528\u4e86\u4f60\u3002") {
                         Event("item/started",new {threadId,turnId,item=new {id="draft-"+turnId,type="agentMessage",phase="final_answer",text="Unpublished draft"}});
-                        Send(new {id="tool-"+turnId,method="item/tool/call",@params=new {threadId,turnId,callId="tool-"+turnId,
-                            tool="runtime_eval",arguments=new {code=ObjectInvocationCode}}});
+                        Tool("tool-"+turnId,ObjectInvocationCode);
                     } else Finish(text+" \u56de\u6267","completed");
                     break;
                 case "turn/interrupt":

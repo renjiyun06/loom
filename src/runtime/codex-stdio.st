@@ -1,6 +1,6 @@
 "Speak Codex App Server JSON-RPC from GT; native process handles are scoped to this VM."
 | transport |
-transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending #loaded #models #toolProcesses #writeMutex #serial #session #epoch #registry #failure #active #usage); package: 'Loom-Codex') install.
+transport := (Object << #LMNativeCodexTransport slots: #(#child #reader #pending #loaded #models #toolProcesses #writeMutex #serial #session #epoch #registry #failure #active #usage #turns #turnsLock); package: 'Loom-Codex') install.
 transport compile: 'start: options registry: aRegistry
  | builder cwd temp logs identity |
 registry := aRegistry.
@@ -48,15 +48,56 @@ transport compile: 'modelCatalog
  ^ models asArray'.
 transport compile: 'pid
  ^ child id'.
+transport compile: 'turnsLock
+ ^ turnsLock ifNil: [ turnsLock := Mutex new ]'.
+transport compile: 'activeCalls
+ "A turn already on the stack during hot installation finishes using the old active slot."
+ ^ self turnsLock critical: [
+  | calls |
+  calls := turns ifNil: [ #() ] ifNotNil: [ turns values asArray ].
+  active ifNil: [ calls ] ifNotNil: [ calls copyWith: active ] ]'.
+transport compile: 'activeForClient: key
+ ^ self activeCalls detect: [ :each | (each at: ''clientKey'' ifAbsent: [ nil ]) = key ] ifNone: [ nil ]'.
+transport compile: 'activeForThread: thread
+ thread ifNil: [ ^ nil ].
+ ^ self activeCalls detect: [ :each | (each at: ''threadId'') = thread ] ifNone: [ nil ]'.
+transport compile: 'isActive: current
+ ^ current notNil and: [ self activeCalls anySatisfy: [ :each | each == current ] ]'.
+transport compile: 'registerTurn: current
+ self turnsLock critical: [
+  | key |
+  key := current at: ''clientKey''.
+  (self activeForClient: key) ifNotNil: [ self error: ''This session already has an active turn'' ].
+  (turns ifNil: [ turns := Dictionary new ]) at: key put: current ]'.
+transport compile: 'removeTurn: current
+ self turnsLock critical: [
+  active == current ifTrue: [ active := nil ].
+  turns ifNotNil: [ | key |
+   key := current at: ''clientKey''.
+   (turns at: key ifAbsent: [ nil ]) == current ifTrue: [ turns removeKey: key ] ] ]'.
+transport compile: 'executionAt: id
+ self activeCalls do: [ :each |
+  (each at: ''businessScope'' ifAbsent: [ nil ]) ifNotNil: [ :scope |
+   scope execution ifNotNil: [ :run | run id = id ifTrue: [ ^ run ] ] ] ].
+ self error: ''Parent business execution is no longer active'''.
+transport compile: 'businessScopeDuring: current
+ ^ self turnsLock critical: [
+  current at: ''businessScope'' ifAbsentPut: [
+   LMBusinessScope new client: (current at: ''clientKey'') call: (current at: ''requestId'')
+    parent: (current at: ''parentExecution'' ifAbsent: [ nil ])
+    events: [ :call :fields |
+     registry recordBusinessEvent: fields call: call.
+     self noteTurnProgress: ''业务历程已推进'' at: Time millisecondClockValue during: current ];
+    threadId: (current at: ''threadId''); yourself ] ]'.
 transport compile: 'active
- ^ active'.
+ ^ self activeCalls ifEmpty: [ nil ] ifNotEmpty: [ :calls | calls first ]'.
 transport compile: 'failure
  ^ failure'.
 transport compile: 'isCurrent
  ^ session = LoomRuntimeSessionId and: [
   epoch = (OSEnvironment current at: ''LOOM_RUNTIME_EPOCH'' ifAbsent: [ nil ]) ]'.
 transport compile: 'isToolProcess
- ^ toolProcesses includes: Processor activeProcess'.
+ ^ self turnsLock critical: [ toolProcesses includes: Processor activeProcess ]'.
 transport compile: 'checkAlive
  self isCurrent ifFalse: [ self error: ''Previous Codex transport was stopped'' ].
 failure ifNotNil: [ self error: failure ]'.
@@ -67,20 +108,20 @@ transport compile: 'rpc: method params: arguments
  ^ self rpc: method params: arguments timeout: 30'.
 transport compile: 'rpc: method params: arguments timeout: seconds
  | id deadline result |
-writeMutex critical: [ serial := serial + 1. id := serial. pending at: id put: nil ].
+self turnsLock critical: [ serial := serial + 1. id := serial. pending at: id put: nil ].
 method = ''turn/start'' ifTrue: [
- active at: ''startRpcId'' put: id; at: ''earlyTurnEvents'' put: OrderedCollection new ].
+ (self activeForThread: (arguments at: ''threadId'')) at: ''startRpcId'' put: id; at: ''earlyTurnEvents'' put: OrderedCollection new ].
 [
  self send: (Dictionary new at: ''id'' put: id; at: ''method'' put: method; at: ''params'' put: arguments; yourself).
  deadline := DateAndTime now + (Duration seconds: seconds).
- [ (result := pending at: id) isNil ] whileTrue: [
+ [ (result := self turnsLock critical: [ pending at: id ]) isNil ] whileTrue: [
   self checkAlive.
   DateAndTime now >= deadline ifTrue: [ self error: ''App Server timeout: '', method ].
   (Delay forMilliseconds: 20) wait ].
  result at: ''error'' ifPresent: [ :error |
   self error: ((error at: ''message'' ifAbsent: [ ''App Server request failed'' ]) asString) ].
  ^ result at: ''result'' ifAbsent: [ nil ]
-] ensure: [ pending removeKey: id ifAbsent: [ ] ]'.
+] ensure: [ self turnsLock critical: [ pending removeKey: id ifAbsent: [ ] ] ]'.
 transport compile: 'readMessages
  | stream bytes offset chunk |
 [
@@ -100,23 +141,23 @@ transport compile: 'readMessages
 ] on: Error do: [ :error | failure := error messageText ]'.
 transport compile: 'receiveRPC: message id: id
  | current turn events |
- (id notNil and: [ pending includesKey: id ]) ifFalse: [ ^ self ].
- current := active.
- (current notNil and: [ (current at: ''startRpcId'' ifAbsent: [ nil ]) = id ]) ifTrue: [
+ (id notNil and: [ self turnsLock critical: [ pending includesKey: id ] ]) ifFalse: [ ^ self ].
+ current := self activeCalls detect: [ :each | (each at: ''startRpcId'' ifAbsent: [ nil ]) = id ] ifNone: [ nil ].
+ current ifNotNil: [
   (message at: ''result'' ifAbsent: [ nil ]) ifNotNil: [ :response |
    turn := response at: ''turn''.
    current at: ''turnId'' put: (turn at: ''id'').
    self noteTurnProgress: ''轮次已开始'' at: Time millisecondClockValue during: current.
    events := current removeKey: ''earlyTurnEvents''.
    events do: [ :event | self receive: event ] ] ].
- pending at: id put: message'.
+ self turnsLock critical: [ (pending includesKey: id) ifTrue: [ pending at: id put: message ] ]'.
 transport compile: 'receive: message
  | id method params current turnId |
 id := message at: ''id'' ifAbsent: [ nil ].
 method := message at: ''method'' ifAbsent: [ nil ].
 method ifNil: [ ^ self receiveRPC: message id: id ].
 params := message at: ''params'' ifAbsent: [ Dictionary new ].
-current := active.
+current := self activeForThread: (params at: ''threadId'' ifAbsent: [ nil ]).
 turnId := params at: ''turnId'' ifAbsent: [ (params at: ''turn'' ifAbsent: [ Dictionary new ]) at: ''id'' ifAbsent: [ nil ] ].
 (current notNil and: [ turnId notNil and: [ (current at: ''turnId'') isNil and: [
  (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') ] ] ]) ifTrue: [
@@ -140,7 +181,7 @@ usage ifNotNil: [
   (method = ''turn/completed'' and: [ turnId notNil ]) ifTrue: [
    current at: ''completed'' ifAbsentPut: [ params at: ''turn'' ].
    (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) ifTrue: [
-    active == current ifTrue: [ active := nil ].
+    self removeTurn: current.
     registry acceptActivity: message call: (current at: ''requestId'') ] ] ] ].
 id ifNotNil: [
  [
@@ -153,14 +194,15 @@ id ifNotNil: [
 transport compile: 'respond: id method: method params: params active: current
  | task result content |
 task := Processor activeProcess.
-toolProcesses add: task.
+self turnsLock critical: [ toolProcesses add: task ].
 [
  method = ''item/tool/call'' ifFalse: [
   ^ self send: (Dictionary new at: ''id'' put: id; at: ''error'' put: (Dictionary new
    at: ''code'' put: -32601; at: ''message'' put: ''Unsupported interactive request: '', method; yourself); yourself) ].
  result := [
   (self permitsTool: params during: current) ifFalse: [ self error: ''Tool is not available for this runtime invocation.'' ].
-  self evaluateTool: (params at: ''arguments'') during: current
+  LMBusinessToolCall value: (params at: ''callId'' ifAbsent: [ id ]) during: [
+   self evaluateTool: (params at: ''arguments'') during: current ]
  ] on: Error do: [ :error |
   Dictionary new at: ''ok'' put: false; at: ''error'' put: error messageText; yourself ].
  self isCurrent ifFalse: [ ^ self ].
@@ -170,7 +212,7 @@ toolProcesses add: task.
  content := Dictionary new at: ''type'' put: ''inputText''; at: ''text'' put: (STONJSON toString: result); yourself.
  self send: (Dictionary new at: ''id'' put: id; at: ''result'' put: (Dictionary new
   at: ''success'' put: (result at: ''ok''); at: ''contentItems'' put: {content}; yourself); yourself)
-] ensure: [ toolProcesses remove: task ifAbsent: [ ] ]'.
+] ensure: [ self turnsLock critical: [ toolProcesses remove: task ifAbsent: [ ] ] ]'.
 transport compile: 'turnProgressLockDuring: current
  ^ current at: ''turnProgressLock'' ifAbsentPut: [ Mutex new ]'.
 transport compile: 'noteTurnProgress: stage at: tick during: current
@@ -216,6 +258,7 @@ transport compile: 'progressStageFor: method params: params during: current
  ^ ((delta isString) and: [ delta notEmpty ]) ifTrue: [ stage ] ifFalse: [ nil ]'.
 transport compile: 'recordTurnSilenceDuring: current at: tick
  | progress since elapsed release |
+ (current at: ''businessScope'' ifAbsent: [ nil ]) ifNotNil: [ :scope | scope awaitsProgram ifTrue: [ ^ self ] ].
  (current at: ''networkProbe'' ifAbsent: [ nil ]) ifNotNil: [ :probe |
   ^ self pollNetwork: probe during: current at: tick ].
  progress := current at: ''lastTurnProgress'' ifAbsent: [ ^ self ].
@@ -279,7 +322,7 @@ transport compile: 'recordNetworkWait: probe during: current title: title status
  [ registry recordNetworkWait: (probe at: ''waitActivity'') during: current title: title status: status ]
   on: Error do: [ :error | Smalltalk globals at: #LoomActivityWriteError put: error messageText ]'.
 transport compile: 'permitsTool: params during: current
- ^ current notNil and: [ active == current and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
+ ^ current notNil and: [ (self isActive: current) and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
  (current at: ''turnId'') notNil and: [
  (params at: ''tool'' ifAbsent: [ nil ]) = ''runtime_eval'' and: [
  (params at: ''threadId'' ifAbsent: [ nil ]) = (current at: ''threadId'') and: [
@@ -287,26 +330,28 @@ transport compile: 'permitsTool: params during: current
  turn := params at: ''turnId'' ifAbsent: [ nil ].
  turn isNil or: [ turn = (current at: ''turnId'') ] ] ] ] ] ] ]'.
 transport compile: 'evaluateTool: raw during: current
- | arguments source value sessionId block invocation |
+ | arguments source value sessionId block invocation scope compiler |
 arguments := raw isString ifTrue: [ STONJSON fromString: raw ] ifFalse: [ raw ].
 source := arguments at: ''code''.
 source isString ifFalse: [ self error: ''Expected Smalltalk source in code'' ].
+scope := self businessScopeDuring: current.
+compiler := Smalltalk compiler bindings: (Dictionary new at: #loomRun put: scope; yourself); yourself.
 (current at: ''objectInvocation'')
- ifFalse: [ value := Smalltalk compiler evaluate: source ]
+ ifFalse: [ value := compiler evaluate: source ]
  ifTrue: [
   sessionId := registry sessionIdFor: (current at: ''clientKey'').
-  block := Smalltalk compiler evaluate:
+  block := compiler evaluate:
    (''[ :loomCaller :loomMessage :loomSessionId :loomReturn |'', String cr, source, String cr, '']'').
   invocation := LMInvocation pendingAt: (current at: ''requestId'').
   value := invocation evaluate: block sessionId: sessionId returning: [ :object |
-   self saveObject: object from: invocation during: current ] ].
+   scope assertComplete. self saveObject: object from: invocation during: current ] ].
 STONJSON toString: value.
 ^ Dictionary new at: ''ok'' put: true; at: ''value'' put: value; yourself'.
 transport compile: 'objectReturnLockDuring: current
  ^ current at: ''objectReturnLock'' ifAbsentPut: [ Mutex new ]'.
 transport compile: 'saveObject: object from: invocation during: current
  ^ (self objectReturnLockDuring: current) critical: [
-  (active == current and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
+  ((self isActive: current) and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
    (current includesKey: ''completed'') not ] ])
    ifFalse: [ self error: ''This Codex turn has already ended'' ].
   invocation return: object.
@@ -322,7 +367,7 @@ transport compile: 'threadOptions: workspace
  ^ Dictionary new at: ''cwd'' put: workspace; at: ''approvalPolicy'' put: ''never'';
  at: ''sandbox'' put: ''danger-full-access''; yourself'.
 transport compile: 'dynamicTools
- ^ { STONJSON fromString: ''{"type":"function","name":"runtime_eval","description":"Evaluate Smalltalk in the live GT runtime that issued this call. Object calls bind loomCaller (Context), loomMessage (Message), loomSessionId (Loom session ID), and loomReturn (a one-argument block for returning a live object). Tool output must be JSON-serializable. See AGENTS.md. Do not synchronously invoke LoomCodex from this tool.","inputSchema":{"type":"object","properties":{"code":{"type":"string"}},"required":["code"],"additionalProperties":false}}'' }'.
+ ^ { STONJSON fromString: ''{"type":"function","name":"runtime_eval","description":"Evaluate Smalltalk in the live GT runtime that issued this call. Object calls bind loomCaller (Context), loomMessage (Message), loomSessionId (Loom session ID), and loomReturn (a one-argument block for returning a live object). Tool output must be JSON-serializable. See AGENTS.md. Start Loom business programs using loomRun start: [ ... ]; resume subrequests with loomRun answer: id with: value. Direct observations need no business process.","inputSchema":{"type":"object","properties":{"code":{"type":"string"}},"required":["code"],"additionalProperties":false}}'' }'.
 transport compile: 'openThreadFor: current request: request in: workspace
  | key id binding thread options result |
 key := current at: ''clientKey''.
@@ -356,14 +401,14 @@ thread ifNil: [
 transport compile: 'ask: request settings: settings workspace: workspace
  | current result previous |
 "An early business result leaves the App Server turn busy until its terminal event."
-[ (previous := active) notNil and: [ previous at: ''releasedAfterSilence'' ifAbsent: [ false ] ] ] whileTrue: [
+[ (previous := self activeForClient: (request at: ''clientKey'')) notNil and: [ previous at: ''releasedAfterSilence'' ifAbsent: [ false ] ] ] whileTrue: [
  self checkAlive.
  (Delay forMilliseconds: 25) wait ].
-active ifNotNil: [ self error: ''Loom processes one model turn at a time'' ].
 current := Dictionary new at: ''requestId'' put: (request at: ''id''); at: ''clientKey'' put: (request at: ''clientKey'');
  at: ''threadId'' put: nil; at: ''turnId'' put: nil; at: ''objectInvocation'' put: (request at: ''objectInvocation'' ifAbsent: [ false ]);
  at: ''messages'' put: OrderedDictionary new; at: ''startedAt'' put: registry now; yourself.
-active := current.
+request at: ''parentExecutionId'' ifPresent: [ :id | current at: ''parentExecution'' put: (self executionAt: id) ].
+self registerTurn: current.
 [
  result := [
   | thread turn params |
@@ -381,11 +426,12 @@ active := current.
    ifTrue: [ self finishSilentTurn: current ]
    ifFalse: [ self finishTurn: turn active: current model: (settings at: ''model'' ifAbsent: [ models at: thread ifAbsent: [ nil ] ]) ]
  ] on: Error do: [ :error |
-  [ self interrupt ] on: Error do: [ :ignored | nil ].
+  [ self interruptDuring: current ] on: Error do: [ :ignored | nil ].
   (self receiptFrom: current) at: ''ok'' put: false; at: ''error'' put: error messageText; yourself ].
  ^ result
 ] ensure: [
- (active == current and: [ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not ]) ifTrue: [ active := nil ] ]'.
+ (current at: ''businessScope'' ifAbsent: [ nil ]) ifNotNil: #close.
+ (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) ifFalse: [ self removeTurn: current ] ]'.
 transport compile: 'finishSilentTurn: current
  | receipt |
  receipt := (self receiptFrom: current) at: ''ok'' put: true; at: ''text'' put: '''';
@@ -434,7 +480,7 @@ transport compile: 'recoveryReceipt: receipt handoff: handoff
  handoff ifTrue: [ receipt at: ''replaceCodexSession'' put: true ].
  ^ receipt at: ''ok'' put: false; at: ''needsRecovery'' put: true; yourself'.
 transport compile: 'canHandoffDuring: current
- ^ current notNil and: [ active == current and: [
+ ^ current notNil and: [ (self isActive: current) and: [
   (current at: ''objectInvocation'' ifAbsent: [ false ]) and: [ (current at: ''turnId'') notNil and: [
   (current at: ''turnProgressEnded'' ifAbsent: [ false ]) not and: [
   (current at: ''releasedAfterSilence'' ifAbsent: [ false ]) not and: [
@@ -442,7 +488,7 @@ transport compile: 'canHandoffDuring: current
   (current at: ''interruptionSent'' ifAbsent: [ false ]) not ] ] ] ] ] ] ]'.
 transport compile: 'requestHandoffFor: key request: requestId
  | current |
- current := active.
+ current := self activeForClient: key.
  (current notNil and: [ (current at: ''clientKey'') = key and: [
   (current at: ''requestId'') = requestId ] ]) ifFalse: [ self error: ''当前轮次已变更，请刷新后重试'' ].
  (self turnProgressLockDuring: current) critical: [
@@ -455,7 +501,7 @@ transport compile: 'markHandoffDuring: current automatic: automatic
  current at: ''handoffRequested'' put: true.
  self endNetworkWaitDuring: current title: ''已请求中断旧轮次'''.
 transport compile: 'interrupt
- ^ self interruptDuring: active'.
+ ^ self activeCalls do: [ :current | self interruptDuring: current ]'.
 transport compile: 'interruptDuring: current
  | arguments |
  arguments := self claimInterruptDuring: current.
@@ -465,7 +511,7 @@ transport compile: 'claimInterruptDuring: current
  ^ (self turnProgressLockDuring: current) critical: [
   | turn |
   turn := current at: ''turnId''.
-  (active ~~ current or: [ turn isNil or: [
+  ((self isActive: current) not or: [ turn isNil or: [
    (current at: ''turnProgressEnded'' ifAbsent: [ false ]) or: [
    current at: ''interruptionSent'' ifAbsent: [ false ] ] ] ])
     ifTrue: [ nil ]
@@ -477,13 +523,13 @@ transport compile: 'sendInterruptWithoutWaitingDuring: current
  arguments := self claimInterruptDuring: current.
  arguments ifNil: [ ^ self ].
  "Send a JSON-RPC request without making business delivery depend on its reply."
- writeMutex critical: [ serial := serial + 1. id := serial ].
+ self turnsLock critical: [ serial := serial + 1. id := serial ].
  [ self send: (Dictionary new at: ''id'' put: id; at: ''method'' put: ''turn/interrupt'';
     at: ''params'' put: arguments; yourself) ]
    on: Error do: [ :error | current at: ''interruptWriteError'' put: error messageText ]'.
 transport compile: 'retire
  reader ifNotNil: #terminate.
-toolProcesses copy do: #terminate'.
+(self turnsLock critical: [ toolProcesses copy ]) do: #terminate'.
 transport compile: 'stop
  reader ifNotNil: #terminate.
 child ifNotNil: [ [ child stdin close ] on: Error do: [ :error | nil ].

@@ -25,9 +25,15 @@ clientClass compile: 'configure: settings
   [ self performRequest: (STONJSON toString: settings) action: ''configure'' ]
    ensure: [ lastResponse := previous. activeRequestId := nil ] ]'.
 clientClass compile: 'ask: prompt
+ LMBusinessProcess value ifNotNil: [ :run |
+  (run ancestorFor: self clientKey) ifNotNil: [ :destination |
+   ^ run ask: (Message selector: #ask: arguments: { prompt }) caller: thisContext sender through: destination ] ].
  self assertIndependentProcess.
  ^ mutex critical: [ [ self performRequest: prompt action: ''ask'' ] ensure: [ activeRequestId := nil ] ]'.
 clientClass compile: 'requireThread: expected during: operation
+ LMBusinessProcess value ifNotNil: [ :run |
+  (run ancestorFor: self clientKey) ifNotNil: [ :destination |
+   ^ destination requireThread: expected during: operation ] ].
  self assertIndependentProcess.
  ^ mutex critical: [
   | previous |
@@ -64,6 +70,7 @@ clientClass compile: 'requestReceipt: prompt action: action invocation: invocati
   at: ''action'' put: action;
   at: ''threadId'' put: threadId;
   yourself.
+ LMBusinessProcess value ifNotNil: [ :run | request at: ''parentExecutionId'' put: run id ].
  requiredThreadId ifNotNil: [ request at: ''requiredThreadId'' put: requiredThreadId ].
  invocation ifNotNil: [
   invocation attachTo: id.

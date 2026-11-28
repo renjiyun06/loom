@@ -236,6 +236,28 @@ try {
       ['dynamicToolCall', null, ''],
       ['agentMessage', 'final_answer', 'object callback completed'],
     ]);
+    for (const [scenario,expected] of [
+      ['direct',null], ['self',['one-answered','two-answered']], ['A',['A',['B',['C','rollback-answered']]]],
+    ]) {
+      const run = await submitModel(`(LoomSessions session: 'debate-a') fixtureBusiness: '${scenario}'`,
+        'business-'+scenario);
+      assert.deepEqual(await run(), {ok:true,value:expected});
+    }
+    const businessEvents = await gt(`LoomNativeCodexHost registry database: [ :db |
+      (db execute: 'SELECT data
+        FROM loom_activities WHERE json_extract(data, ''$.requestId'') IS NOT NULL
+        AND json_extract(data, ''$.phase'') IN (''subrequest'',''answered'') ORDER BY seq' values: #()) asArray ]`,
+      'business-subrequests');
+    const events = businessEvents.map(row=>JSON.parse(row));
+    assert.deepEqual(events.map(row=>row.phase), [
+      'subrequest','answered','subrequest','answered','subrequest','answered',
+    ]);
+    for (let i=0;i<events.length;i+=2) {
+      assert.equal(events[i].requestId,events[i+1].requestId);
+      assert.equal(events[i].executionId,events[i+1].executionId);
+      assert.ok(events[i].toolCallId && events[i+1].toolCallId);
+      assert.notEqual(events[i].toolCallId,events[i+1].toolCallId);
+    }
     const recovery = await submitModel(`| session original result receipt |
       session := LoomSessions session: 'recovery-fixture'.
       original := Object new.

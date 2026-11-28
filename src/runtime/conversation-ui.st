@@ -31,7 +31,7 @@ ui compile: 'activityDetailMode: value for: id
  activityDetailModes at: id put: value'.
 ui compile: 'activityDetailModeFor: id
  activityDetailModes ifNil: [ activityDetailModes := Dictionary new ].
- ^ activityDetailModes at: id ifAbsent: [ #arguments ]'.
+ ^ activityDetailModes at: id ifAbsent: [ nil ]'.
 ui compile: 'activityExpanded: value for: id
  activityExpansionStates ifNil: [ activityExpansionStates := Dictionary new ].
  activityExpansionStates at: id put: value'.

@@ -24,6 +24,7 @@ value isArray ifTrue: [ ^ value collect: [ :entry | self masked: entry ] ].
 registry compile: 'visibleActivity: row
  | type |
 type := row at: ''type''.
+ (type = ''loomActivity'' and: [ row includesKey: ''executionId'' ]) ifTrue: [ ^ false ].
 type = ''agentMessage'' ifTrue: [
  ^ (row at: ''phase'' ifAbsent: [ nil ]) caseOf: {
   [ ''commentary'' ] -> [ true ].
@@ -48,8 +49,105 @@ registry compile: 'recordActivity: call title: title on: db
 registry compile: 'recordBusinessEvent: fields call: callId
  | row |
  row := fields copy at: ''type'' put: ''loomActivity''; at: ''status'' put: ''completed'';
-  at: ''title'' put: (''业务历程 · '', (fields at: ''phase'')); at: ''text'' put: ''''; at: ''at'' put: self now; yourself.
- self database: [ :db | self putActivity: row call: callId item: (''business-'', UUID new asString) on: db ]'.
+  at: ''text'' put: ''''; at: ''at'' put: self now; yourself.
+ self database: [ :db | db transaction: [
+  self putActivity: row call: callId item: (''business-'', UUID new asString) on: db.
+  self projectExecutionEvent: row call: callId on: db ] ]'.
+registry compile: 'executionOwner: executionId on: db
+ ^ self record: ''SELECT json_object(''''call'''',call_id,''''item'''',item_id) FROM loom_activities
+  WHERE json_extract(data,''''$.execution.id'''')=? LIMIT 1'' values: {executionId} on: db'.
+registry compile: 'executionSession: client call: call on: db
+ | key |
+ key := client ifNil: [ self one: ''SELECT json_extract(request_json,''''$.clientKey'''') FROM calls WHERE request_id=?'' values: {call} on: db ].
+ ^ (self one: ''SELECT id FROM loom_sessions WHERE client_key=?'' values: {key} on: db)
+  ifNil: [ key ifNil: [ ''会话未记录'' ] ]'.
+registry compile: 'projectExecutionEvent: event call: call on: db
+ | id owner phase origin other from to |
+ id := event at: ''executionId''. phase := event at: ''phase''.
+ owner := self executionOwner: id on: db.
+ owner ifNil: [ | tool item existing |
+  tool := event at: ''toolCallId'' ifAbsent: [ nil ].
+  item := tool ifNil: [ ''execution-'', id ].
+  existing := self one: ''SELECT json_extract(data,''''$.execution.id'''') FROM loom_activities WHERE call_id=? AND item_id=?'' values: {call. item} on: db.
+  (existing notNil and: [ existing ~= id ]) ifTrue: [ item := ''execution-'', id ].
+  owner := Dictionary new at: ''call'' put: call; at: ''item'' put: item; yourself ].
+ origin := event at: ''originExecutionId'' ifAbsent: [ nil ].
+ origin ifNotNil: [
+  (origin ~= id) ifTrue: [ other := self executionOwner: origin on: db ].
+  to := self executionSession: (event at: ''clientKey'' ifAbsent: [ nil ]) call: call on: db.
+  from := origin = id ifTrue: [ to ] ifFalse: [
+   self executionSession: (event at: ''originClientKey'' ifAbsent: [ nil ])
+    call: (other ifNotNil: [ other at: ''call'' ]) on: db ] ].
+ self updateExecution: id owner: owner event: event from: from to: to on: db.
+ other ifNotNil: [ self updateExecution: origin owner: other event: event from: from to: to on: db ]'.
+registry compile: 'updateExecution: id owner: owner event: event from: from to: to on: db
+ | row run phase at call item code |
+ call := owner at: ''call''. item := owner at: ''item''. at := event at: ''at''. phase := event at: ''phase''.
+ row := self entryFor: item call: call type: ''dynamicToolCall'' at: at on: db.
+ row at: ''tool'' ifAbsentPut: [ ''runtime_eval'' ].
+ run := row at: ''execution'' ifAbsentPut: [
+  code := row at: ''arguments'' ifAbsent: [ nil ].
+  code isDictionary ifTrue: [ code := code at: ''code'' ifAbsent: [ nil ] ].
+  Dictionary new at: ''id'' put: id; at: ''startedAt'' put: at;
+   at: ''session'' put: (self executionSession: (event at: ''clientKey'' ifAbsent: [ nil ]) call: call on: db);
+   at: ''action'' put: (LMExecutionActivity actionFor: code); yourself ].
+ (from notNil and: [ run includesKey: ''endedAt'' ]) ifTrue: [ ^ self ].
+ (event at: ''executionId'') = id ifTrue: [
+  event at: ''parentExecutionId'' ifPresent: [ :parent | run at: ''parentExecutionId'' put: parent ] ].
+ run at: ''phase'' put: phase.
+ phase = ''started'' ifTrue: [ run at: ''summary'' put: (''由 '', (run at: ''session''), '' 发起''); at: ''status'' put: ''inProgress'' ].
+ from ifNotNil: [ LMExecutionActivity updateQuestionIn: run event: event from: from to: to ].
+ (#(''done'' ''failed'' ''cancelled'') includes: phase) ifTrue: [
+  self finishExecution: run event: event owner: owner tool: row on: db ].
+ run at: ''title'' put: (LMExecutionActivity titleFor: run).
+ self putActivity: row call: call item: item on: db'.
+registry compile: 'finishExecution: run event: event owner: owner tool: row on: db
+ | phase ended ms result value pending args |
+ phase := event at: ''phase''. ended := event at: ''at''.
+ ms := ((DateAndTime fromString: ended) - (DateAndTime fromString: (run at: ''startedAt''))) asMilliSeconds max: 0.
+ run at: ''endedAt'' put: ended; at: ''durationMs'' put: ms;
+  at: ''status'' put: (phase = ''done'' ifTrue: [ ''completed'' ] ifFalse: [ phase = ''failed'' ifTrue: [ ''failed'' ] ifFalse: [ ''interrupted'' ] ]).
+ #(''checkpointId'' ''checkpointAt'') do: [ :key | event at: key ifPresent: [ :v | run at: key put: v ] ].
+ value := event at: ''outcome'' ifAbsent: [ nil ].
+ value ifNil: [
+  result := self record: ''SELECT json_extract(data,''''$.result'''') FROM loom_activities WHERE call_id=? AND item_id=?''
+    values: {owner at: ''call''. event at: ''toolCallId'' ifAbsent: [ nil ]} on: db.
+  (result isDictionary and: [ (result includesKey: ''executionId'') not ]) ifTrue: [ result := result at: ''value'' ifAbsent: [ nil ] ].
+  (result isDictionary and: [ (result at: ''executionId'' ifAbsent: [ nil ]) = (run at: ''id'') ]) ifTrue: [
+   result at: ''value'' ifPresent: [ :v | value := LMExecutionActivity preview: v.
+    args := row at: ''arguments'' ifAbsent: [ nil ].
+    ((args isDictionary and: [ (args at: ''code'' ifAbsent: [ '''' ]) trimBoth = ''LMExecution checkpoint'' ]) and: [
+     v isString and: [ [ (UUID fromString: v) asString = v ] on: Error do: [ :e | false ] ] ])
+     ifTrue: [ run at: ''checkpointId'' put: v ] ].
+   result at: ''error'' ifPresent: [ :v | value := LMExecutionActivity preview: v ].
+   result at: ''valueClass'' ifPresent: [ :v | value := v, '' 对象'' ] ] ].
+ pending := (run at: ''questions'' ifAbsent: [ #() ]) detect: [ :q | (q includesKey: ''answeredAt'') not ] ifNone: [ nil ].
+ run at: ''summary'' put: (phase caseOf: {
+  [ ''done'' ] -> [ value ifNil: [ ''执行完成，未记录返回值'' ] ifNotNil: [ ''结果　'', value ] ].
+  [ ''failed'' ] -> [ value ifNil: [ ''执行失败，未记录错误信息'' ] ifNotNil: [ ''错误　'', value ] ].
+  [ ''cancelled'' ] -> [ pending ifNil: [ ''轮次结束时，此操作尚未完成'' ]
+   ifNotNil: [ ''取消时仍在等待 '', (pending at: ''to''), '' 答复 '', (pending at: ''selector'') ] ] })'.
+registry compile: 'upgradeExecutionActivitiesOn: db
+ | entries |
+ db execute: ''CREATE INDEX IF NOT EXISTS loom_activity_execution ON loom_activities(json_extract(data,''''$.execution.id''''))
+  WHERE json_extract(data,''''$.execution.id'''') IS NOT NULL''.
+ revision := revision max: (db execute: ''SELECT COALESCE(MAX(change_revision),0) FROM loom_activities'') first asInteger.
+ entries := db execute: ''SELECT json_object(''''call'''',call_id,''''item'''',item_id,''''event'''',json(data)) FROM loom_activities
+  WHERE visible=1 AND json_extract(data,''''$.type'''')=''''loomActivity'''' AND json_extract(data,''''$.executionId'''') IS NOT NULL ORDER BY seq''.
+ entries do: [ :line | | entry event |
+  entry := STONJSON fromString: line. event := entry at: ''event''.
+  self putActivity: event call: (entry at: ''call'') item: (entry at: ''item'') on: db.
+  self projectExecutionEvent: event call: (entry at: ''call'') on: db ].
+ (db execute: ''SELECT json_object(''''call'''',a.call_id,''''item'''',a.item_id,''''row'''',json(a.data)) FROM loom_activities a
+  JOIN calls c ON c.request_id=a.call_id WHERE c.state<>''''started'''' AND json_extract(a.data,''''$.execution.status'''') IN (''''inProgress'''',''''pending'''')'') do: [ :line |
+   | entry row |
+   entry := STONJSON fromString: line. row := entry at: ''row''.
+   self markUnfinishedExecution: (row at: ''execution'').
+   self putActivity: row call: (entry at: ''call'') item: (entry at: ''item'') on: db ]'.
+registry compile: 'markUnfinishedExecution: run
+ run at: ''summary'' put: (''未记录结束结果。最后记录：'', (run at: ''summary''));
+  at: ''phase'' put: ''unknown''; at: ''status'' put: ''interrupted''.
+ run at: ''title'' put: (LMExecutionActivity titleFor: run)'.
 registry compile: 'recordTurnSilence: current stage: stage seconds: seconds
  self database: [ :db |
   self putActivity: (Dictionary new at: ''type'' put: ''loomActivity''; at: ''phase'' put: ''turnSilence'';
@@ -126,11 +224,14 @@ registry compile: 'endRecoveryActivity: call because: reason
  self database: [ :db | self endRecoveryActivity: call because: reason on: db ]'.
 registry compile: 'interruptActivity: call on: db
  (db execute: ''SELECT json_object(''''id'''',item_id,''''data'''',data) FROM loom_activities WHERE call_id=? ORDER BY seq'' values: {call}) do: [
- :line | | item data |
+ :line | | item data running |
  item := STONJSON fromString: line.
  data := STONJSON fromString: (item at: ''data'').
- (#(''inProgress'' ''pending'' ''进行中'') includes: (data at: ''status'')) ifTrue: [
-  self putActivity: (data at: ''status'' put: ''interrupted''; yourself) call: call item: (item at: ''id'') on: db ] ]'.
+ running := #(''inProgress'' ''pending'' ''进行中'') includes: (data at: ''status'').
+ running ifTrue: [ data at: ''status'' put: ''interrupted'' ].
+ data at: ''execution'' ifPresent: [ :run | (#(''inProgress'' ''pending'') includes: (run at: ''status'')) ifTrue: [
+  self markUnfinishedExecution: run. running := true ] ].
+ running ifTrue: [ self putActivity: data call: call item: (item at: ''id'') on: db ] ]'.
 registry compile: 'recoverActivities
  self database: [ :db | db transaction: [
   (db execute: ''SELECT request_id FROM calls WHERE state=''''started'''''') do: [ :id |
@@ -195,13 +296,15 @@ registry compile: 'activitySummariesWhere: where values: args on: db
   ''''id'''',a.call_id||''''/''''||a.item_id,''''sessionId'''',s.id,
   ''''type'''',json_extract(a.data,''''$.type''''),
   ''''phase'''',json_extract(a.data,''''$.phase''''),
-  ''''status'''',json_extract(a.data,''''$.status''''),
+  ''''executionPhase'''',json_extract(a.data,''''$.execution.phase''''),
+  ''''status'''',coalesce(json_extract(a.data,''''$.execution.status''''),json_extract(a.data,''''$.status'''')),
   ''''at'''',json_extract(a.data,''''$.at''''),
-  ''''title'''',substr(json_extract(a.data,''''$.title''''),1,160),
+  ''''title'''',substr(coalesce(json_extract(a.data,''''$.execution.title''''),json_extract(a.data,''''$.title'''')),1,160),
   ''''tool'''',COALESCE(json_extract(a.data,''''$.tool''''),''''''''),
-  ''''durationMs'''',json_extract(a.data,''''$.durationMs''''),
-  ''''success'''',json_extract(a.data,''''$.success''''),
-  ''''text'''',COALESCE(substr(json_extract(a.data,''''$.text''''),1,360),''''''''),
+  ''''durationMs'''',coalesce(json_extract(a.data,''''$.execution.durationMs''''),json_extract(a.data,''''$.durationMs'''')),
+  ''''success'''',CASE WHEN json_extract(a.data,''''$.execution.id'''') IS NULL THEN json_extract(a.data,''''$.success'''')
+   ELSE CASE json_extract(a.data,''''$.execution.phase'''') WHEN ''''done'''' THEN 1 WHEN ''''failed'''' THEN 0 END END,
+  ''''text'''',substr(COALESCE(json_extract(a.data,''''$.execution.summary''''),json_extract(a.data,''''$.text''''),''''''''),1,360),
   ''''codePreview'''',CASE WHEN json_extract(a.data,''''$.tool'''') IN (''''runtime_eval'''',''''pharo_eval'''')
    THEN substr(json_extract(a.data,''''$.arguments.code''''),1,320) END)''.
  ^ (db execute: sql, self activitySource, '' WHERE '', where values: args) collect: [ :line |

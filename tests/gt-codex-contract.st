@@ -330,4 +330,44 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
     (log count: [ :entry | #('done' 'failed' 'cancelled') includes: (entry at: 'phase') ])) value: 'all evaluations have paired activity'
  ] ensure: [ scope close. other close ]
 ] value.
+[ | history call tool runId checkpoint event read visible before run |
+ history := LMNativeSessionRegistry new initializeAt: base / 'execution-history'; yourself.
+ call := 'archived-call'. tool := 'checkpoint-tool'. runId := UUID new asString. checkpoint := UUID new asString.
+ history acceptActivity: (STONJSON fromString: '{"method":"item/tool/call","params":{"callId":"checkpoint-tool","tool":"runtime_eval","arguments":{"code":"LMExecution checkpoint"}}}') call: call.
+ history completeToolActivity: tool call: call result: (Dictionary new at: 'ok' put: true; at: 'executionId' put: runId; at: 'value' put: checkpoint; yourself).
+ visible := [ history database: [ :db | db execute: 'SELECT seq FROM loom_activities WHERE visible=1 ORDER BY seq' ] ].
+ before := visible value.
+ event := Dictionary new at: 'type' put: 'loomActivity'; at: 'status' put: 'completed'; at: 'text' put: '';
+  at: 'toolCallId' put: tool; at: 'executionId' put: runId; yourself.
+ history database: [ :db |
+  db execute: 'PRAGMA user_version=7'.
+  #('started' 'done') with: #('2026-11-01T10:00:00Z' '2026-11-01T10:00:02Z') do: [ :phase :at |
+   event at: 'phase' put: phase; at: 'at' put: at.
+   db execute: 'INSERT INTO loom_activities(call_id,item_id,visible,data) VALUES(?,?,1,?)' values: {call. phase. STONJSON toString: event} ] ].
+ history upgradeActivityTracking.
+ read := [ history database: [ :db | history record: 'SELECT data FROM loom_activities WHERE item_id=?' values: {tool} on: db ] ].
+ run := read value at: 'execution'.
+ verify value: (visible value = before and: [ (run at: 'title') = '检查点已保存' and: [
+  (run at: 'checkpointId') = checkpoint and: [ (run at: 'durationMs') = 2000 ] ] ]) value: 'migration folds the recorded checkpoint into the original tool row'.
+ verify value: ((read value at: 'result') at: 'value') = checkpoint value: 'the original tool payload survives migration'.
+ history upgradeActivityTracking.
+ verify value: (visible value = before and: [ (read value at: 'execution') = run ]) value: 'reopening the migrated history is idempotent'
+] value.
+[ | history scope read waiting run |
+ history := LMNativeSessionRegistry new initializeAt: base / 'execution-outcomes'; yourself.
+ scope := LMBusinessScope new client: 'fixture' call: 'outcomes' parent: nil
+  events: [ :call :fields | history recordBusinessEvent: fields call: call ]; yourself.
+ read := [ :id | history database: [ :db | history record:
+  'SELECT json_extract(data,''$.execution'') FROM loom_activities WHERE json_extract(data,''$.execution.id'')=? AND visible=1'
+  values: {id} on: db ] ].
+ [
+  run := read value: ((scope evaluate: [ :job | Error signal: 'fixture error' ]) at: 'executionId').
+  verify value: ((run at: 'status') = 'failed' and: [ (run at: 'summary') includesSubstring: 'fixture error' ]) value: 'a failed evaluation retains its error'.
+  waiting := scope evaluate: [ :job | job ask: (Message selector: #review: arguments: {'核对回执'}) caller: thisContext through: job ].
+  run := read value: (waiting at: 'executionId').
+  verify value: ((run at: 'status') = 'pending' and: [ ((run at: 'questions') first at: 'question') = '核对回执' ]) value: 'a waiting execution retains its question'.
+ ] ensure: [ scope close ].
+ run := read value: (waiting at: 'executionId').
+ verify value: ((run at: 'phase') = 'cancelled' and: [ (run at: 'summary') includesSubstring: 'review:' ]) value: 'a cancelled evaluation names the outstanding question'
+] value.
 'GT Codex contract passed'

@@ -357,7 +357,8 @@ event := scope evaluate: [ :run |
     (''[ :loomCaller :loomMessage :loomSessionId :loomReturn |'', String cr, source, String cr, '']'').
    invocation := LMInvocation pendingAt: (current at: ''requestId'').
    invocation evaluate: block sessionId: sessionId returning: [ :object |
-    scope assertCanReturnFrom: run. self saveObject: object from: invocation during: current ] ] ].
+    scope assertCanReturnFrom: run. self saveObject: object from: invocation during: current.
+    run returned: object. true ] ] ].
 (event at: ''kind'') = ''subrequest'' ifTrue: [ event at: ''value'' put: event copy ].
 ^ event at: ''ok'' put: (event at: ''kind'') ~= ''failed''; yourself'.
 transport compile: 'objectReturnLockDuring: current

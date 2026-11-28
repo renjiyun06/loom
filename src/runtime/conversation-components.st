@@ -804,7 +804,7 @@ cls compile: 'descriptor: value
  descriptor := value.
  changedId ifTrue: [
   expanded := controller ifNil: [ false ] ifNotNil: [ controller activityExpandedFor: (value at: ''id'') ].
-  mode := controller ifNil: [ #arguments ] ifNotNil: [ controller activityDetailModeFor: (value at: ''id'') ].
+  mode := controller ifNotNil: [ controller activityDetailModeFor: (value at: ''id'') ].
   self userData removeKey: #detailRequest ifAbsent: [ ].
   self userData removeKey: #detailText ifAbsent: [ ].
   detailCache := nil. self removeChildren. self build ].
@@ -813,15 +813,20 @@ cls compile: 'descriptor: value
   details ifNotNil: [ details removeFromParent. details := nil ] ]'.
 cls compile: 'detailTextFrom: row mode: tab
  | value |
+ tab = #execution ifTrue: [ ^ row at: ''execution'' ifPresent: [ :run | LMExecutionActivity detailFor: run ] ifAbsent: [ '''' ] ].
  value := tab = #text ifTrue: [ row at: ''text'' ifAbsent: [ '''' ] ] ifFalse: [
   tab = #arguments
    ifTrue: [ row at: ''arguments'' ifAbsent: [ row at: ''command'' ifAbsent: [ '''' ] ] ]
    ifFalse: [ row at: ''contentItems'' ifAbsent: [ row at: ''result'' ifAbsent: [
     row at: ''aggregatedOutput'' ifAbsent: [ row at: ''error'' ifAbsent: [ row at: ''changes'' ifAbsent: [ '''' ] ] ] ] ] ] ].
  ^ value ifNil: [ '''' ] ifNotNil: [ LMConversationStream new displayValue: value ]'.
+cls compile: 'hasExecution
+ ^ (descriptor at: ''executionPhase'' ifAbsent: [ nil ]) notNil'.
+cls compile: 'selectedDetailMode
+ ^ mode ifNil: [ self hasExecution ifTrue: [ #execution ] ifFalse: [ #arguments ] ]'.
 cls compile: 'activityDetailText
  | seq tab version cached token |
- tab := self isTool ifTrue: [ mode ] ifFalse: [ #text ].
+ tab := self isTool ifTrue: [ self selectedDetailMode ] ifFalse: [ #text ].
  controller ifNil: [ ^ self detailTextFrom: descriptor mode: tab ].
  seq := descriptor at: ''seq'' ifAbsent: [ ^ self detailTextFrom: descriptor mode: tab ].
  version := descriptor at: ''revision''.
@@ -847,7 +852,7 @@ cls compile: 'initialize
  super initialize.
  self hMatchParent; vFitContent; padding: (BlInsets top: 0 right: 12 bottom: 4 left: 12).
  self addEventHandlerOn: BlElementExtentChangedEvent do: [ :event | self fitSummary ].
- expanded := false. mode := #arguments'.
+ expanded := false'.
 cls compile: 'isFailed
  ^ (descriptor at: ''success'' ifAbsent: [ nil ]) = false
   or: [ #(''failed'' ''declined'' ''已中断或失败'') includes: (descriptor at: ''status'' ifAbsent: [ '''' ]) ]'.
@@ -924,6 +929,7 @@ cls compile: 'updateDetails
  self isTool ifTrue: [
   tabs := BrHorizontalPane new hMatchParent; vExact: 28; yourself.
   tabs layout cellSpacing: 4.
+  self hasExecution ifTrue: [ tabs addChild: (self detailTab: ''过程'' mode: #execution) ].
   tabs addChild: (self detailTab: ''参数'' mode: #arguments).
   tabs addChild: (self detailTab: ''结果'' mode: #result).
   tabs addChild: (BrHorizontalPane new hMatchParent; vExact: 1; yourself).
@@ -941,7 +947,7 @@ cls compile: 'updateDetails
  details := pane. self addChild: details'.
 cls compile: 'detailTab: caption mode: tabMode
  ^ (LMChatStyle button: caption action: [ self showDetailMode: tabMode ]
-  foreground: (Color gray: 0.24) background: (mode = tabMode ifTrue: [ Color gray: 0.93 ] ifFalse: [ Color white ]))
+  foreground: (Color gray: 0.24) background: (self selectedDetailMode = tabMode ifTrue: [ Color gray: 0.93 ] ifFalse: [ Color white ]))
   geometry: (BlRoundedRectangleGeometry cornerRadius: 4); yourself'.
 cls compile: 'updateSummary
  | label icon statusColor |
@@ -973,7 +979,7 @@ cls compile: 'fitSummary
  | width parts name subtitle toolWidth durationWidth display |
  (descriptor isNil or: [ summary isNil or: [ summary parent isNil ] ]) ifTrue: [ ^ self ].
  width := self width - self padding left - self padding right.
- parts := self isTool ifTrue: [ { self actionTitle. '''' } ] ifFalse: [
+ parts := self isTool ifTrue: [ { self actionTitle. self hasExecution ifTrue: [ descriptor at: ''text'' ] ifFalse: [ '''' ] } ] ifFalse: [
   (descriptor at: ''type'') = ''agentMessage''
    ifTrue: [ self progressParts ] ifFalse: [ { self actionTitle. descriptor at: ''text'' } ] ].
  name := parts first. subtitle := parts second.

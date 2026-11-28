@@ -233,9 +233,7 @@ try {
     assert.deepEqual(activity, [
       ['agentMessage', 'commentary', 'Starting offline'],
       ['agentMessage', 'final_answer', 'Unpublished draft'],
-      ['dynamicToolCall', null, ''],
-      ['loomActivity', 'started', ''],
-      ['loomActivity', 'done', ''],
+      ['dynamicToolCall', null, '结果　{argument = 活对象，session = isolation-check}'],
       ['agentMessage', 'final_answer', 'object callback completed'],
     ]);
     for (const [scenario,expected] of [
@@ -265,6 +263,17 @@ try {
     }
     assert.notEqual(events[5].executionId,events[4].executionId);
     assert.equal(events[9].parentExecutionId,events[8].executionId);
+    const executionDetail = await gt(`| page row entry view |
+      page := LoomNativeCodexHost registry activitySummariesBefore: nil limit: 40 session: 'debate-a' managedOnly: true.
+      row := (page at: 'items') detect: [ :item |
+       (item at: 'id') endsWith: '/${events[4].toolCallId}' ].
+      entry := (LoomNativeCodexHost registry activityDetailAt: (row at: 'seq')) at: 'data'.
+      view := LMConversationActivityView new descriptor: row; yourself.
+      { view selectedDetailMode asString. view detailTextFrom: entry mode: #execution }`, 'execution-panel-detail');
+    assert.equal(executionDetail[0], 'execution');
+    assert.match(executionDetail[1], /debate-c 向 debate-a 提问/);
+    assert.match(executionDetail[1], /debate-a 答复　rollback-followup-answered/);
+    assert.match(executionDetail[1], /执行编号/);
     const recovery = await submitModel(`| session original result receipt |
       session := LoomSessions session: 'recovery-fixture'.
       original := Object new.

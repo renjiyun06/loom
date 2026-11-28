@@ -174,7 +174,7 @@ ui compile: 'visibleAnchor
  ^ { (values at: index) at: ''id''. child boundsInParent top }'.
 ui compile: 'activityExpandedFor: id ^ expansions at: id ifAbsent: [ false ]'.
 ui compile: 'activityExpanded: value for: id expansions at: id put: value'.
-ui compile: 'activityDetailModeFor: id ^ detailModes at: id ifAbsent: [ #arguments ]'.
+ui compile: 'activityDetailModeFor: id ^ detailModes at: id ifAbsent: [ nil ]'.
 ui compile: 'activityDetailMode: value for: id detailModes at: id put: value'.
 GtWorldElement compile: 'loomActivityOverviewActionFor: anAction
  <gtWorldAction>

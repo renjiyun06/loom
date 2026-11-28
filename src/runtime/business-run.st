@@ -4,7 +4,7 @@
 (DynamicVariable << #LMBusinessProcess slots: #(); package: 'Loom-Codex') install.
 question := (Object << #LMBusinessQuestion slots: #(id origin invocation gate answer failure); package: 'Loom-Codex') install.
 scope := (Object << #LMBusinessScope slots: #(client threadId call parent record lock execution result completed closed toolLock); package: 'Loom-Codex') install.
-run := (Object << #LMBusinessRun slots: #(id scope worker events lock pending delivered cancelled toolCallId enclosing parent stagedAnswer); package: 'Loom-Codex') install.
+run := (Object << #LMBusinessRun slots: #(id scope worker events lock pending delivered cancelled toolCallId enclosing parent stagedAnswer outcome checkpointId checkpointAt); package: 'Loom-Codex') install.
 question compile: 'initialize
  super initialize. id := UUID new asString. gate := Semaphore new'.
 question compile: 'id ^ id'.
@@ -20,8 +20,11 @@ question compile: 'wait
  gate wait.
  failure ifNotNil: [ self error: failure ].
  ^ answer'.
-question compile: 'resolve: anObject
- answer := anObject. gate signal'.
+question compile: 'answer: anObject answer := anObject'.
+question compile: 'answerSummary
+ ^ (LMExecutionActivity sensitive: invocation message selector asString)
+  ifTrue: [ ''[已隐藏]'' ] ifFalse: [ LMExecutionActivity preview: answer ]'.
+question compile: 'signalAnswer gate signal'.
 question compile: 'fail: reason
  failure := reason. gate signal'.
 scope compile: 'client: aKey call: aCall parent: aRun events: aBlock
@@ -45,10 +48,13 @@ scope compile: 'result
  ^ lock critical: [ completed = true ifFalse: [ self error: ''No completed business result'' ]. result ]'.
 scope compile: 'record: phase run: run question: aQuestion
  | row |
- row := Dictionary new at: ''phase'' put: phase; at: ''executionId'' put: run id; yourself.
+ row := Dictionary new at: ''phase'' put: phase; at: ''executionId'' put: run id; at: ''clientKey'' put: client; yourself.
  run toolCallId ifNotNil: [ :tool | row at: ''toolCallId'' put: tool ].
  run parent ifNotNil: [ :p | row at: ''parentExecutionId'' put: p id ].
- aQuestion ifNotNil: [ row addAll: aQuestion description ].
+ aQuestion ifNotNil: [ row addAll: aQuestion description; at: ''originClientKey'' put: aQuestion origin client.
+  phase = ''subrequest'' ifTrue: [ row at: ''question'' put: (LMExecutionActivity question: aQuestion invocation message) ].
+  phase = ''answered'' ifTrue: [ row at: ''answer'' put: aQuestion answerSummary ] ].
+ run addActivityOutcomeTo: row phase: phase.
  record value: call value: row'.
 scope compile: 'evaluate: aBlock
  | serial |
@@ -83,6 +89,19 @@ scope compile: 'finish: run value: object ok: success
 run compile: 'scope: aScope
  scope := aScope. toolCallId := LMBusinessToolCall value. id := UUID new asString. events := SharedQueue new. lock := Mutex new'.
 run compile: 'id ^ id'.
+run compile: 'client ^ scope client'.
+run compile: 'returned: object
+ ((object class == Dictionary or: [ object class == OrderedDictionary ]) and: [ (object includesKey: ''browserAction'') and: [
+   #(ByteString WideString) includes: (object at: ''text'' ifAbsent: [ nil ]) class name ] ]) ifTrue: [
+  outcome := LMExecutionActivity preview: (object at: ''text''). ^ self ].
+ outcome := LMExecutionActivity preview: object'.
+run compile: 'savedCheckpoint: aString at: committedAt
+ checkpointId := aString. checkpointAt := committedAt'.
+run compile: 'addActivityOutcomeTo: row phase: phase
+ (#(''done'' ''failed'' ''cancelled'') includes: phase) ifTrue: [
+  outcome ifNotNil: [ row at: ''outcome'' put: outcome ].
+  checkpointId ifNotNil: [ row at: ''checkpointId'' put: checkpointId ].
+  checkpointAt ifNotNil: [ row at: ''checkpointAt'' put: checkpointAt ] ]'.
 run compile: 'enclosing: aRun
  enclosing := aRun.
  "The local waiting point owns the answer. The sender of its question supplies the causal chain."
@@ -129,9 +148,10 @@ run compile: 'resumeQuestion: requestId with: object
   | q |
   q := self questionWithId: requestId.
   toolCallId := LMBusinessToolCall value.
+  q answer: object.
   scope record: ''answered'' run: self question: q.
   pending := nil. delivered := false.
-  q resolve: object ]'.
+  q signalAnswer ]'.
 run compile: 'completionFor: object
  | feedback |
  feedback := Dictionary new at: ''kind'' put: ''completed''; at: ''executionId'' put: id; yourself.
@@ -157,6 +177,12 @@ run compile: 'nextEvent
  event isDictionary ifTrue: [
   lock critical: [ cancelled = true ifTrue: [ self error: ''Owning turn ended'' ]. delivered := true ].
   ^ event copy at: ''executionId'' put: id; yourself ].
+ event first = #failed
+  ifTrue: [ outcome := LMExecutionActivity preview: event second ]
+  ifFalse: [ outcome ifNil: [
+   outcome := stagedAnswer ifNotNil: [ ''答复已提交'' ] ifNil: [
+    event third at: ''value'' ifPresent: [ :v | LMExecutionActivity preview: v ]
+     ifAbsent: [ (event third at: ''valueClass''), '' 对象'' ] ] ] ].
  (scope finish: self value: event second ok: event first = #done) ifFalse: [
   ^ Dictionary new at: ''kind'' put: ''failed''; at: ''executionId'' put: id; at: ''error'' put: ''Owning turn ended''; yourself ].
  event first = #failed ifTrue: [

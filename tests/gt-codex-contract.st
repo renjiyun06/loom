@@ -370,4 +370,23 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  run := read value: (waiting at: 'executionId').
  verify value: ((run at: 'phase') = 'cancelled' and: [ (run at: 'summary') includesSubstring: 'review:' ]) value: 'a cancelled evaluation names the outstanding question'
 ] value.
+[ | scope phases waiting reply joke inspection |
+ phases := OrderedCollection new.
+ scope := LMBusinessScope new client: 'joke-fixture' call: 'joke-call' parent: nil
+  events: [ :call :event | phases add: (event at: 'phase') ]; yourself.
+ [
+  waiting := scope evaluate: [ :run | LoomJoke runIn: run ].
+  verify value: ((waiting at: 'kind') = 'subrequest' and: [ (waiting at: 'originExecutionId') = (waiting at: 'executionId') ])
+   value: 'the joke program asks the session that called it'.
+  inspection := scope evaluate: [ :run | | question |
+   question := run request: (waiting at: 'requestId').
+   {question message selector asString. question message arguments first. question caller method = (LoomJoke class >> #runIn:)} ].
+  verify value: (inspection at: 'value') = {'ask:'. '请讲一个笑话。'. true} value: 'the question points back to the joke program'.
+  joke := '这是一条用于核对返回值的答复。'.
+  reply := scope evaluate: [ :run | run answer: (waiting at: 'requestId') with: joke ].
+  verify value: ((reply at: 'kind') = 'completed' and: [ (reply at: 'executionId') = (waiting at: 'executionId') and: [
+   scope result == joke and: [ (phases occurrencesOf: 'subrequest') = 1 and: [ (phases occurrencesOf: 'answered') = 1 ] ] ] ])
+   value: 'one answer resumes the original program and returns the same joke'
+ ] ensure: [ scope close ]
+] value.
 'GT Codex contract passed'

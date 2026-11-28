@@ -88,6 +88,7 @@ applications class compile: 'install
  self attempt: ''desktop-ime'' during: [ self load: ''windows-ime.st'' ].
  self attempt: ''platform-tools'' during: [ self load: ''platform-tools.st'' ].
  modelLoaded := self attempt: ''conversation-model'' during: [
+  self load: ''joke.st''.
   self load: ''conversation-db.st''.
   self load: ''conversation.st''.
   self load: ''upgrade-main-session.st''.

@@ -755,7 +755,8 @@ cls := (BrVerticalPane << #LMConversationActivityView slots: #(#controller #desc
 (cls includesSelector: #detailValue) ifTrue: [ cls removeSelector: #detailValue ].
 cls compile: 'actionTitle
  | type code toolName |
- (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption | ^ caption ].
+ (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption |
+  ^ self isCompletedExecution ifTrue: [ caption withoutSuffix: '' · 已完成'' ] ifFalse: [ caption ] ].
  type := descriptor at: ''type''.
  type = ''agentMessage'' ifTrue: [ ^ self shorten: (descriptor at: ''text'') limit: 44 ].
  type = ''reasoning'' ifTrue: [
@@ -822,6 +823,8 @@ cls compile: 'detailTextFrom: row mode: tab
  ^ value ifNil: [ '''' ] ifNotNil: [ LMConversationStream new displayValue: value ]'.
 cls compile: 'hasExecution
  ^ (descriptor at: ''executionPhase'' ifAbsent: [ nil ]) notNil'.
+cls compile: 'isCompletedExecution
+ ^ (descriptor at: ''executionPhase'' ifAbsent: [ nil ]) = ''done'''.
 cls compile: 'selectedDetailMode
  ^ mode ifNil: [ self hasExecution ifTrue: [ #execution ] ifFalse: [ #arguments ] ]'.
 cls compile: 'activityDetailText
@@ -979,7 +982,8 @@ cls compile: 'fitSummary
  | width parts name subtitle toolWidth durationWidth display |
  (descriptor isNil or: [ summary isNil or: [ summary parent isNil ] ]) ifTrue: [ ^ self ].
  width := self width - self padding left - self padding right.
- parts := self isTool ifTrue: [ { self actionTitle. self hasExecution ifTrue: [ descriptor at: ''text'' ] ifFalse: [ '''' ] } ] ifFalse: [
+ parts := self isTool ifTrue: [ { self actionTitle.
+  (self hasExecution and: [ self isCompletedExecution not ]) ifTrue: [ descriptor at: ''text'' ] ifFalse: [ '''' ] } ] ifFalse: [
   (descriptor at: ''type'') = ''agentMessage''
    ifTrue: [ self progressParts ] ifFalse: [ { self actionTitle. descriptor at: ''text'' } ] ].
  name := parts first. subtitle := parts second.

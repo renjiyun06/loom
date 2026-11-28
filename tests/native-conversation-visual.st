@@ -162,6 +162,21 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
  row descriptor: entry; forceLayout.
  check value: ((row instVarNamed: 'mark') allChildrenBreadthFirstSelect: [:child | child geometry isKindOf: BlSvgPath]) notEmpty
   value: 'completed tools use a vector status mark without missing font glyphs'.
+ entry := entry copy at: 'executionPhase' put: 'subrequest'; at: 'title' put: '核对回执 · 等待答复';
+  at: 'status' put: 'pending'; at: 'text' put: '正在等待答复'; yourself.
+ row descriptor: entry; forceLayout.
+ check value: ((row instVarNamed: 'preview') visibility = BlVisibility visible)
+  value: 'the waiting question is visible before completion'.
+ entry := entry copy at: 'executionPhase' put: 'done'; at: 'title' put: '核对回执 · 已完成';
+  at: 'status' put: 'completed'; at: 'text' put: '结果　已核对'; at: 'result' put: '已核对'; yourself.
+ row descriptor: entry; forceLayout.
+ check value: ((row instVarNamed: 'title') text asString = '核对回执' and: [
+  (row instVarNamed: 'preview') visibility = BlVisibility gone and: [ (row instVarNamed: 'details') isNil ] ])
+  value: 'a completed execution shows its action alone and drops the previous preview'.
+ row toggle; showDetailMode: #result.
+ check value: ((row instVarNamed: 'details') notNil and: [ row activityDetailText includesSubstring: '已核对' ])
+  value: 'opening the result tab reveals the saved result'.
+ row toggle.
  values := (LoomConversationWindow instVarNamed: 'lastPayload') at: 'activities'.
  values do: [ :value |
   row := LMConversationActivityView new controller: ui; hExact: 340; yourself.

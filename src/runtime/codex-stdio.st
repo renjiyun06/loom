@@ -256,6 +256,14 @@ transport compile: 'progressStageFor: method params: params during: current
   otherwise: [ ^ nil ].
  delta := params at: ''delta'' ifAbsent: [ ^ nil ].
  ^ ((delta isString) and: [ delta notEmpty ]) ifTrue: [ stage ] ifFalse: [ nil ]'.
+transport compile: 'elapsedMillisecondsAt: tick since: eventTick
+ "A monitor sample may precede progress published by another process.
+ Interpret the modular clock difference as signed so that a stale sample stays negative."
+ | elapsed |
+ elapsed := Time milliseconds: tick since: eventTick.
+ ^ elapsed > (SmallInteger maxVal // 2)
+  ifTrue: [ elapsed - SmallInteger maxVal ]
+  ifFalse: [ elapsed ]'.
 transport compile: 'recordTurnSilenceDuring: current at: tick
  | progress since elapsed release |
  (current at: ''businessScope'' ifAbsent: [ nil ]) ifNotNil: [ :scope | scope awaitsProgram ifTrue: [ ^ self ] ].
@@ -264,7 +272,7 @@ transport compile: 'recordTurnSilenceDuring: current at: tick
  progress := current at: ''lastTurnProgress'' ifAbsent: [ ^ self ].
  (current at: ''reportedTurnSilence'' ifAbsent: [ nil ]) == progress ifTrue: [ ^ self ].
  since := current at: ''quietSince'' ifAbsent: [ progress first ].
- elapsed := Time milliseconds: tick since: since.
+ elapsed := self elapsedMillisecondsAt: tick since: since.
  elapsed < 1800000 ifTrue: [ ^ self ].
  release := (self turnProgressLockDuring: current) critical: [
   ((current at: ''lastTurnProgress'') == progress and: [
@@ -295,10 +303,13 @@ transport compile: 'probeNetworkReachable
   ''--output'' ''NUL'' ''--write-out'' ''%{http_code}'' ''https://www.google.com/generate_204'') timeout: 6.
  ^ status trimBoth = ''204'''.
 transport compile: 'pollNetwork: probe during: current at: tick
+ | elapsed |
  (self turnProgressLockDuring: current) critical: [
   ((current at: ''networkProbe'' ifAbsent: [ nil ]) == probe and: [
     (current at: ''lastTurnProgress'') == (probe at: ''progress'') and: [
     (self canHandoffDuring: current) and: [ (current at: ''objectSaved'' ifAbsent: [ false ]) not ] ] ]) ifFalse: [ ^ self ].
+  elapsed := self elapsedMillisecondsAt: tick since: (probe at: ''startedAt'').
+  elapsed < 0 ifTrue: [ ^ self ].
   (probe at: ''answer'') first ifNotNil: [ :reachable |
    reachable ifTrue: [
     (probe includesKey: ''waitActivity'') ifTrue: [
@@ -312,7 +323,7 @@ transport compile: 'pollNetwork: probe during: current at: tick
     (probe includesKey: ''waitActivity'') ifFalse: [
      probe at: ''waitActivity'' put: (''network-wait-'', UUID new asString).
      self recordNetworkWait: probe during: current title: ''Google 探测失败，正在等待网络恢复'' status: ''inProgress'' ].
-    (Time milliseconds: tick since: (probe at: ''startedAt'')) >= 15000 ifTrue: [
+    elapsed >= 15000 ifTrue: [
      self startNetworkProbe: probe at: tick ] ] ] ]'.
 transport compile: 'endNetworkWaitDuring: current title: title
  (current removeKey: ''networkProbe'' ifAbsent: [ nil ]) ifNotNil: [ :probe |

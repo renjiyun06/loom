@@ -194,6 +194,15 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  transport receive: (STONJSON fromString: '{"method":"item/commandExecution/outputDelta","params":{"threadId":"fixture-thread","turnId":"silent-turn","delta":"tool log"}}').
  verify value: ((current at: 'lastTurnProgress') == progress and: [ progress second = '思考中' ])
   value: 'duplicate, unrelated, and tool output events do not reset the turn clock'.
+ transport recordTurnSilenceDuring: current at: progress first - 1.
+ verify value: ((summaries value: registry) isEmpty and: [ (current includesKey: 'networkProbe') not ])
+  value: 'a sample taken before the latest progress cannot start a silence period'.
+ current at: 'quietSince' put: progress first + 1800000.
+ transport recordTurnSilenceDuring: current at: progress first + 1799999.
+ current removeKey: 'quietSince'.
+ verify value: (summaries value: registry) isEmpty value: 'a sample predating a restarted observation window is ignored'.
+ verify value: (transport elapsedMillisecondsAt: 1799000 since: SmallInteger maxVal - 1000) = 1800000
+  value: 'forward elapsed time survives a clock rollover'.
  transport recordTurnSilenceDuring: current at: progress first + 1799999.
  verify value: (summaries value: registry) isEmpty value: 'no silence event is logged before thirty minutes'.
  transport recordTurnSilenceDuring: current at: progress first + 1800000.

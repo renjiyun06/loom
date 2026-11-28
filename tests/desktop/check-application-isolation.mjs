@@ -362,6 +362,9 @@ try {
       transport := LoomNativeCodexHost instVarNamed: #transport.
       current := transport active.
       (current at: 'objectSaved') ifFalse: [ self error: 'Result was not checkpointed' ].
+      transport recordTurnSilenceDuring: current at: (current at: 'lastTurnProgress') first - 1.
+      ((current includesKey: 'releasedAfterSilence') or: [ current includesKey: 'interruptionSent' ])
+        ifTrue: [ self error: 'An older monitor sample interrupted a turn with a saved result' ].
       transport noteTurnProgress: '业务结果已保存，等待轮次结束'
         at: Time millisecondClockValue - 1800000 during: current.
       true`, 'expire-silent-period'), true);

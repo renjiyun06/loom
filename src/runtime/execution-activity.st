@@ -60,10 +60,8 @@ activity class compile: 'titleFor: run
  phase = ''failed'' ifTrue: [ ^ action, ''失败'' ].
  phase = ''cancelled'' ifTrue: [ ^ action, '' · 已取消'' ].
  phase = ''unknown'' ifTrue: [ ^ action, '' · 结束状态未记录'' ].
- phase = ''done'' ifTrue: [
-  (action = ''保存检查点'' and: [ run includesKey: ''checkpointId'' ]) ifTrue: [ ^ ''检查点已保存'' ].
-  ^ action, '' · 已完成'' ].
- ^ ''正在'', action'.
+ (phase = ''done'' and: [ action = ''保存检查点'' and: [ run includesKey: ''checkpointId'' ] ]) ifTrue: [ ^ ''检查点已保存'' ].
+ ^ action'.
 activity class compile: 'localTime: timestamp
  | local |
  local := [ (DateAndTime fromString: timestamp) asLocal ] on: Error do: [ :ignored | ^ timestamp ].

@@ -156,12 +156,23 @@ check := [ :condition :name | condition ifFalse: [ self error: name ]. checks ad
   and: [ draftFile children first id = attachment children first id ])
   value: 'draft and older sent documents use the same file icon'.
  entry := Dictionary new at: 'id' put: 'visual-tool'; at: 'type' put: 'dynamicToolCall';
-  at: 'tool' put: 'pharo_eval'; at: 'status' put: 'completed'; at: 'success' put: true;
+  at: 'tool' put: 'runtime_eval'; at: 'status' put: 'completed'; at: 'success' put: true;
   at: 'arguments' put: (Dictionary new at: 'code' put: '1 + 1'; yourself); at: 'durationMs' put: 12; yourself.
  row := LMConversationActivityView new controller: ui; hExact: 340; yourself.
  row descriptor: entry; forceLayout.
  check value: ((row instVarNamed: 'mark') allChildrenBreadthFirstSelect: [:child | child geometry isKindOf: BlSvgPath]) notEmpty
   value: 'completed tools use a vector status mark without missing font glyphs'.
+ entry := entry copy at: 'executionPhase' put: 'started'; at: 'title' put: '正在执行 Smalltalk';
+  at: 'status' put: 'inProgress'; at: 'text' put: '由 main 发起'; yourself.
+ row descriptor: entry; forceLayout.
+ check value: ((row instVarNamed: 'title') text asString = '执行 Smalltalk' and: [
+  (row instVarNamed: 'tool') text asString = 'runtime_eval' and: [
+  (row instVarNamed: 'duration') text asString = '执行中' and: [ (row instVarNamed: 'preview') visibility = BlVisibility gone ] ] ])
+  value: 'running tools show the action, tool name and status in a single row'.
+ row descriptor: (entry copy at: 'executionPhase' put: 'done'; at: 'title' put: '执行 Smalltalk';
+  at: 'status' put: 'completed'; at: 'durationMs' put: 1250; yourself); forceLayout.
+ check value: ((row instVarNamed: 'title') text asString = '执行 Smalltalk' and: [
+  (row instVarNamed: 'duration') text asString = '1.25 秒' ]) value: 'elapsed seconds replace the running label in the same row'.
  entry := entry copy at: 'executionPhase' put: 'subrequest'; at: 'title' put: '核对回执 · 等待答复';
   at: 'status' put: 'pending'; at: 'text' put: '正在等待答复'; yourself.
  row descriptor: entry; forceLayout.

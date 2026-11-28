@@ -270,7 +270,7 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
  compacting := (entries value: registry) last.
  view descriptor: compacting.
  verify value: ((compacting at: 'status') = 'inProgress' and: [ (compacting at: 'visible') = 1 and: [
-  view actionTitle = '正在压缩上下文' ] ]) value: 'a compaction start is stored and shown as running'.
+  view actionTitle = '压缩上下文' and: [ view isRunning ] ] ]) value: 'a compaction start is stored and shown as running'.
  transport receive: (STONJSON fromString: '{"method":"item/completed","params":{"threadId":"fixture-thread","turnId":"activity-turn","item":{"id":"compaction","type":"contextCompaction"}}}').
  reopened := LMNativeSessionRegistry new initializeAt: base / 'registry'; yourself.
  compacted := (entries value: reopened) last.

@@ -755,9 +755,12 @@ cls := (BrVerticalPane << #LMConversationActivityView slots: #(#controller #desc
 (cls includesSelector: #detailValue) ifTrue: [ cls removeSelector: #detailValue ].
 cls compile: 'actionTitle
  | type code toolName |
- (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption |
-  ^ self isCompletedExecution ifTrue: [ caption withoutSuffix: '' · 已完成'' ] ifFalse: [ caption ] ].
  type := descriptor at: ''type''.
+ (descriptor at: ''title'' ifAbsent: [ nil ]) ifNotNil: [ :caption |
+  (self isRunning and: [ self hasExecution or: [ type = ''loomActivity'' ] ]) ifTrue: [
+   caption = ''Codex 轮次失败，正在恢复'' ifTrue: [ ^ ''恢复失败的 Codex 轮次'' ].
+   ^ caption withoutPrefix: ''正在'' ].
+  ^ self isCompletedExecution ifTrue: [ caption withoutSuffix: '' · 已完成'' ] ifFalse: [ caption ] ].
  type = ''agentMessage'' ifTrue: [ ^ self shorten: (descriptor at: ''text'') limit: 44 ].
  type = ''reasoning'' ifTrue: [
   (descriptor at: ''text'') notEmpty ifTrue: [ ^ ''思考摘要'' ].
@@ -765,7 +768,7 @@ cls compile: 'actionTitle
   ^ self isRunning ifTrue: [ ''思考中'' ] ifFalse: [ ''思考已结束'' ] ].
  type = ''contextCompaction'' ifTrue: [
   self isInterrupted ifTrue: [ ^ ''上下文压缩已中断'' ].
-  ^ self isRunning ifTrue: [ ''正在压缩上下文'' ] ifFalse: [ ''上下文压缩已结束'' ] ].
+  ^ self isRunning ifTrue: [ ''压缩上下文'' ] ifFalse: [ ''上下文压缩已结束'' ] ].
  type = ''plan'' ifTrue: [ ^ ''计划'' ].
  type = ''commandExecution'' ifTrue: [ ^ ''执行命令'' ].
  type = ''fileChange'' ifTrue: [ ^ ''修改文件'' ].
@@ -969,7 +972,8 @@ cls compile: 'updateSummary
   statusColor := Color r: 0.67 g: 0.19 b: 0.21.
   ''失败'' ] ifFalse: [
   self isRunning ifTrue: [ ''执行中'' ] ifFalse: [
-   (descriptor at: ''durationMs'' ifAbsent: [ nil ]) ifNil: [ '''' ] ifNotNil: [ :ms | ms asString, '' ms'' ] ] ] ].
+   (descriptor at: ''durationMs'' ifAbsent: [ nil ]) ifNil: [ '''' ] ifNotNil: [ :ms |
+    ((ms / 1000) asFloat asString withoutSuffix: ''.0''), '' 秒'' ] ] ] ].
  duration aptitude foreground: statusColor.
  duration text: label.
  (chevron userData at: #expanded ifAbsent: [ nil ]) = expanded ifFalse: [
@@ -979,11 +983,13 @@ cls compile: 'updateSummary
  summary background: ((expanded or: [ self isRunning ]) ifTrue: [ Color gray: 0.94 ] ifFalse: [ Color transparent ]).
  self fitSummary'.
 cls compile: 'fitSummary
- | width parts name subtitle toolWidth durationWidth display |
+ | width parts name subtitle toolWidth durationWidth display phase |
  (descriptor isNil or: [ summary isNil or: [ summary parent isNil ] ]) ifTrue: [ ^ self ].
  width := self width - self padding left - self padding right.
- parts := self isTool ifTrue: [ { self actionTitle.
-  (self hasExecution and: [ self isCompletedExecution not ]) ifTrue: [ descriptor at: ''text'' ] ifFalse: [ '''' ] } ] ifFalse: [
+ parts := self isTool ifTrue: [
+  phase := descriptor at: ''executionPhase'' ifAbsent: [ nil ].
+  { self actionTitle. (phase notNil and: [ (#(''started'' ''done'') includes: phase) not ])
+    ifTrue: [ descriptor at: ''text'' ] ifFalse: [ '''' ] } ] ifFalse: [
   (descriptor at: ''type'') = ''agentMessage''
    ifTrue: [ self progressParts ] ifFalse: [ { self actionTitle. descriptor at: ''text'' } ] ].
  name := parts first. subtitle := parts second.

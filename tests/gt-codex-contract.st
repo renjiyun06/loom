@@ -270,25 +270,54 @@ verify value: ([ LMNativeSessionRegistry new initializeAt: protected. false ] on
   (compacted at: 'status') = 'completed' and: [ view actionTitle = '上下文压缩已结束' ] ] ])
   value: 'the same compaction row shows completion after reopening the activity store'
 ] value.
-[ | scope other client original feedback id log newScope |
+[ | scope other client original feedback id log newScope displayClass transport textTurn |
  log := OrderedCollection new.
  newScope := [ LMBusinessScope new client: 'fixture' call: 'root' parent: nil
-   events: [ :ignored :event | log add: event ]; yourself ].
- scope := newScope value threadId: 'fixture-thread'; yourself. other := newScope value. original := Object new.
+   events: [ :ignored :event | log add: event ]; threadId: 'fixture-thread'; yourself ].
+ scope := newScope value. other := newScope value. original := Object new.
  client := LMCodexClient new clientKey: 'fixture'; yourself.
+ displayClass := (Object << #LMBusinessDisplayFixture slots: #(client); package: 'Loom-Tests') install.
+ displayClass compile: 'client: aClient client := aClient'.
+ displayClass compile: 'printOn: stream stream nextPutAll: (client fixtureOpinion: ''display'')'.
+ displayClass compile: 'stonOn: writer writer writeString: self printString'.
  [
-  feedback := scope start: [ client requireThread: 'fixture-thread' during: [ client fixtureOpinion: original ] ].
+  feedback := scope evaluate: [ :run | client requireThread: 'fixture-thread' during: [ client fixtureOpinion: original ] ].
   id := feedback at: 'requestId'.
-  verify value: (scope request: id) message arguments first == original value: 'question retains live input'.
-  verify value: ([ other answer: id with: nil. false ] on: Error do: [ :e | true ]) value: 'different scope cannot answer'.
-  verify value: ([ scope start: [ 1 ]. false ] on: Error do: [ :e | true ]) value: 'one outstanding execution per turn'.
-  verify value: ([ scope assertComplete. false ] on: Error do: [ :e | true ]) value: 'outer result waits for the execution'.
-  feedback := scope answer: id with: original.
+  verify value: ((scope evaluate: [ :run | (run request: id) message arguments first == original ]) at: 'value')
+   value: 'inspection retains live input'.
+  verify value: (((other evaluate: [ :run | run answer: id with: nil ]) at: 'kind') = 'failed') value: 'different scope cannot answer'.
+  verify value: (((scope evaluate: [ :run | scope assertCanReturnFrom: run ]) at: 'kind') = 'failed') value: 'pending outer result is protected'.
+  verify value: (((scope evaluate: [ :run | run answer: id with: nil. Error signal: 'after staging' ]) at: 'kind') = 'failed')
+   value: 'a failed answer computation leaves the question pending'.
+  feedback := scope evaluate: [ :run | run answer: id with: original ].
   verify value: ((feedback at: 'valueClass') = 'Object' and: [ scope result == original ]) value: 'result retains identity'.
-  verify value: ([ scope answer: id with: nil. false ] on: Error do: [ :e | true ]) value: 'one answer per question'.
-  verify value: ([ scope start: [ Error signal: 'fixture error' ]. false ] on: Error do: [ :e | e messageText = 'fixture error' ])
-   value: 'business failure releases the scope'.
-  verify value: ((scope start: [ nil ]) at: 'value') isNil value: 'nil is a completed value'
+  verify value: (((scope evaluate: [ :run | run answer: id with: nil ]) at: 'kind') = 'failed') value: 'one answer per question'.
+  verify value: (((scope evaluate: [ :run | nil ]) at: 'value') isNil) value: 'nil is a completed value'.
+  feedback := scope evaluate: [ :run | run start: [ original ] ].
+  verify value: (((feedback at: 'value') at: 'valueClass') = 'Object' and: [ scope result == original ])
+   value: 'legacy explicit start keeps its feedback and live result'.
+  feedback := scope evaluate: [ :run | displayClass new client: client; yourself ].
+  id := feedback at: 'requestId'.
+  feedback := scope evaluate: [ :run | run answer: id with: 'serialized' ].
+  verify value: ((feedback at: 'value') = 'serialized') value: 'serialization can call a session within the same execution'.
+  transport := LMNativeCodexTransport new.
+  textTurn := Dictionary new at: 'objectInvocation' put: false; at: 'businessScope' put: other; yourself.
+  feedback := transport evaluateTool: (Dictionary new at: 'code' put:
+    '(LMCodexClient new clientKey: ''fixture''; yourself) fixtureOpinion: 20'; yourself) during: textTurn.
+  id := feedback at: 'requestId'.
+  feedback := transport evaluateTool: (Dictionary new at: 'code' put:
+    ('loomRun answer: ''', id, ''' with: 22'); yourself) during: textTurn.
+  verify value: ((feedback at: 'ok') and: [ (feedback at: 'value') = 22 ]) value: 'plain text turns can suspend and resume'.
+  feedback := transport evaluateTool: (Dictionary new at: 'code' put:
+    'Dictionary new at: ''kind'' put: ''subrequest''; yourself'; yourself) during: textTurn.
+  verify value: ((feedback at: 'kind') = 'completed' and: [ ((feedback at: 'value') at: 'kind') = 'subrequest' ])
+   value: 'user dictionaries cannot be mistaken for runtime events'.
+  feedback := scope evaluate: [ :run | client fixtureOpinion: 1 ].
+  scope evaluate: [ :run | client fixtureOpinion: 2 ].
+  scope close.
+  verify value: ((log count: [ :entry | (entry at: 'phase') = 'cancelled' ]) = 2) value: 'closing a turn accounts for suspended evaluations'.
+  verify value: ((log count: [ :entry | (entry at: 'phase') = 'started' ]) =
+    (log count: [ :entry | #('done' 'failed' 'cancelled') includes: (entry at: 'phase') ])) value: 'all evaluations have paired activity'
  ] ensure: [ scope close. other close ]
 ] value.
 'GT Codex contract passed'

@@ -234,10 +234,13 @@ try {
       ['agentMessage', 'commentary', 'Starting offline'],
       ['agentMessage', 'final_answer', 'Unpublished draft'],
       ['dynamicToolCall', null, ''],
+      ['loomActivity', 'started', ''],
+      ['loomActivity', 'done', ''],
       ['agentMessage', 'final_answer', 'object callback completed'],
     ]);
     for (const [scenario,expected] of [
-      ['direct',null], ['self',['one-answered','two-answered']], ['A',['A',['B',['C','rollback-answered']]]],
+      ['direct',null], ['self',['one-answered','two-answered']], ['A',['A',['B',['C','rollback-followup-answered']]]],
+      ['inspect','inner-answered'],
     ]) {
       const run = await submitModel(`(LoomSessions session: 'debate-a') fixtureBusiness: '${scenario}'`,
         'business-'+scenario);
@@ -250,14 +253,18 @@ try {
       'business-subrequests');
     const events = businessEvents.map(row=>JSON.parse(row));
     assert.deepEqual(events.map(row=>row.phase), [
-      'subrequest','answered','subrequest','answered','subrequest','answered',
+      'subrequest','answered','subrequest','answered',
+      'subrequest','subrequest','answered','answered',
+      'subrequest','subrequest','answered','answered',
     ]);
-    for (let i=0;i<events.length;i+=2) {
-      assert.equal(events[i].requestId,events[i+1].requestId);
-      assert.equal(events[i].executionId,events[i+1].executionId);
-      assert.ok(events[i].toolCallId && events[i+1].toolCallId);
-      assert.notEqual(events[i].toolCallId,events[i+1].toolCallId);
+    for (const question of events.filter(row=>row.phase==='subrequest')) {
+      const answer = events.find(row=>row.phase==='answered' && row.requestId===question.requestId);
+      assert.equal(answer.executionId,question.executionId);
+      assert.ok(question.toolCallId && answer.toolCallId);
+      assert.notEqual(question.toolCallId,answer.toolCallId);
     }
+    assert.notEqual(events[5].executionId,events[4].executionId);
+    assert.equal(events[9].parentExecutionId,events[8].executionId);
     const recovery = await submitModel(`| session original result receipt |
       session := LoomSessions session: 'recovery-fixture'.
       original := Object new.

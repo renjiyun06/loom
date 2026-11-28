@@ -22,15 +22,15 @@ public static class FakeCodexAppServer {
 selector := loomMessage selector.
 input := loomMessage arguments first.
 selector = #fixtureBusiness: ifTrue: [
- loomRun start: [
-  input caseOf: {
+ loomReturn value: (input caseOf: {
    [ 'direct' ] -> [ nil ].
+   [ 'inspect' ] -> [ (LMBusinessDisplayFixture new client: (LoomCodex session: loomSessionId); yourself) printString ].
    [ 'self' ] -> [ | first |
      first := (LoomCodex session: loomSessionId) fixtureOpinion: 'one'.
      {first. (LoomCodex session: loomSessionId) fixtureOpinion: 'two'} ].
    [ 'A' ] -> [ {'A'. (LoomCodex session: 'debate-b') fixtureBusiness: 'B'} ].
    [ 'B' ] -> [ {'B'. (LoomCodex session: 'debate-c') fixtureBusiness: 'C'} ].
-   [ 'C' ] -> [ {'C'. (LoomCodex session: 'debate-a') fixtureOpinion: 'rollback'} ] } ] ] ifFalse: [
+   [ 'C' ] -> [ {'C'. (LoomCodex session: 'debate-a') fixtureOpinion: 'rollback'} ] }) ] ifFalse: [
 (#(fixtureRecovery: fixtureCommitted: fixtureInterrupted: fixtureHandoff: fixtureHandoff:usingContext: fixtureHeldResult: fixtureSilentResult: fixtureNetworkResult: recover:after:) includes: selector) ifTrue: [
   selector caseOf: {
     [ #fixtureRecovery: ] -> [ 'fail-before-return' ].
@@ -151,15 +151,15 @@ true ] ]";
         }
         var output = (Dictionary<string,object>)((System.Collections.IList)result["contentItems"])[0];
         var value = (Dictionary<string,object>)Json.DeserializeObject((string)output["text"]);
-        var business = value["value"] as Dictionary<string,object>;
-        if (business != null && business.ContainsKey("kind")) {
-            string source;
-            if (Object.Equals(business["kind"],"subrequest")) {
-                var requestId=Guid.Parse((string)business["requestId"]).ToString();
-                source="| sub | sub := loomRun request: '"+requestId+"'. "+
-                    "(sub message selector = #fixtureOpinion: and: [sub caller notNil]) ifFalse: [self error: 'wrong subrequest']. "+
-                    "loomRun answer: '"+requestId+"' with: (sub message arguments first, '-answered')";
-            } else source="loomReturn value: loomRun result. true";
+        if (Object.Equals(value["kind"],"subrequest")) {
+            var requestId=Guid.Parse((string)value["requestId"]).ToString();
+            string source="| sub word | sub := loomRun request: '"+requestId+"'. "+
+                "(sub message selector = #fixtureOpinion: and: [sub caller notNil]) ifFalse: [self error: 'wrong subrequest']. "+
+                "word := sub message arguments first. "+
+                "loomRun answer: '"+requestId+"' with: (word caseOf: { "+
+                "['display'] -> [(LoomCodex session: loomSessionId) fixtureOpinion: 'inner']. "+
+                "['rollback'] -> ['rollback-', ((LoomCodex session: 'debate-b') fixtureOpinion: 'followup')] "+
+                "} otherwise: [word, '-answered'])";
             Tool("business-"+(++toolSerial),source);
             return;
         }

@@ -78,7 +78,7 @@ transport compile: 'removeTurn: current
 transport compile: 'executionAt: id
  self activeCalls do: [ :each |
   (each at: ''businessScope'' ifAbsent: [ nil ]) ifNotNil: [ :scope |
-   scope execution ifNotNil: [ :run | run id = id ifTrue: [ ^ run ] ] ] ].
+   (scope localExecutionAt: id) ifNotNil: [ :run | ^ run ] ] ].
  self error: ''Parent business execution is no longer active'''.
 transport compile: 'businessScopeDuring: current
  ^ self turnsLock critical: [
@@ -330,23 +330,25 @@ transport compile: 'permitsTool: params during: current
  turn := params at: ''turnId'' ifAbsent: [ nil ].
  turn isNil or: [ turn = (current at: ''turnId'') ] ] ] ] ] ] ]'.
 transport compile: 'evaluateTool: raw during: current
- | arguments source value sessionId block invocation scope compiler |
+ | arguments scope event |
 arguments := raw isString ifTrue: [ STONJSON fromString: raw ] ifFalse: [ raw ].
-source := arguments at: ''code''.
-source isString ifFalse: [ self error: ''Expected Smalltalk source in code'' ].
 scope := self businessScopeDuring: current.
-compiler := Smalltalk compiler bindings: (Dictionary new at: #loomRun put: scope; yourself); yourself.
-(current at: ''objectInvocation'')
- ifFalse: [ value := compiler evaluate: source ]
- ifTrue: [
-  sessionId := registry sessionIdFor: (current at: ''clientKey'').
-  block := compiler evaluate:
-   (''[ :loomCaller :loomMessage :loomSessionId :loomReturn |'', String cr, source, String cr, '']'').
-  invocation := LMInvocation pendingAt: (current at: ''requestId'').
-  value := invocation evaluate: block sessionId: sessionId returning: [ :object |
-   scope assertComplete. self saveObject: object from: invocation during: current ] ].
-STONJSON toString: value.
-^ Dictionary new at: ''ok'' put: true; at: ''value'' put: value; yourself'.
+event := scope evaluate: [ :run |
+ | source compiler sessionId block invocation |
+ source := arguments at: ''code''.
+ source isString ifFalse: [ self error: ''Expected Smalltalk source in code'' ].
+ compiler := Smalltalk compiler bindings: (Dictionary new at: #loomRun put: run; yourself); yourself.
+ (current at: ''objectInvocation'')
+  ifFalse: [ compiler evaluate: source ]
+  ifTrue: [
+   sessionId := registry sessionIdFor: (current at: ''clientKey'').
+   block := compiler evaluate:
+    (''[ :loomCaller :loomMessage :loomSessionId :loomReturn |'', String cr, source, String cr, '']'').
+   invocation := LMInvocation pendingAt: (current at: ''requestId'').
+   invocation evaluate: block sessionId: sessionId returning: [ :object |
+    scope assertCanReturnFrom: run. self saveObject: object from: invocation during: current ] ] ].
+(event at: ''kind'') = ''subrequest'' ifTrue: [ event at: ''value'' put: event copy ].
+^ event at: ''ok'' put: (event at: ''kind'') ~= ''failed''; yourself'.
 transport compile: 'objectReturnLockDuring: current
  ^ current at: ''objectReturnLock'' ifAbsentPut: [ Mutex new ]'.
 transport compile: 'saveObject: object from: invocation during: current
@@ -367,7 +369,7 @@ transport compile: 'threadOptions: workspace
  ^ Dictionary new at: ''cwd'' put: workspace; at: ''approvalPolicy'' put: ''never'';
  at: ''sandbox'' put: ''danger-full-access''; yourself'.
 transport compile: 'dynamicTools
- ^ { STONJSON fromString: ''{"type":"function","name":"runtime_eval","description":"Evaluate Smalltalk in the live GT runtime that issued this call. Object calls bind loomCaller (Context), loomMessage (Message), loomSessionId (Loom session ID), and loomReturn (a one-argument block for returning a live object). Tool output must be JSON-serializable. See AGENTS.md. Start Loom business programs using loomRun start: [ ... ]; resume subrequests with loomRun answer: id with: value. Direct observations need no business process.","inputSchema":{"type":"object","properties":{"code":{"type":"string"}},"required":["code"],"additionalProperties":false}}'' }'.
+ ^ { STONJSON fromString: ''{"type":"function","name":"runtime_eval","description":"Evaluate Smalltalk in the live GT runtime. Every evaluation runs in a managed process, including inspection and serialization. Inspect kind: completed returns value or valueClass, subrequest returns requestId. Use loomRun request: id to inspect and loomRun answer: id with: object to resume. Object calls bind loomCaller, loomMessage, loomSessionId and loomReturn. See AGENTS.md.","inputSchema":{"type":"object","properties":{"code":{"type":"string"}},"required":["code"],"additionalProperties":false}}'' }'.
 transport compile: 'openThreadFor: current request: request in: workspace
  | key id binding thread options result |
 key := current at: ''clientKey''.
